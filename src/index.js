@@ -15,96 +15,6 @@ const webServer = new WebServer(config.webPort, eventEmitter, config.groupAddres
 const knxHandler = new KnxHandler(config.knx, config.groupAddresses);
 const mqttHandler = new MqttHandler(config.mqtt, config.topicPrefix);
 
-// ── Repeat-publish timers ──────────────────────────────────────────────────────
-
-/** Minimum allowed repeat interval in milliseconds. */
-const MIN_REPEAT_INTERVAL_MS = 1000;
-
-/**
- * Active repeat timers for GA-level publishing.
- * key: group address string  →  value: { timer, topic, value }
- */
-const repeatTimers = new Map();
-
-/**
- * Active repeat timers for route-level publishing.
- * key: `${gaAddress}::${route.mqttTopic}`  →  timer handle
- */
-const routeRepeatTimers = new Map();
-
-/**
- * Publish a repeat tick: the plain value to `topic` and the current Unix
- * timestamp (seconds) to `topic/ts`.  The companion timestamp topic always
- * carries a changing value so that automation platforms which implement
- * application-level change-detection (e.g. Home Assistant's state_changed
- * event) are still triggered on every tick even when the main value is
- * unchanged.
- */
-function publishRepeatTick(topic, value) {
-  mqttHandler.publish(topic, value);
-  mqttHandler.publish(`${topic}/ts`, String(Math.floor(Date.now() / 1000)));
-}
-
-/**
- * Start (or restart) a GA-level repeat timer.
- * The timer self-cancels if the GA no longer has a repeatInterval.
- */
-function startRepeatTimer(address, topic, value, intervalSec) {
-  stopRepeatTimer(address);
-  const ms = Math.max(MIN_REPEAT_INTERVAL_MS, intervalSec * 1000);
-  const timer = setInterval(() => {
-    const ga = config.groupAddresses.find((g) => g.address === address);
-    if (!ga || !(Number(ga.repeatInterval) > 0)) {
-      clearInterval(timer);
-      repeatTimers.delete(address);
-      return;
-    }
-    publishRepeatTick(topic, value);
-    console.log(`[BRIDGE] Repeat KNX→MQTT ${address} → ${topic} = ${value}`);
-  }, ms);
-  repeatTimers.set(address, { timer, topic, value });
-}
-
-function stopRepeatTimer(address) {
-  const existing = repeatTimers.get(address);
-  if (existing) {
-    clearInterval(existing.timer);
-    repeatTimers.delete(address);
-  }
-}
-
-/**
- * Start (or restart) a route-level repeat timer.
- * The timer self-cancels if the route no longer has a repeatInterval.
- */
-function startRouteRepeatTimer(gaAddress, route, value, intervalSec) {
-  const key = `${gaAddress}::${route.mqttTopic}`;
-  stopRouteRepeatTimer(key);
-  const ms = Math.max(MIN_REPEAT_INTERVAL_MS, intervalSec * 1000);
-  const timer = setInterval(() => {
-    const ga = config.groupAddresses.find((g) => g.address === gaAddress);
-    const currentRoute = ga && Array.isArray(ga.routes)
-      ? ga.routes.find((r) => r.mqttTopic === route.mqttTopic)
-      : null;
-    if (!currentRoute || !(Number(currentRoute.repeatInterval) > 0)) {
-      clearInterval(timer);
-      routeRepeatTimers.delete(key);
-      return;
-    }
-    publishRepeatTick(route.mqttTopic, value);
-    console.log(`[BRIDGE] Repeat route KNX→MQTT ${gaAddress} → ${route.mqttTopic} = ${value}`);
-  }, ms);
-  routeRepeatTimers.set(key, timer);
-}
-
-function stopRouteRepeatTimer(key) {
-  const existing = routeRepeatTimers.get(key);
-  if (existing) {
-    clearInterval(existing);
-    routeRepeatTimers.delete(key);
-  }
-}
-
 // ── Router helpers ─────────────────────────────────────────────────────────────
 
 /**
@@ -150,6 +60,60 @@ function subscribeRouteTopics() {
   }
 }
 
+// ── Visual Routing Designer (sidecar, legacy routes stay active) ───────────────
+const routingStore = webServer.routingStore;
+function subscribeVisualRoutes() {
+  for (const route of routingStore.routes) {
+    if (route.enabled && ['mqtt', 'mqttDevice'].includes(route.from.type)) {
+      try { const endpoint = routingStore.resolve(route.from, routingStore.endpoints); if (endpoint.topic) mqttHandler.subscribe(endpoint.topic); } catch (err) { console.warn('[ROUTING]', err.message); }
+    }
+  }
+}
+function routePayload(value, type, toKnx, transform) {
+  if (transform?.kind === 'constant') return String(transform.value);
+  if (transform?.kind === 'map') {
+    const raw = String(value);
+    const normalized = ['1','true','on'].includes(raw.toLowerCase()) ? 'ON' : ['0','false','off'].includes(raw.toLowerCase()) ? 'OFF' : raw;
+    const mapped = transform.values[raw] ?? transform.values[normalized];
+    return mapped === undefined ? (Object.hasOwn(transform,'defaultValue') ? String(transform.defaultValue) : raw) : String(mapped);
+  }
+  if (type !== 'boolean') return String(value);
+  const v = String(value).trim().toLowerCase();
+  if (['1','true','on','ein'].includes(v)) return toKnx ? '1' : 'true';
+  if (['0','false','off','aus'].includes(v)) return toKnx ? '0' : 'false';
+  return null;
+}
+knxHandler.on('groupValueWrite', ({ address, value }) => {
+  for (const route of routingStore.routes) {
+    if (!route.enabled || route.from.type !== 'device') continue;
+    try {
+      const source = routingStore.resolve(route.from, routingStore.endpoints);
+      if (source.address !== address) continue;
+      const destination = routingStore.resolve(route.to, routingStore.endpoints);
+      const payload = routePayload(value, source.type, false, route.transform);
+      if (payload === null) continue;
+      mqttHandler.publish(destination.topic, payload);
+      eventEmitter.emit('routing-traffic', { id: route.id, value: payload, direction: 'KNX→MQTT', timestamp: new Date().toISOString() });
+    } catch (err) { console.warn('[ROUTING] Invalid KNX route:', err.message); }
+  }
+});
+mqttHandler.on('message', ({ topic, value }) => {
+  for (const route of routingStore.routes) {
+    if (!route.enabled || !['mqtt', 'mqttDevice'].includes(route.from.type)) continue;
+    try {
+      const source = routingStore.resolve(route.from, routingStore.endpoints);
+      if (source.topic !== topic) continue;
+      const destination = routingStore.resolve(route.to, routingStore.endpoints);
+      const payload = routePayload(value, source.type, true, route.transform);
+      if (payload === null || !knxHandler.connected) continue;
+      if (!knxHandler.write(destination.address, payload)) continue;
+      eventEmitter.emit('routing-traffic', { id: route.id, value: payload, direction: 'MQTT→KNX', timestamp: new Date().toISOString() });
+    } catch (err) { console.warn('[ROUTING] Invalid MQTT route:', err.message); }
+  }
+});
+mqttHandler.on('connected', subscribeVisualRoutes);
+eventEmitter.on('routing-changed', subscribeVisualRoutes);
+
 // ── KNX → MQTT ─────────────────────────────────────────────────────────────────
 knxHandler.on('groupValueWrite', ({ address, src, value, name }) => {
   const topic = `${config.topicPrefix}/${address}`;
@@ -163,29 +127,14 @@ knxHandler.on('groupValueWrite', ({ address, src, value, name }) => {
     if (direction === 'both' || direction === 'knx2mqtt') {
       mqttHandler.publish(topic, value);
 
-      // GA-level repeat timer
-      const gaInterval = Number(ga.repeatInterval);
-      if (gaInterval > 0) {
-        startRepeatTimer(address, topic, String(value), gaInterval);
-      } else {
-        stopRepeatTimer(address);
-      }
-
       // Custom routes: publish to each configured route topic (with optional value mapping)
       if (Array.isArray(ga.routes)) {
         for (const route of ga.routes) {
-          if (!route.mqttTopic) continue;
+          if (!route.mqttTopic || routingStore.migrated(address, route.mqttTopic, 'knx2mqtt')) continue;
           const routeValue = applyValueMap(String(value), route.valueMap);
           mqttHandler.publish(route.mqttTopic, routeValue);
           console.log(`[BRIDGE] Route KNX→MQTT ${address} → ${route.mqttTopic} = ${routeValue}`);
 
-          // Route-level repeat timer
-          const routeInterval = Number(route.repeatInterval);
-          if (routeInterval > 0) {
-            startRouteRepeatTimer(address, route, routeValue, routeInterval);
-          } else {
-            stopRouteRepeatTimer(`${address}::${route.mqttTopic}`);
-          }
         }
       }
     } else {
@@ -246,7 +195,7 @@ mqttHandler.on('message', ({ topic, value }) => {
   for (const ga of config.groupAddresses) {
     if (!Array.isArray(ga.routes)) continue;
     for (const route of ga.routes) {
-      if (route.mqttTopic !== topic) continue;
+      if (route.mqttTopic !== topic || routingStore.migrated(ga.address, topic, 'mqtt2knx')) continue;
 
       const direction = ga.direction || 'both';
       if (direction === 'both' || direction === 'mqtt2knx') {

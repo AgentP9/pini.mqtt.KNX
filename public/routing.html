@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="de" data-bs-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Routing Designer · pini.mqtt.KNX</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet"><script src="/socket.io/socket.io.js"></script>
+<style>
+body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:420px;background:var(--bs-body-bg);border:1px solid var(--bs-border-color);border-radius:1rem;overflow:auto}.lanes{display:grid;grid-template-columns:minmax(230px,1fr) minmax(230px,1fr);gap:12%;padding:1.5rem;position:relative;z-index:2}.node{background:var(--bs-body-bg);border:1px solid var(--bs-border-color);border-radius:.8rem;padding:.75rem;margin-bottom:.75rem;box-shadow:0 2px 8px #0001}.node h3{font-size:1rem;margin:0 0 .5rem}.signal{display:flex;align-items:center;justify-content:space-between;gap:.5rem;border-top:1px solid var(--bs-border-color);padding:.4rem 0;font-size:.85rem}.signal button{white-space:nowrap;flex-shrink:0}#mqtt .signal{justify-content:flex-start}#mqtt .signal .signal-btn{margin-right:.25rem}.signal button.selected{background:var(--bs-primary);color:white}.links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}.muted{color:var(--bs-secondary-color)}@media(max-width:650px){.lanes{gap:1rem;grid-template-columns:minmax(170px,1fr) minmax(170px,1fr);padding:.7rem}.node{padding:.5rem}.signal{flex-wrap:wrap}}
+.aligned-route{display:grid;grid-template-columns:minmax(180px,1fr) minmax(150px,.9fr) minmax(180px,1fr);gap:1rem;align-items:center;border-bottom:1px solid var(--bs-border-color);padding:1rem 0}.aligned-route .node{margin:0}.transform-chip{display:block;text-align:center;font-size:.8rem;white-space:normal;overflow-wrap:anywhere}.aligned-route .arrow{text-align:center;color:var(--bs-primary)}@media(max-width:700px){.aligned-route{gap:.4rem;grid-template-columns:minmax(90px,1fr) minmax(90px,1fr) minmax(90px,1fr)}.aligned-route .node{padding:.4rem}}.workspace{overflow:auto}.lanes{display:grid;grid-template-columns:minmax(230px,1fr) minmax(230px,1fr);gap:16%;padding:1.5rem;position:relative;z-index:2;align-items:start}.node{position:relative}.node h3{min-height:1.5rem}.signal{min-height:43px}.links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3;overflow:visible}.connection-label{font-size:12px;fill:var(--bs-body-color);paint-order:stroke;stroke:var(--bs-body-bg);stroke-width:5px;stroke-linejoin:round}.connection-path{fill:none;stroke:var(--bs-primary);stroke-width:2.5;opacity:.8}.connection-path.inactive{stroke:var(--bs-secondary-color);stroke-dasharray:6 5;opacity:.55}.route-transform{position:absolute;z-index:4;transform:translate(-50%,-50%);font-size:.73rem;max-width:190px;white-space:normal;overflow-wrap:anywhere;box-shadow:0 1px 4px #0002}.route-transform.inactive{opacity:.65}
+.route-actions{display:flex;align-items:center;justify-content:center;gap:.45rem;margin-top:.35rem}.route-actions input{cursor:pointer}.route-actions .btn{padding:.12rem .3rem}.floating-route-actions{position:absolute;z-index:5;transform:translate(-50%,0);background:var(--bs-body-bg);border-radius:.35rem;padding:.12rem .3rem;box-shadow:0 1px 3px #0002}#route-dialog{border:1px solid var(--bs-border-color);border-radius:1rem;max-width:min(94vw,560px);width:100%;background:var(--bs-body-bg);color:var(--bs-body-color);box-shadow:0 20px 60px #0004}#route-dialog::backdrop{background:#0007}.aligned-route{padding:1.6rem 0;gap:1.75rem}.aligned-connector{min-height:64px}.lanes{gap:20%;padding:2rem 1.5rem}.signal{min-height:56px}.route-transform{max-width:170px;padding:.35rem .6rem}.node{padding:1rem}@media(max-width:700px){.aligned-route{gap:.6rem;padding:1rem 0}.lanes{gap:1rem;padding:1rem .7rem}.node{padding:.6rem}}.connection-arrow{fill:none;stroke:var(--bs-primary);stroke-width:2.8;stroke-linecap:round;stroke-linejoin:round}.connection-arrow.inactive{stroke:var(--bs-secondary-color);opacity:.55}</style></head><body>
+<main class="container-fluid py-3" style="max-width:1500px">
+<header class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3"><div><a href="/" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Dashboard</a><h1 class="h3 mt-2">Routing Designer</h1><p class="muted mb-0">Device-Signale mit MQTT-Topics verbinden. Keine Logikbausteine nötig.</p></div><div class="d-flex gap-2"><button class="btn btn-outline-info" id="migration-preview"><i class="bi bi-arrow-left-right"></i> Bestehende Routen migrieren</button><button class="btn btn-outline-secondary" id="reload">Verwerfen</button><button class="btn btn-primary" id="save">Änderungen aktivieren</button></div></header>
+<div id="notice" role="status" class="small mb-3"></div><div id="focus-bar" class="alert alert-info py-2" hidden><span id="focus-label"></span> <button class="btn btn-sm btn-outline-primary ms-2" id="clear-focus">Alle Devices anzeigen</button></div>
+<section id="migration-panel" class="card mb-3" hidden><div class="card-header d-flex justify-content-between"><strong>Migration bestehender GA-Routen</strong><button class="btn-close" id="migration-close" aria-label="Schließen"></button></div><div class="card-body"><p class="small text-muted">Eindeutig zuordenbare Routen werden angeboten. Bestehende Wertumwandlungen werden übernommen. Die bisherigen Einstellungen bleiben als Rückfalloption erhalten.</p><div id="migration-list"></div><div id="migration-skipped" class="small text-muted mt-2"></div><hr><div class="d-flex justify-content-between align-items-center"><strong class="small">Alte Routings bereinigen</strong><button type="button" class="btn btn-sm btn-outline-secondary" id="load-legacy">Alte Routings anzeigen</button></div><div id="legacy-list" class="mt-2"></div><button type="button" class="btn btn-sm btn-outline-danger mt-2" id="delete-legacy" disabled>Ausgewählte alte Routings löschen</button><button class="btn btn-primary mt-3" id="migration-confirm">Ausgewählte Routen migrieren</button></div></section>
+<div class="row g-3"><div class="col-12 col-xl-9">
+<div class="d-flex justify-content-between align-items-center mb-2"><h2 class="h6 m-0">Signalübersicht</h2><span class="small muted">Zuerst Quelle, dann Ziel anklicken</span></div>
+<div class="workspace" id="workspace"><svg id="links" class="links" aria-hidden="true"></svg><div class="lanes"><section id="devices"><h2 class="h6 mb-3"><i class="bi bi-house"></i> Devices</h2></section><section id="mqtt"><h2 class="h6 mb-3"><i class="bi bi-broadcast"></i> MQTT-Endpunkte</h2></section></div></div>
+</div><aside class="col-12 col-xl-3">
+<div class="card mb-3"><div class="card-header fw-semibold">MQTT-Device anlegen</div><form class="card-body" id="mqtt-device-form">
+<label class="form-label" for="mqtt-device-name">Device-Name</label><input class="form-control mb-2" id="mqtt-device-name" required maxlength="120" placeholder="Sonos Esszimmer">
+<label class="form-label" for="mqtt-device-template">Template</label><select class="form-select mb-2" id="mqtt-device-template"><option value="sonos">Sonos Player</option><option value="generic">Generisches MQTT-Device</option></select>
+<label class="form-label" for="mqtt-device-base">MQTT-Basistopic</label><input class="form-control mb-3" id="mqtt-device-base" required placeholder="sonos/devices/Esszimmer">
+<button class="btn btn-outline-primary w-100" type="submit">MQTT-Device hinzufügen</button></form></div>
+<div class="card mb-3"><div class="card-header fw-semibold">MQTT-Device-Signal hinzufügen</div><form class="card-body" id="mqtt-signal-form">
+<label class="form-label" for="signal-device">MQTT-Device</label><select class="form-select mb-2" id="signal-device" required></select>
+<label class="form-label" for="signal-topic">MQTT-Topic</label><input class="form-control mb-2" id="signal-topic" maxlength="240" required placeholder="sonos/devices/Esszimmer/set/mute">
+<label class="form-label" for="signal-type">Payload-Typ</label><select class="form-select mb-2" id="signal-type"><option value="boolean">Boolean</option><option value="number">Zahl</option><option value="text">Text</option></select>
+<label class="form-label" for="signal-direction">Signalrichtung</label><select class="form-select mb-3" id="signal-direction"><option value="input">Eingang (Nachricht an Device)</option><option value="output">Ausgang (Nachricht vom Device)</option><option value="both">Beide Richtungen</option></select>
+<button class="btn btn-outline-primary w-100" type="submit">Signal hinzufügen</button></form></div>
+<div class="card mb-3"><div class="card-header fw-semibold">Einzelnes MQTT-Topic anlegen</div><form id="endpoint-form" class="card-body">
+<label class="form-label" for="topic-name">Name</label><input class="form-control mb-2" id="topic-name" required maxlength="120" placeholder="Esszimmer Licht">
+<label class="form-label" for="topic">Topic</label><input class="form-control mb-2" id="topic" required maxlength="240" placeholder="home/dining/light/set">
+<label class="form-label" for="payload-type">Payload-Typ</label><select class="form-select mb-3" id="payload-type"><option value="boolean">Boolean</option><option value="number">Zahl</option><option value="text">Text</option></select>
+<button class="btn btn-outline-primary w-100" type="submit"><i class="bi bi-plus-lg"></i> MQTT hinzufügen</button></form></div>
+
+<p class="small muted mt-3">Bestehende GA-Routen bleiben aktiv. Neue Verbindungen werden separat gespeichert. Vor dem Aktivieren werden Signaltypen und Schreibrichtungen geprüft.</p>
+</aside></div></main><dialog id="route-dialog" aria-labelledby="route-dialog-title"><form id="route-dialog-form" class="p-3"><h3 class="h5 mb-3" id="route-dialog-title">Verbindung bearbeiten</h3><div id="route-dialog-path" class="small text-secondary mb-3"></div><label class="form-label" for="route-dialog-direction">Datenfluss</label><select class="form-select mb-3" id="route-dialog-direction"><option value="knx2mqtt">KNX → MQTT</option><option value="mqtt2knx">MQTT → KNX</option></select><div class="small text-secondary mb-3" id="route-dialog-direction-hint"></div><label class="form-label" for="route-dialog-map">Wertumwandlung (JSON)</label><textarea class="form-control mb-3" id="route-dialog-map" rows="5" spellcheck="false"></textarea><div class="form-check mb-4"><input class="form-check-input" type="checkbox" id="route-dialog-enabled"><label class="form-check-label" for="route-dialog-enabled">Verbindung aktiv</label></div><div class="d-flex gap-2 justify-content-between"><button type="button" class="btn btn-outline-danger" id="route-dialog-delete">Verbindung löschen</button><div class="d-flex gap-2"><button type="button" class="btn btn-outline-secondary" id="route-dialog-cancel">Abbrechen</button><button type="submit" class="btn btn-primary">Übernehmen</button></div></div><p class="small text-secondary mt-3 mb-0">Änderungen anschließend aktivieren.</p></form></dialog>
+<script>
+let graph={endpoints:[],mqttDevices:[],routes:[]},devices=[],templates=[],selected=null,dirty=false,migration=null;
+let focusAddress=new URLSearchParams(location.search).get("ga"),focusRoute=new URLSearchParams(location.search).get("route");
+const lastTraffic=new Map();
+const socket=io();socket.on('routing-traffic',entry=>{lastTraffic.set(entry.id,entry);});
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>{const bytes=new Uint8Array(16);crypto.getRandomValues(bytes);bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;return [...bytes].map((b,i)=>([4,6,8,10].includes(i)?'-':'')+b.toString(16).padStart(2,'0')).join('')};
+const signalKey=r=>r.type+':'+r.id+':'+(r.signal||'');
+const signals=()=>devices.flatMap(d=>{const t=templates.find(t=>t.id===d.templateId);return (t?.objects||[]).filter(o=>d.addresses?.[o.key]).map(o=>({ref:{type:'device',id:d.id,signal:o.key},name:d.name+' · '+o.label,type:o.dpt.startsWith('1.')?'boolean':'number',dpt:o.dpt,dir:o.direction||'both',address:d.addresses[o.key]}))});
+const endpointSignals=()=>[...graph.endpoints.map(e=>({ref:{type:'mqtt',id:e.id},name:e.name+' · '+e.topic,type:e.payloadType})),...(graph.mqttDevices||[]).flatMap(d=>d.signals.map(x=>({ref:{type:'mqttDevice',id:d.id,signal:x.key},name:d.name+' · '+x.topic,type:x.payloadType,topic:x.topic,direction:x.direction})))];
+const mqttTemplates={
+ sonos:[{key:'control',suffix:'/control',payloadType:'text',direction:'input'},{key:'volume',suffix:'/set/volume',payloadType:'number',direction:'input'},{key:'state',suffix:'/state',payloadType:'text',direction:'output'}],
+ generic:[{key:'command',suffix:'/set',payloadType:'text',direction:'input'},{key:'status',suffix:'/state',payloadType:'text',direction:'output'}]
+};
+function mqttTemplateUpgrade(device){
+ const template=mqttTemplates[device.templateId];if(!template)return null;
+ const base=device.baseTopic||(()=>{const known=device.signals.map(x=>template.find(t=>x.topic.endsWith(t.suffix))).filter(Boolean);const match=device.signals.find(x=>template.some(t=>x.topic.endsWith(t.suffix)));const suffix=template.find(t=>match?.topic.endsWith(t.suffix))?.suffix;return suffix?match.topic.slice(0,-suffix.length):null})();
+ if(!base)return null;
+ const additions=template.filter(t=>!device.signals.some(x=>x.topic===base+t.suffix));
+ return {base,additions};
+}
+function notice(message,error=false){$('notice').textContent=message;$('notice').className='small mb-3 '+(error?'text-danger':'text-success')}
+function isFocused(r){
+ if(focusRoute)return r.id===focusRoute;
+ if(!focusAddress)return true;
+ const list=signals();
+ // A GA deep-link selects its device, not only that one signal.
+ // This keeps the Sonos state -> KNX status feedback visible when the
+ // designer was opened from the switch command GA.
+ const deviceIds=new Set(list.filter(s=>s.address===focusAddress).map(s=>s.ref.id));
+ return [r.from,r.to].some(ref=>ref.type==='device'&&deviceIds.has(ref.id));
+}
+function transformLabel(r){
+ if(!r.transform)return 'Direkt';
+ if(r.transform.kind==='constant')return 'Konstant: '+String(r.transform.value);
+ return [...Object.entries(r.transform.values||{}).map(([k,v])=>k+' → '+v),...(Object.hasOwn(r.transform,'defaultValue')?['Sonst → '+r.transform.defaultValue]:[])].join(' · ')||'Wertetabelle (leer)';
+}
+function render(){
+ const list=signals(),eps=endpointSignals();
+ const focused=graph.routes.filter(isFocused);
+ $('focus-bar').hidden=!focusAddress&&!focusRoute;
+ $('focus-label').textContent=focusAddress?'Routing für Gruppenadresse '+focusAddress:'Ausgewählte Verbindung '+(focusRoute||'');
+ const visibleDevices=focusAddress||focusRoute?devices.filter(d=>focused.some(r=>[r.from,r.to].some(ref=>ref.type==='device'&&ref.id===d.id))):devices;
+ const visibleMqttIds=new Set(focused.flatMap(r=>[r.from,r.to].filter(ref=>ref.type!=='device').map(ref=>ref.id)));
+ const deviceCards=visibleDevices.map(d=>{
+  const own=list.filter(x=>x.ref.id===d.id);
+  return {id:d.id,html:'<div class="node" data-node="device:'+esc(d.id)+'"><h3>'+esc(d.name)+'</h3>'+own.map(signalHtml).join('')+'</div>'};
+ });
+ const mqttCards=[
+ ...(graph.mqttDevices||[]).filter(d=>!focusAddress&&!focusRoute||visibleMqttIds.has(d.id)).map(d=>({id:d.id,html:'<div class="node" data-node="mqttDevice:'+esc(d.id)+'"><h3><i class="bi bi-speaker"></i> '+esc(d.name)+'</h3>'+eps.filter(x=>x.ref.type==='mqttDevice'&&x.ref.id===d.id).map(signalHtml).join('')+(mqttTemplateUpgrade(d)?.additions.length?'<button class="btn btn-sm btn-outline-primary upgrade-mqtt-device me-2" data-id="'+esc(d.id)+'"><i class="bi bi-arrow-up-circle"></i> Template aktualisieren ('+mqttTemplateUpgrade(d).additions.length+')</button>':'')+'<button class="btn btn-sm btn-link text-danger delete-mqtt-device" data-id="'+esc(d.id)+'">Entfernen</button></div>'})),
+ ...eps.filter(x=>x.ref.type==='mqtt'&&(!focusAddress&&!focusRoute||visibleMqttIds.has(x.ref.id))).map(x=>({id:x.ref.id,html:'<div class="node" data-node="mqtt:'+esc(x.ref.id)+'"><h3>'+esc(graph.endpoints.find(e=>e.id===x.ref.id).name)+'</h3>'+signalHtml(x)+'<button class="btn btn-sm btn-link text-danger delete-endpoint" data-id="'+esc(x.ref.id)+'">Entfernen</button></div>'}))
+ ];
+ // Order the right-hand cards by their connected KNX device, so related
+ // devices start on the same horizontal level instead of independent lists.
+ const order=new Map(deviceCards.map((d,i)=>[d.id,i]));
+ mqttCards.sort((a,b)=>{
+  const rank=c=>Math.min(Infinity,...focused.filter(r=>[r.from,r.to].some(x=>x.id===c.id&&x.type!=='device')).flatMap(r=>[r.from,r.to].filter(x=>x.type==='device').map(x=>order.get(x.id)??Infinity)));
+  return rank(a)-rank(b);
+ });
+ $('devices').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-house"></i> KNX-Devices</h2>'+deviceCards.map(c=>c.html).join('');
+ $('mqtt').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-broadcast"></i> MQTT-Devices und Endpunkte</h2>'+mqttCards.map(c=>c.html).join('');
+ $('signal-device').innerHTML=(graph.mqttDevices||[]).map(d=>'<option value="'+esc(d.id)+'">'+esc(d.name)+'</option>').join('');
+ renderRoutes();
+ requestAnimationFrame(()=>{alignNodes(focused);drawLinks(focused)});
+}
+function alignNodes(routes){
+ // Add spacing only on the right lane, keeping the original card layout.
+ const root=$('workspace'),right=$('mqtt');
+ right.querySelectorAll('.node').forEach(n=>n.style.marginTop='');
+ const knx=signals();
+ for(const node of right.querySelectorAll('.node')){
+  const ref=node.dataset.node;
+  const connected=routes.filter(r=>[r.from,r.to].some(x=>x.type+':'+x.id===ref));
+  const targets=connected.flatMap(r=>[r.from,r.to].filter(x=>x.type==='device').map(x=>knx.find(y=>signalKey(y.ref)===signalKey(x))));
+  const top=Math.min(Infinity,...targets.filter(Boolean).map(x=>{const btn=[...document.querySelectorAll('#devices .signal-btn')].find(el=>el.dataset.key===signalKey(x.ref));return btn?btn.getBoundingClientRect().top:Infinity}));
+  if(!Number.isFinite(top))continue;
+  const linked=connected.flatMap(r=>[r.from,r.to].filter(x=>x.type!=='device'&&x.type+':'+x.id===ref));
+  const own=[...node.querySelectorAll('.signal-btn')].find(el=>linked.some(x=>el.dataset.key===signalKey(x)))||node.querySelector('.signal-btn');
+  if(!own)continue;
+  const delta=top-own.getBoundingClientRect().top;
+  if(delta>0)node.style.marginTop=Math.min(delta,600)+'px';
+ }
+}
+function drawLinks(routes=graph.routes.filter(isFocused)){
+ const root=$('workspace'),svg=$('links');
+ root.querySelectorAll('.route-transform').forEach(x=>x.remove());
+ const rect=root.getBoundingClientRect(),width=root.scrollWidth,height=root.scrollHeight;
+ svg.setAttribute('viewBox','0 0 '+width+' '+height);svg.setAttribute('width',width);svg.setAttribute('height',height);
+ svg.innerHTML='';
+ const find=ref=>[...root.querySelectorAll('.signal-btn')].find(el=>el.dataset.key===signalKey(ref));
+ for(const r of routes){
+  const a=find(r.from),b=find(r.to);if(!a||!b)continue;
+  const p=a.getBoundingClientRect(),q=b.getBoundingClientRect();
+  const fromDevice=r.from.type==='device',left=fromDevice?p:q,right=fromDevice?q:p;
+  const x1=left.right-rect.left+root.scrollLeft,y1=left.top+left.height/2-rect.top+root.scrollTop;
+  const x2=right.left-rect.left+root.scrollLeft,y2=right.top+right.height/2-rect.top+root.scrollTop;
+  const mid=(x1+x2)/2,ns='http://www.w3.org/2000/svg';
+  const path=document.createElementNS(ns,'path');
+  path.setAttribute('d','M '+x1+' '+y1+' C '+mid+' '+y1+', '+mid+' '+y2+', '+x2+' '+y2);
+  path.setAttribute('class','connection-path'+(r.enabled?'':' inactive'));
+  svg.appendChild(path);
+  // Place a directional arrow on the curve, away from the edit button.
+  const forward=r.from.type==='device';
+  const t=forward?.76:.24;
+  const bx=(1-t)**3*x1+3*(1-t)**2*t*mid+3*(1-t)*t*t*mid+t**3*x2;
+  const by=(1-t)**3*y1+3*(1-t)**2*t*y1+3*(1-t)*t*t*y2+t**3*y2;
+  const dx=3*(1-t)**2*(mid-x1)+3*t*t*(x2-mid);
+  const dy=6*(1-t)*t*(y2-y1);
+  const angle=Math.atan2(forward?dy:-dy,forward?dx:-dx);
+  const arrow=document.createElementNS(ns,'path');
+  arrow.setAttribute('d','M -9 -5 L 0 0 L -9 5');
+  arrow.setAttribute('transform','translate('+bx+' '+by+') rotate('+(angle*180/Math.PI)+')');
+  arrow.setAttribute('class','connection-arrow'+(r.enabled?'':' inactive'));
+  svg.appendChild(arrow);
+  const chip=document.createElement('button');chip.type='button';chip.className='btn btn-sm btn-light border route-transform edit-transform'+(r.enabled?'':' inactive');
+  chip.dataset.id=r.id;chip.textContent=transformLabel(r);chip.title='Wertumwandlung bearbeiten';
+  chip.style.left=mid+'px';chip.style.top=((y1+y2)/2)+'px';root.appendChild(chip);
+  
+ }
+}
+$('clear-focus').onclick=()=>{focusAddress=null;focusRoute=null;history.replaceState(null,'',location.pathname);render()};
+function renderRoutes(){ /* Connections are managed directly on the canvas. */ }
+function signalHtml(s){const key=signalKey(s.ref);const button='<button class="btn btn-sm btn-outline-primary signal-btn '+(selected&&signalKey(selected.ref)===key?'selected':'')+'" data-key="'+esc(key)+'" title="Als Quelle oder Ziel wählen"><i class="bi bi-circle"></i></button>';const label='<span>'+esc(s.name.split(' · ').slice(1).join(' · '))+' <span class="muted">'+(s.ref.type==='device'?' · '+esc(s.address)+' · DPT '+esc(s.dpt):' ('+esc(s.type)+')')+'</span></span>';return '<div class="signal">'+(s.ref.type==='device'?label+button:button+label)+'</div>'}
+function choose(ref){const all=[...signals(),...endpointSignals()];const next=all.find(s=>signalKey(s.ref)===signalKey(ref));if(!next)return;if(!selected){selected=next;notice('Quelle gewählt: '+next.name+'. Jetzt Ziel auswählen.');render();return}const from=selected;selected=null;if((from.ref.type==='device')===(next.ref.type==='device')){notice('Eine Verbindung benötigt ein Device und einen MQTT-Endpunkt.',true);render();return}if(from.type!==next.type){notice('Datentypen unterscheiden sich. Nach dem Verbinden eine Wertumwandlung konfigurieren.',true)}if(from.ref.type==='device'&&!['both','knx2mqtt'].includes(from.dir)){notice('Dieses Device-Signal kann nicht gelesen werden.',true);render();return}if(next.ref.type==='device'&&next.ref.signal!=='status'&&!['both','mqtt2knx'].includes(next.dir)){notice('Dieses Device-Signal ist nicht schreibbar.',true);render();return}if(next.ref.type==='mqttDevice'&&!['input','both'].includes(next.direction)){notice('Dieses MQTT-Signal ist kein Eingang.',true);render();return}if(from.ref.type==='mqttDevice'&&!['output','both'].includes(from.direction)){notice('Dieses MQTT-Signal ist kein Ausgang.',true);render();return}if(graph.routes.some(r=>signalKey(r.to)===signalKey(next.ref))){notice('Dieses Ziel besitzt bereits eine Verbindung.',true);render();return}graph.routes.push({id:uid(),from:from.ref,to:next.ref,enabled:true,...(from.type!==next.type?{transform:{kind:'map',values:{}}}:{})});dirty=true;notice('Verbindung hinzugefügt. Mit „Änderungen aktivieren“ speichern.');render()}
+
+let editingRouteId=null;
+function routeMapText(r){
+ if(r.transform?.kind==='map')return JSON.stringify({...r.transform.values,...(Object.hasOwn(r.transform,'defaultValue')?{'*':r.transform.defaultValue}:{})},null,2);
+ if(r.transform?.kind==='constant')return JSON.stringify({constant:r.transform.value},null,2);
+ return '{}';
+}
+function openRouteDialog(id){
+ const r=graph.routes.find(r=>r.id===id);if(!r)return;
+ editingRouteId=id;
+ const all=[...signals(),...endpointSignals()];
+ const name=ref=>all.find(x=>signalKey(x.ref)===signalKey(ref))?.name||'Unbekannt';
+ $('route-dialog-path').textContent=name(r.from)+' → '+name(r.to);
+ $('route-dialog-map').value=routeMapText(r);
+ $('route-dialog-direction').value=r.from.type==='device'?'knx2mqtt':'mqtt2knx';
+ $('route-dialog-direction').disabled=Boolean(r.legacyKey);
+ $('route-dialog-direction-hint').textContent=r.legacyKey?'Migrierte Legacy-Verbindung: Richtung erst nach Ablösen der Legacy-Route änderbar.':'Die Richtung bestimmt, welches Signal sendet und welches empfängt.';
+ $('route-dialog-enabled').checked=r.enabled;
+ $('route-dialog').showModal();
+}
+$('route-dialog-cancel').onclick=()=>$('route-dialog').close();
+$('route-dialog-delete').onclick=()=>{
+ if(!editingRouteId||!confirm('Diese Verbindung wirklich löschen?'))return;
+ graph.routes=graph.routes.filter(r=>r.id!==editingRouteId);
+ dirty=true;$('route-dialog').close();editingRouteId=null;render();notice('Verbindung entfernt. Bitte Änderungen aktivieren.');
+};
+$('route-dialog-form').addEventListener('submit',e=>{
+ e.preventDefault();const r=graph.routes.find(r=>r.id===editingRouteId);if(!r)return;
+ try{
+  const parsed=JSON.parse($('route-dialog-map').value);
+  if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))throw Error('JSON-Objekt erwartet');
+  let transform;
+  if(Object.hasOwn(parsed,'constant')&&Object.keys(parsed).length===1)transform={kind:'constant',value:parsed.constant};
+  else if(Object.keys(parsed).length){const {'*':fallback,...values}=parsed;transform={kind:'map',values,...(Object.hasOwn(parsed,'*')?{defaultValue:fallback}:{})}}
+  const direction=$('route-dialog-direction').value;
+  const currentDirection=r.from.type==='device'?'knx2mqtt':'mqtt2knx';
+  if(direction!==currentDirection){
+   if(r.legacyKey)throw Error('Migrierte Legacy-Verbindung kann nicht umgedreht werden.');
+   const from=r.to,to=r.from;
+   const all=[...signals(),...endpointSignals()];
+   const src=all.find(x=>signalKey(x.ref)===signalKey(from));
+   const dst=all.find(x=>signalKey(x.ref)===signalKey(to));
+   if(!src||!dst)throw Error('Quell- oder Zielsignal fehlt.');
+   if(from.type==='device'&&!['both','knx2mqtt'].includes(src.dir))throw Error('KNX-Signal ist nicht lesbar.');
+   if(to.type==='device'&&to.signal!=='status'&&!['both','mqtt2knx'].includes(dst.dir))throw Error('KNX-Signal ist nicht schreibbar.');
+   if(from.type==='mqttDevice'&&!['output','both'].includes(src.direction))throw Error('MQTT-Signal ist kein Ausgang.');
+   if(to.type==='mqttDevice'&&!['input','both'].includes(dst.direction))throw Error('MQTT-Signal ist kein Eingang.');
+   if(graph.routes.some(other=>other.id!==r.id&&signalKey(other.to)===signalKey(to)))throw Error('Das neue Ziel besitzt bereits eine Verbindung.');
+   if(src.type!==dst.type&&!transform)throw Error('Für unterschiedliche Datentypen ist eine Wertumwandlung erforderlich.');
+   r.from=from;r.to=to;
+  }
+  if(transform)r.transform=transform;else delete r.transform;
+  r.enabled=$('route-dialog-enabled').checked;
+  dirty=true;$('route-dialog').close();editingRouteId=null;render();notice('Verbindung aktualisiert. Bitte Änderungen aktivieren.');
+ }catch(err){notice('Verbindung konnte nicht geändert werden: '+err.message,true);$('route-dialog-map').focus()}
+});
+document.addEventListener('click',e=>{
+ const edit=e.target.closest('.edit-transform');if(edit){openRouteDialog(edit.dataset.id);return}
+ const upgrade=e.target.closest('.upgrade-mqtt-device');
+ if(upgrade){
+  const device=graph.mqttDevices.find(d=>d.id===upgrade.dataset.id);
+  const plan=device&&mqttTemplateUpgrade(device);
+  if(!plan||!plan.additions.length){notice('Das Device ist bereits aktuell oder das Basistopic ist nicht erkennbar.',true);return}
+  const existingTopics=new Set([...graph.endpoints.map(x=>x.topic),...graph.mqttDevices.flatMap(d=>d.signals.map(x=>x.topic))]);
+  const collisions=plan.additions.filter(t=>existingTopics.has(plan.base+t.suffix));
+  if(collisions.length){notice('Upgrade nicht möglich: Topic bereits von anderem Endpunkt belegt: '+collisions.map(t=>plan.base+t.suffix).join(', '),true);return}
+  if(!confirm('Template von '+device.name+' aktualisieren? Neue Signale: '+plan.additions.map(t=>plan.base+t.suffix).join(', ')+'. Bestehende Signale und Verbindungen bleiben erhalten.'))return;
+  for(const t of plan.additions){
+   let key=t.key,number=2;while(device.signals.some(x=>x.key===key))key=t.key+number++;
+   device.signals.push({key,label:plan.base+t.suffix,topic:plan.base+t.suffix,payloadType:t.payloadType,direction:t.direction});
+  }
+  device.baseTopic=plan.base;dirty=true;render();notice('Template ergänzt. Bitte Änderungen aktivieren.');
+  return;
+ }
+ const b=e.target.closest('.signal-btn');if(b){const all=[...signals(),...endpointSignals()];const s=all.find(s=>signalKey(s.ref)===b.dataset.key);if(s)choose(s.ref)}const del=e.target.closest('.delete-route');if(del){if(!confirm('Diese Verbindung wirklich löschen?'))return;graph.routes=graph.routes.filter(r=>r.id!==del.dataset.id);dirty=true;render()}const md=e.target.closest('.delete-mqtt-device');if(md){graph.mqttDevices=graph.mqttDevices.filter(d=>d.id!==md.dataset.id);graph.routes=graph.routes.filter(r=>!(r.from.type==='mqttDevice'&&r.from.id===md.dataset.id)&&!(r.to.type==='mqttDevice'&&r.to.id===md.dataset.id));dirty=true;render()}
+const ep=e.target.closest('.delete-endpoint');if(ep){graph.endpoints=graph.endpoints.filter(x=>x.id!==ep.dataset.id);graph.routes=graph.routes.filter(r=>r.from.id!==ep.dataset.id&&r.to.id!==ep.dataset.id);dirty=true;render()}});
+document.addEventListener('change',e=>{if(e.target.matches('.route-enabled')){const r=graph.routes.find(r=>r.id===e.target.dataset.id);if(r){r.enabled=e.target.checked;dirty=true;render()}}});
+$('mqtt-device-form').addEventListener('submit',e=>{
+ e.preventDefault();
+ const name=$('mqtt-device-name').value.trim(),base=$('mqtt-device-base').value.trim().replace(/\/$/,'');
+ if(!name||!base||/[+#\s]/.test(base)||base.startsWith('knx/')){notice('Ungültiges Basistopic.',true);return}
+ const templateId=$('mqtt-device-template').value;
+ const definitions=templateId==='sonos'?
+ [{key:'control',label:'Wiedergabe',suffix:'/control',payloadType:'text',direction:'input'},{key:'volume',label:'Lautstärke setzen',suffix:'/set/volume',payloadType:'number',direction:'input'},{key:'state',label:'Wiedergabestatus',suffix:'/state',payloadType:'text',direction:'output'}]:
+ [{key:'command',label:'Befehl',suffix:'/set',payloadType:'text',direction:'input'},{key:'status',label:'Status',suffix:'/state',payloadType:'text',direction:'output'}];
+ const signals=definitions.map(d=>({key:d.key,label:d.label,topic:base+d.suffix,payloadType:d.payloadType,direction:d.direction}));
+ if((graph.mqttDevices||[]).some(d=>d.signals.some(x=>signals.some(y=>y.topic===x.topic)))){notice('MQTT-Topic bereits vorhanden.',true);return}
+ graph.mqttDevices.push({id:uid(),name,templateId,baseTopic:base,signals});dirty=true;e.target.reset();render();notice('MQTT-Device angelegt. Verbindungen noch nicht aktiviert.');
+});
+$('mqtt-signal-form').addEventListener('submit',e=>{
+ e.preventDefault();
+ const device=graph.mqttDevices.find(d=>d.id===$('signal-device').value);
+ if(!device){notice('Bitte zunächst ein MQTT-Device anlegen.',true);return}
+ const topic=$('signal-topic').value.trim();
+ if(!topic||/[+#\\s]/.test(topic)||topic.startsWith('knx/')||[...graph.endpoints.map(x=>x.topic),...graph.mqttDevices.flatMap(d=>d.signals.map(x=>x.topic))].includes(topic)){notice('Ungültiges oder bereits verwendetes Topic.',true);return}
+ let key='signal'+(device.signals.length+1);
+ while(device.signals.some(x=>x.key===key))key='signal'+(Number(key.slice(6))+1);
+ device.signals.push({key,label:topic,topic,payloadType:$('signal-type').value,direction:$('signal-direction').value});
+ dirty=true;e.target.reset();render();notice('Signal hinzugefügt. Bitte Änderungen aktivieren.');
+});
+$('endpoint-form').addEventListener('submit',e=>{e.preventDefault();const topic=$('topic').value.trim();if(topic.startsWith('knx/')||/[+#\s]/.test(topic)||graph.endpoints.some(x=>x.topic===topic)){notice('Topic ungültig, reserviert oder bereits vorhanden.',true);return}graph.endpoints.push({id:uid(),name:$('topic-name').value.trim(),topic,payloadType:$('payload-type').value});dirty=true;e.target.reset();render();notice('MQTT-Endpunkt angelegt. Änderungen noch nicht aktiviert.')});
+$('save').onclick=async()=>{try{const r=await fetch('/api/routing',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(graph)});const d=await r.json();if(!r.ok)throw Error(d.error||'Speichern fehlgeschlagen');graph=d;dirty=false;notice('Routing gespeichert und aktiviert.');render()}catch(e){notice(e.message,true)}};
+$('migration-preview').onclick=async()=>{
+ if(dirty){notice('Bitte zunächst ungespeicherte Änderungen aktivieren oder verwerfen.',true);return}
+ try{
+  const r=await fetch('/api/routing/migration-preview');if(!r.ok)throw Error('Vorschau konnte nicht geladen werden');
+  migration=await r.json();
+  $('migration-panel').hidden=false;
+  $('migration-list').innerHTML=migration.candidates.length?migration.candidates.map(c=>'<label class="d-block border-bottom py-2"><input class="form-check-input me-2 migration-check" type="checkbox" value="'+esc(c.key)+'" checked> '+esc(c.deviceName)+' · '+esc(c.signal)+' ↔ '+esc(c.topic)+(c.suggestedDevice?' <span class="badge text-bg-info">Sonos: '+esc(c.suggestedDevice.name)+'</span>':'')+(c.valueMap?' <span class="badge text-bg-secondary">Value Map</span>':'')+' <span class="text-muted">('+esc(c.direction)+')</span></label>').join(''):'<p>Keine automatisch migrierbaren Routen gefunden.</p>';
+  $('migration-skipped').textContent=migration.skipped.length?migration.skipped.length+' nicht automatisch migrierbar: '+migration.skipped.map(x=>x.address+' → '+x.topic+' ('+x.reason+')').join('; '):'';
+  $('migration-confirm').disabled=!migration.candidates.length;
+ }catch(e){notice(e.message,true)}
+};
+$('load-legacy').onclick=async()=>{
+ try{
+  const r=await fetch('/api/groupaddresses');if(!r.ok)throw Error('Gruppenadressen nicht erreichbar');
+  const gas=await r.json();
+  const rows=gas.flatMap(g=>(g.routes||[]).filter(x=>x.mqttTopic).map(x=>({address:g.address,topic:x.mqttTopic})));
+  $('legacy-list').innerHTML=rows.length?rows.map(x=>'<label class="d-block small border-bottom py-2"><input type="checkbox" class="form-check-input me-2 legacy-check" data-address="'+esc(x.address)+'" data-topic="'+esc(x.topic)+'"> '+esc(x.address)+' → '+esc(x.topic)+'</label>').join(''):'<p class="small text-muted">Keine alten Routings vorhanden.</p>';
+  $('delete-legacy').disabled=!rows.length;
+ }catch(e){notice(e.message,true)}
+};
+$('delete-legacy').onclick=async()=>{
+ const routes=[...document.querySelectorAll('.legacy-check:checked')].map(el=>({address:el.dataset.address,topic:el.dataset.topic}));
+ if(!routes.length){notice('Bitte mindestens ein altes Routing auswählen.',true);return}
+ if(!confirm(routes.length+' alte Routings dauerhaft löschen? Bereits migrierte Verbindungen bleiben im Designer erhalten. Nicht migrierte Routings verlieren ihre Funktion.'))return;
+ try{
+  const r=await fetch('/api/routing/legacy-cleanup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({routes})});
+  const data=await r.json();if(!r.ok)throw Error(data.error||'Löschen fehlgeschlagen');
+  await load();await $('load-legacy').onclick();
+  notice(data.deleted+' alte Routings gelöscht. Verbindungen im Designer bleiben erhalten.');
+ }catch(e){notice(e.message,true)}
+};
+$('migration-close').onclick=()=>{$('migration-panel').hidden=true};
+$('migration-confirm').onclick=async()=>{
+ const keys=Array.from(document.querySelectorAll('.migration-check:checked')).map(x=>x.value);
+ if(!keys.length){notice('Bitte mindestens eine Route auswählen.',true);return}
+ if(!confirm(keys.length+' Routen migrieren? Die alten Routings bleiben gespeichert, werden aber für die übernommenen Signalrichtungen nicht mehr ausgeführt.'))return;
+ try{
+  const r=await fetch('/api/routing/migrate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keys})});
+  const d=await r.json();if(!r.ok)throw Error(d.error||'Migration fehlgeschlagen');
+  $('migration-panel').hidden=true;await load();notice(keys.length+' Routen migriert und aktiviert. Alte Routings bleiben gespeichert.');
+ }catch(e){notice(e.message,true)}
+};
+$('reload').onclick=()=>load();
+async function load(){try{const r=await Promise.all(['/api/routing','/api/devices','/api/device-templates'].map(p=>fetch(p).then(x=>{if(!x.ok)throw Error(p+' nicht erreichbar');return x.json()})));[graph,devices,templates]=r;selected=null;dirty=false;render();notice('Routing geladen.')}catch(e){notice(e.message,true)}}
+window.addEventListener('resize',()=>requestAnimationFrame(()=>{alignNodes(graph.routes.filter(isFocused));drawLinks()}));
+window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
+load();
+</script></body></html>

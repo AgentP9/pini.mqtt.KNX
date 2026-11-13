@@ -105,6 +105,7 @@
   <div class="container-fluid">
     <span class="navbar-brand fw-bold">⚡ piniMqtt4KNX</span>
     <div class="d-flex gap-2 align-items-center">
+      <a class="btn btn-sm btn-outline-light" href="/routing.html"><i class="bi bi-diagram-3"></i> <span class="d-none d-sm-inline">Routing Designer</span></a>
       <span id="knx-badge"  class="badge bg-secondary badge-status">KNX: …</span>
       <span id="mqtt-badge" class="badge bg-secondary badge-status">MQTT: …</span>
       <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="offcanvas" data-bs-target="#trafficDrawer" aria-controls="trafficDrawer" aria-label="Open live traffic logs" title="Live traffic logs"><i class="bi bi-terminal"></i> <span class="d-none d-sm-inline">Live Logs</span></button>
@@ -341,16 +342,6 @@
             <option value="mqtt2knx">MQTT → KNX only</option>
           </select>
         </div>
-        <div class="mb-3">
-          <label for="ga-repeat-interval" class="form-label">
-            Repeat Interval
-            <small class="text-muted fw-normal ms-1" title="Re-publish the last KNX value to MQTT at this interval (seconds) until a new KNX message arrives. Leave blank or 0 to disable.">ℹ</small>
-          </label>
-          <div class="input-group">
-            <input type="number" class="form-control" id="ga-repeat-interval" placeholder="e.g. 5" min="0" step="1">
-            <span class="input-group-text">seconds</span>
-          </div>
-        </div>
         <!-- Routes section -->
         <hr>
         <div class="d-flex justify-content-between align-items-center mb-2">
@@ -533,6 +524,8 @@
     });
   }
 
+  let migratedGALinks = {};
+  function refreshMigratedGALinks(){fetch('/api/routing/group-address-links').then(r=>r.ok?r.json():{}).then(data=>{migratedGALinks=data;renderGATable(configuredGAs)}).catch(()=>{});}
   function renderGATable(addresses) {
     configuredGAs = addresses;
     renderDevices();
@@ -572,12 +565,17 @@
     }
     gaBody.innerHTML = sorted.map((ga, rowIndex) => {
       const routeCount = Array.isArray(ga.routes) ? ga.routes.filter((r) => r.mqttTopic).length : 0;
-      const routesBadge = routeCount > 0
-        ? `<span class="badge bg-info text-dark" title="${escHtml(ga.routes.filter((r) => r.mqttTopic).map((r) => r.mqttTopic).join(', '))}">${routeCount} route${routeCount > 1 ? 's' : ''}</span>`
-        : '<span class="text-muted">–</span>';
-      const repeatBadge = ga.repeatInterval > 0
-        ? `<span class="badge bg-warning text-dark repeat-icon ms-1" title="Repeat every ${escHtml(String(ga.repeatInterval))}s">↻${escHtml(String(ga.repeatInterval))}s</span>`
-        : '';
+      const migrated = migratedGALinks[ga.address] || [];
+      const activeMigrated = migrated.filter(r => r.enabled);
+      const migratedTopics = new Set(activeMigrated.map(r => { try { return JSON.parse(r.legacyKey)[1]; } catch (_) { return r.id; } }));
+      const legacyCount = Math.max(0, routeCount - migratedTopics.size);
+      const totalRoutes = legacyCount + activeMigrated.length;
+      const routesBadge = migrated.length
+        ? `<a class="badge bg-info text-dark text-decoration-none" href="/routing.html?ga=${encodeURIComponent(ga.address)}" title="${totalRoutes} Routings – im Routing Designer anzeigen">${totalRoutes}</a>`
+        : routeCount > 0
+          ? `<span class="badge bg-info text-dark" title="${escHtml(ga.routes.filter(r=>r.mqttTopic).map(r=>r.mqttTopic).join(', '))}">${routeCount}</span>`
+          : '<span class="text-muted">–</span>';
+      const repeatBadge = '';
       const assignments = assignedDevices(ga.address);
       const suggestion = assignments.length ? null : suggestDeviceForGA(ga);
       const deviceCell = assignments.length ? assignments.map(d => `<div><span class="fw-semibold">${escHtml(d.name)}</span><span class="small text-muted ms-1">(${escHtml(d.role)})</span></div>`).join('') : suggestion ? `<button type="button" class="btn btn-sm btn-primary btn-suggest-device" data-address="${escHtml(ga.address)}" title="Review suggested device mapping"><i class="bi bi-lightbulb me-1"></i>${escHtml(suggestion.templateName)}</button>` : '<span class="text-muted">–</span>';
@@ -700,7 +698,6 @@
   const dptInput     = document.getElementById('ga-dpt');
   const commentInput = document.getElementById('ga-comment');
   const dirSelect    = document.getElementById('ga-direction');
-  const repeatInput  = document.getElementById('ga-repeat-interval');
   const formError    = document.getElementById('ga-form-error');
   const routesList   = document.getElementById('ga-routes-list');
 
@@ -717,16 +714,6 @@
       <div class="mb-2">
         <label class="form-label form-label-sm mb-1">Value Map <small class="text-muted">(JSON, optional – e.g. {"ON":"PLAY","OFF":"STOP"})</small></label>
         <input type="text" class="form-control form-control-sm route-valuemap" placeholder='{"ON":"PLAY","OFF":"STOP"}' value="${escHtml(valueMapStr || '')}">
-      </div>
-      <div>
-        <label class="form-label form-label-sm mb-1">
-          Repeat Interval
-          <small class="text-muted">(seconds, optional – re-publish to this topic at this rate)</small>
-        </label>
-        <div class="input-group input-group-sm">
-          <input type="number" class="form-control form-control-sm route-repeat-interval" placeholder="e.g. 5" min="0" step="1" value="${escHtml(repeatInterval > 0 ? String(repeatInterval) : '')}">
-          <span class="input-group-text">seconds</span>
-        </div>
       </div>
     `;
     row.querySelector('.btn-remove-route').addEventListener('click', () => row.remove());
@@ -746,11 +733,8 @@
       if (vmRaw) {
         try { valueMap = JSON.parse(vmRaw); } catch (_) { valueMap = undefined; }
       }
-      const riRaw = row.querySelector('.route-repeat-interval').value.trim();
-      const repeatInterval = riRaw ? Number(riRaw) : 0;
-      const route = { mqttTopic };
+const route = { mqttTopic };
       if (valueMap && typeof valueMap === 'object') route.valueMap = valueMap;
-      if (repeatInterval > 0) route.repeatInterval = repeatInterval;
       routes.push(route);
     }
     return routes.length ? routes : undefined;
@@ -767,7 +751,6 @@
     dptInput.value     = ga ? (ga.dpt     || '') : '';
     commentInput.value = ga ? (ga.comment || '') : '';
     dirSelect.value    = ga ? (ga.direction || 'both') : 'both';
-    repeatInput.value  = ga && ga.repeatInterval > 0 ? ga.repeatInterval : '';
     // Populate existing routes
     if (ga && Array.isArray(ga.routes)) {
       ga.routes.forEach((r) => {
@@ -857,7 +840,6 @@
       return;
     }
     const routes = collectRoutes();
-    const repeatInterval = parseFloat(repeatInput.value) || 0;
     const body = {
       address,
       name:      nameInput.value.trim(),
@@ -865,7 +847,6 @@
       comment:   commentInput.value.trim(),
       direction: dirSelect.value || 'both',
     };
-    if (repeatInterval > 0) body.repeatInterval = repeatInterval;
     if (routes) body.routes = routes;
     fetch('/api/groupaddresses', {
       method:  'POST',
@@ -893,7 +874,7 @@
 
   socket.on('status', ({ service, connected }) => updateBadge(service, connected));
 
-  socket.on('groupaddresses', renderGATable);
+  socket.on('groupaddresses', addresses => { renderGATable(addresses); refreshMigratedGALinks(); });
   socket.on('ga-value', ({ address, value, confirmed }) => {
     if (confirmed) {
       pendingGAValues.delete(address);
@@ -1147,6 +1128,7 @@
     } catch (err) { deviceError.textContent = err.message; deviceError.classList.remove('d-none'); }
   });
   fetch('/api/device-templates').then(r => r.json()).then(t => { deviceTemplates = t; renderDevices(); }).catch(err => console.error('Templates unavailable', err));
+  refreshMigratedGALinks();
   fetch('/api/devices').then(r => r.json()).then(d => { devices = d; renderDevices(); renderGATable(configuredGAs); }).catch(err => console.error('Devices unavailable', err));
   socket.on('devices', d => { devices = d; renderDevices(); renderGATable(configuredGAs); });
   document.getElementById('device-search').addEventListener('input', renderDevices);
