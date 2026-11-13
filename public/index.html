@@ -821,7 +821,7 @@
     const openSetpointEditors = new Set([...target.querySelectorAll('.device-setpoint-form:not([hidden])')].map(el => el.dataset.id));
     const writeMessages = new Map([...target.querySelectorAll('.device-write-status')].map(el => [el.dataset.id, { text: el.textContent, className: el.className }]));
     const gaByAddress = new Map(configuredGAs.map(ga => [ga.address, ga]));
-    const metric = (d, key, label, actions = '') => {
+    const metric = (d, key, label, actions = '', editor = '') => {
       const address = d.addresses && d.addresses[key];
       const ga = address ? gaByAddress.get(address) : null;
       const pending = address && pendingGAValues.has(address);
@@ -829,7 +829,7 @@
       const numeric = raw !== undefined && raw !== null && raw !== '' ? Number(raw) : NaN;
       const value = Number.isFinite(numeric) ? numeric.toLocaleString(undefined, { maximumFractionDigits: 1 }) + ' °C' : '–';
       const hint = !address ? 'Not assigned' : !ga ? 'Address missing' : pending ? address + ' · sent, not confirmed' : !Number.isFinite(numeric) ? 'No live value' : address;
-      return `<div class="device-metric"><div class="metric-header"><div class="metric-label mb-0">${escHtml(label)}</div>${actions}</div><div class="metric-value">${escHtml(value)}</div><div class="small text-muted mt-2">${escHtml(hint)}</div></div>`;
+      return `<div class="device-metric"><div class="metric-header"><div class="metric-label mb-0">${escHtml(label)}</div>${actions}</div><div class="metric-value">${escHtml(value)}</div><div class="small text-muted mt-2">${escHtml(hint)}</div>${editor}</div>`;
     };
     target.innerHTML = visible.map(d => {
       const tpl = deviceTemplate(d.templateId);
@@ -858,7 +858,7 @@
         </div>
       </form>` : '';
       const writeStatus = isHeating && writable ? `<div class="${previousMessage ? escHtml(previousMessage.className) : 'device-write-status text-muted mt-2'}" data-id="${escHtml(d.id)}" role="status">${previousMessage ? escHtml(previousMessage.text) : ''}</div>` : '';
-      const metrics = isHeating ? `<div class="device-metrics">${metric(d, 'temperature', 'Current temperature')}<div class="device-metric">${metric(d, 'setpoint', 'Setpoint', editButton).replace(/^<div class="device-metric">|<\\/div>$/g, '')}${writeControl}${writeStatus}</div></div>` : '';
+      const metrics = isHeating ? `<div class="device-metrics">${metric(d, 'temperature', 'Current temperature')}${metric(d, 'setpoint', 'Setpoint', editButton, writeControl + writeStatus)}</div>` : '';
       return `<div class="col-12 col-xl-6"><article class="card device-card h-100">
         <div class="card-body">
           <div class="d-flex align-items-start gap-3 mb-3">
