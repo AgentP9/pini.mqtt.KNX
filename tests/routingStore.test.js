@@ -24,7 +24,7 @@ test('persists a validated device feedback to MQTT connection without changing l
     f.store.save({ endpoints: [f.endpoint], routes: [{ id: 'r1', from: { type: 'device', id: 'd1', signal: 'status' }, to: { type: 'mqtt', id: 'm1' }, enabled: true }] });
     assert.equal(f.store.routes.length, 1);
     assert.equal(JSON.stringify(f.gas), old);
-    assert.equal(JSON.parse(fs.readFileSync(f.store.file, 'utf8')).version, 1);
+    assert.equal(JSON.parse(fs.readFileSync(f.store.file, 'utf8')).version, 2);
   } finally { f.cleanup(); }
 });
 test('rejects writes to read-only status and duplicate destination', () => {
@@ -74,7 +74,40 @@ test('migration skips mappings and repeat intervals instead of silently changing
     f.gas[0].routes = [{ mqttTopic: 'home/dining/set', valueMap: { '1': 'ON' } }];
     f.gas[1].routes = [{ mqttTopic: 'home/dining/status', repeatInterval: 60 }];
     const preview = f.store.migrationPreview();
-    assert.equal(preview.candidates.length, 0);
-    assert.equal(preview.skipped.length, 3);
+    assert.equal(preview.candidates.length, 1);
+    assert.equal(preview.skipped.length, 2);
   } finally { f.cleanup(); }
+});
+
+test('migration groups Sonos topics as one MQTT device with independent mapped signals', () => {
+ const f=fixture();
+ try {
+  f.gas[0].routes=[
+   {mqttTopic:'sonos/devices/Esszimmer/control',valueMap:{ON:'PLAY',OFF:'PAUSE'}},
+   {mqttTopic:'sonos/devices/Esszimmer/set/volume',valueMap:{ON:'20',OFF:'20'}}
+  ];
+  const preview=f.store.migrationPreview();
+  const selected=preview.candidates.filter(c=>c.direction==='knx2mqtt');
+  assert.equal(selected.length,2);
+  assert.equal(selected[0].suggestedDevice.name,'Esszimmer');
+  f.store.migrate(selected.map(c=>c.key));
+  assert.equal(f.store.mqttDevices.length,1);
+  assert.equal(f.store.mqttDevices[0].signals.length,2);
+  assert.equal(f.store.routes.length,2);
+  assert.equal(f.store.routes[0].transform.values.ON,'PLAY');
+  assert.equal(f.store.migrated('9/1/0','sonos/devices/Esszimmer/control','knx2mqtt'),true);
+ } finally {f.cleanup();}
+});
+test('validates standalone MQTT device signals and transformed routes',()=>{
+ const f=fixture();
+ try {
+  const md={id:'sonos1',name:'Sonos Esszimmer',templateId:'sonos',signals:[
+   {key:'control',label:'Wiedergabe',topic:'sonos/devices/Esszimmer/control',payloadType:'text',direction:'input'}]};
+  f.store.save({endpoints:[],mqttDevices:[md],routes:[{
+   id:'r1',from:{type:'device',id:'d1',signal:'command'},to:{type:'mqttDevice',id:'sonos1',signal:'control'},
+   enabled:true,transform:{kind:'map',values:{ON:'PLAY',OFF:'PAUSE'}}}]});
+  assert.equal(f.store.routes.length,1);
+  assert.throws(()=>f.store.save({endpoints:[],mqttDevices:[md],routes:[{
+   id:'r2',from:{type:'mqttDevice',id:'sonos1',signal:'control'},to:{type:'device',id:'d1',signal:'command'},enabled:true}]}),/not readable/);
+ } finally {f.cleanup();}
 });
