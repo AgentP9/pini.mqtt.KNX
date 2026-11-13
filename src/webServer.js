@@ -57,6 +57,18 @@ class WebServer {
 
     // Visual routing designer: save a complete validated graph atomically.
     this.app.get('/api/routing', (_req, res) => res.json(this.routingStore.list()));
+    this.app.get('/api/routing/group-address-links', (_req, res) => {
+      const links = {};
+      for (const r of this.routingStore.routes) {
+        if (!r.legacyKey) continue;
+        try {
+          const ref = r.from.type === 'device' ? r.from : r.to;
+          const signal = this.routingStore.resolve(ref, this.routingStore.endpoints);
+          (links[signal.address] ||= []).push({ id: r.id, enabled: r.enabled, legacyKey: r.legacyKey });
+        } catch (_) { /* stale device mapping: keep old GA route visible */ }
+      }
+      res.json(links);
+    });
     this.app.put('/api/routing', (req, res) => {
       try {
         const data = this.routingStore.save(req.body || {});
