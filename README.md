@@ -252,3 +252,25 @@ Legacy `knx/<GA>` topics are deliberately not migrated.
 
 Before enabling migrated routes on real hardware, verify the mapping direction
 and payload format. Back up `routing.json` and `groupaddresses.json`.
+
+### MQTT devices and Sonos (visual designer preview)
+
+The editor now supports **MQTT devices** in addition to individual MQTT topics.
+Choose **Sonos Player** to create a device with `control` (text input) and
+`set/volume` (number input), or use **Generic MQTT Device** and add typed
+signals with an explicit input/output direction. A device signal can be
+connected to a KNX device signal and configured with a per-route value map
+(e.g. `{"ON":"PLAY","OFF":"PAUSE"}`) or a constant payload
+(e.g. `{"constant":20}`). The route transform editor currently uses a
+JSON prompt; it is not yet a polished form.
+
+Migration previews `sonos/devices/<name>/...` topics as a single suggested
+Sonos device and can import supported **KNX→MQTT** value maps. For legacy
+routes with a reverse value map, the MQTT→KNX direction is **not** migrated
+automatically; it remains on the legacy path. Repeat timers and the
+reserved `knx/` topics are also not migrated. Check the direction of each
+candidate and the resulting mappings before activation.
+
+Important: the visual routing feature is still a draft and has not been
+verified against a real KNX bus or Sonos player. Keep a backup of
+`groupaddresses.json`, `devices.json`, and `routing.json` before enabling.
