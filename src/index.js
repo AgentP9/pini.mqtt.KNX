@@ -150,6 +150,54 @@ function subscribeRouteTopics() {
   }
 }
 
+// ── Visual Routing Designer (sidecar, legacy routes stay active) ───────────────
+const routingStore = webServer.routingStore;
+function subscribeVisualRoutes() {
+  for (const route of routingStore.routes) {
+    if (route.enabled && route.from.type === 'mqtt') {
+      const endpoint = routingStore.endpoints.find(e => e.id === route.from.id);
+      if (endpoint) mqttHandler.subscribe(endpoint.topic);
+    }
+  }
+}
+function routePayload(value, type, toKnx) {
+  if (type !== 'boolean') return String(value);
+  const v = String(value).trim().toLowerCase();
+  if (['1','true','on','ein'].includes(v)) return toKnx ? '1' : 'true';
+  if (['0','false','off','aus'].includes(v)) return toKnx ? '0' : 'false';
+  return null;
+}
+knxHandler.on('groupValueWrite', ({ address, value }) => {
+  for (const route of routingStore.routes) {
+    if (!route.enabled || route.from.type !== 'device') continue;
+    try {
+      const source = routingStore.resolve(route.from, routingStore.endpoints);
+      if (source.address !== address) continue;
+      const destination = routingStore.resolve(route.to, routingStore.endpoints);
+      const payload = routePayload(value, source.type, false);
+      if (payload === null) continue;
+      mqttHandler.publish(destination.topic, payload);
+      eventEmitter.emit('routing-traffic', { id: route.id, value: payload, direction: 'KNX→MQTT', timestamp: new Date().toISOString() });
+    } catch (err) { console.warn('[ROUTING] Invalid KNX route:', err.message); }
+  }
+});
+mqttHandler.on('message', ({ topic, value }) => {
+  for (const route of routingStore.routes) {
+    if (!route.enabled || route.from.type !== 'mqtt') continue;
+    try {
+      const source = routingStore.resolve(route.from, routingStore.endpoints);
+      if (source.topic !== topic) continue;
+      const destination = routingStore.resolve(route.to, routingStore.endpoints);
+      const payload = routePayload(value, source.type, true);
+      if (payload === null || !knxHandler.connected) continue;
+      if (!knxHandler.write(destination.address, payload)) continue;
+      eventEmitter.emit('routing-traffic', { id: route.id, value: payload, direction: 'MQTT→KNX', timestamp: new Date().toISOString() });
+    } catch (err) { console.warn('[ROUTING] Invalid MQTT route:', err.message); }
+  }
+});
+mqttHandler.on('connected', subscribeVisualRoutes);
+eventEmitter.on('routing-changed', subscribeVisualRoutes);
+
 // ── KNX → MQTT ─────────────────────────────────────────────────────────────────
 knxHandler.on('groupValueWrite', ({ address, src, value, name }) => {
   const topic = `${config.topicPrefix}/${address}`;
