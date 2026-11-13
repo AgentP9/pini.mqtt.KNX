@@ -62,7 +62,9 @@ class RoutingStore {
           if (reason) skipped.push({ ...info, reason });
           else {
             const { device, obj } = matches[0];
-            const outputType = direction === 'knx2mqtt' && legacy.valueMap && Object.keys(legacy.valueMap).length ? 'text' : type;
+            const mappedValues = legacy.valueMap && Object.values(legacy.valueMap);
+            const outputType = direction === 'knx2mqtt' && mappedValues?.length ?
+              (mappedValues.every(v => String(v).trim() !== '' && Number.isFinite(Number(v))) ? 'number' : 'text') : type;
             candidates.push({ ...info, deviceId: device.id, deviceName: device.name, signal: obj.key, type, outputType, valueMap: legacy.valueMap || null,
               suggestedDevice: /^sonos\/devices\/([^/]+)\//.test(topic) ? { templateId: 'sonos', name: topic.split('/')[2], baseTopic: topic.split('/').slice(0, 3).join('/') } : null });
             if (direction === 'knx2mqtt') dests.add('topic:' + topic);
