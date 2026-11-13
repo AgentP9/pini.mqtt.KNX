@@ -839,7 +839,6 @@ const route = { mqttTopic };
       return;
     }
     const routes = collectRoutes();
-    const repeatInterval = parseFloat(repeatInput.value) || 0;
     const body = {
       address,
       name:      nameInput.value.trim(),
@@ -847,7 +846,6 @@ const route = { mqttTopic };
       comment:   commentInput.value.trim(),
       direction: dirSelect.value || 'both',
     };
-    if (repeatInterval > 0) body.repeatInterval = repeatInterval;
     if (routes) body.routes = routes;
     fetch('/api/groupaddresses', {
       method:  'POST',
