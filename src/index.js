@@ -222,7 +222,7 @@ knxHandler.on('groupValueWrite', ({ address, src, value, name }) => {
       // Custom routes: publish to each configured route topic (with optional value mapping)
       if (Array.isArray(ga.routes)) {
         for (const route of ga.routes) {
-          if (!route.mqttTopic) continue;
+          if (!route.mqttTopic || routingStore.migrated(address, route.mqttTopic, 'knx2mqtt')) continue;
           const routeValue = applyValueMap(String(value), route.valueMap);
           mqttHandler.publish(route.mqttTopic, routeValue);
           console.log(`[BRIDGE] Route KNX→MQTT ${address} → ${route.mqttTopic} = ${routeValue}`);
@@ -294,7 +294,7 @@ mqttHandler.on('message', ({ topic, value }) => {
   for (const ga of config.groupAddresses) {
     if (!Array.isArray(ga.routes)) continue;
     for (const route of ga.routes) {
-      if (route.mqttTopic !== topic) continue;
+      if (route.mqttTopic !== topic || routingStore.migrated(ga.address, topic, 'mqtt2knx')) continue;
 
       const direction = ga.direction || 'both';
       if (direction === 'both' || direction === 'mqtt2knx') {
