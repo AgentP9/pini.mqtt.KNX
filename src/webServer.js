@@ -77,6 +77,54 @@ class WebServer {
       } catch (err) { res.status(400).json({ error: err.message }); }
     });
 
+    // Remove selected legacy GA routes only after explicitly confirming their
+    // current topic/address identity. Migrated graph routes are retained and
+    // detached from their legacy fallback marker.
+    this.app.post('/api/routing/legacy-cleanup', (req, res) => {
+      const selections = req.body?.routes;
+      if (!Array.isArray(selections) || !selections.length || selections.length > 200 ||
+          !selections.every(x => x && typeof x.address === 'string' && typeof x.topic === 'string')) {
+        return res.status(400).json({ error: 'Select legacy routes by address and topic' });
+      }
+      const keys = new Set(selections.map(x => JSON.stringify([x.address, x.topic])));
+      if (keys.size !== selections.length) return res.status(400).json({ error: 'Duplicate selection' });
+      const originalGAs = this.groupAddresses.map(g => ({ ...g, routes: g.routes?.map(r => ({ ...r })) }));
+      const originalGraph = this.routingStore.list();
+      const selected = [];
+      for (const x of selections) {
+        const ga = this.groupAddresses.find(g => g.address === x.address);
+        const legacy = ga?.routes?.find(r => r.mqttTopic === x.topic);
+        if (!legacy) return res.status(409).json({ error: 'Legacy route changed; reload preview' });
+        selected.push(x);
+      }
+      // Save graph without migration markers before removing legacy routes.
+      // If persistence fails, do not touch groupaddresses.json.
+      const cleanedRoutes = originalGraph.routes.map(r => {
+        if (!r.legacyKey) return r;
+        let pair;
+        try { const [address, topic] = JSON.parse(r.legacyKey); pair = JSON.stringify([address, topic]); }
+        catch (_) { return r; }
+        if (!keys.has(pair)) return r;
+        const { legacyKey, ...rest } = r;
+        return rest;
+      });
+      try {
+        this.routingStore.save({ ...originalGraph, routes: cleanedRoutes }, { allowLegacyDetach: true });
+        for (const ga of this.groupAddresses) {
+          ga.routes = (ga.routes || []).filter(r => !keys.has(JSON.stringify([ga.address, r.mqttTopic])));
+          if (!ga.routes.length) delete ga.routes;
+        }
+        if (!this._saveGroupAddresses()) throw Error('Failed to save group addresses');
+        this.eventEmitter.emit('routing-changed', this.routingStore.list());
+        this.io.emit('groupaddresses', this._enrichGAs());
+        res.json({ deleted: selected.length, graph: this.routingStore.list() });
+      } catch (err) {
+        this.groupAddresses.splice(0, this.groupAddresses.length, ...originalGAs);
+        try { this.routingStore.save(originalGraph); } catch (_) { /* original config still on disk if first save failed */ }
+        res.status(500).json({ error: err.message });
+      }
+    });
+
     this.app.get('/api/routing/migration-preview', (_req, res) => res.json(this.routingStore.migrationPreview()));
     this.app.post('/api/routing/migrate', (req, res) => {
       try {
