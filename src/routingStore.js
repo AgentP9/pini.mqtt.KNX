@@ -41,6 +41,7 @@ class RoutingStore {
           const info = { address: ga.address, topic, direction, key };
           let reason = '';
           if (Number(legacy.repeatInterval) > 0) reason = 'Repeat interval not yet supported';
+          else if (direction === 'mqtt2knx' && legacy.valueMap && Object.keys(legacy.valueMap).length) reason = 'Reverse value mapping requires manual review';
           else if (topic.startsWith('knx/')) reason = 'Reserved topic';
           const matches = [];
           for (const device of this.deviceStore.devices) {
@@ -61,7 +62,8 @@ class RoutingStore {
           if (reason) skipped.push({ ...info, reason });
           else {
             const { device, obj } = matches[0];
-            candidates.push({ ...info, deviceId: device.id, deviceName: device.name, signal: obj.key, type, valueMap: legacy.valueMap || null,
+            const outputType = direction === 'knx2mqtt' && legacy.valueMap && Object.keys(legacy.valueMap).length ? 'text' : type;
+            candidates.push({ ...info, deviceId: device.id, deviceName: device.name, signal: obj.key, type, outputType, valueMap: legacy.valueMap || null,
               suggestedDevice: /^sonos\/devices\/([^/]+)\//.test(topic) ? { templateId: 'sonos', name: topic.split('/')[2], baseTopic: topic.split('/').slice(0, 3).join('/') } : null });
             if (direction === 'knx2mqtt') dests.add('topic:' + topic);
             else dests.add('ga:' + ga.address);
@@ -83,10 +85,10 @@ class RoutingStore {
     for (const c of preview.candidates.filter(c => requested.has(c.key))) {
       let ep = endpoints.find(e => e.topic === c.topic);
       if (!ep) {
-        ep = { id: crypto.randomUUID(), name: c.deviceName + ' · ' + c.signal, topic: c.topic, payloadType: c.type };
+        ep = { id: crypto.randomUUID(), name: c.deviceName + ' · ' + c.signal, topic: c.topic, payloadType: c.outputType };
         endpoints.push(ep);
       }
-      if (ep.payloadType !== c.type) throw Error('Existing MQTT endpoint has incompatible type');
+      if (ep.payloadType !== c.outputType) throw Error('Existing MQTT endpoint has incompatible type');
       const deviceRef = { type: 'device', id: c.deviceId, signal: c.signal };
       const mqttRef = { type: 'mqtt', id: ep.id };
       const transform = c.direction === 'knx2mqtt' && c.valueMap && Object.keys(c.valueMap).length ?
