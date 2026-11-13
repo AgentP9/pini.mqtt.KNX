@@ -96,7 +96,8 @@ function alignNodes(routes){
   const targets=connected.flatMap(r=>[r.from,r.to].filter(x=>x.type==='device').map(x=>knx.find(y=>signalKey(y.ref)===signalKey(x))));
   const top=Math.min(Infinity,...targets.filter(Boolean).map(x=>{const btn=[...document.querySelectorAll('#devices .signal-btn')].find(el=>el.dataset.key===signalKey(x.ref));return btn?btn.getBoundingClientRect().top:Infinity}));
   if(!Number.isFinite(top))continue;
-  const own=node.querySelector('.signal-btn');
+  const linked=connected.flatMap(r=>[r.from,r.to].filter(x=>x.type!=='device'&&x.type+':'+x.id===ref));
+  const own=[...node.querySelectorAll('.signal-btn')].find(el=>linked.some(x=>el.dataset.key===signalKey(x)))||node.querySelector('.signal-btn');
   if(!own)continue;
   const delta=top-own.getBoundingClientRect().top;
   if(delta>0)node.style.marginTop=Math.min(delta,600)+'px';
@@ -205,6 +206,7 @@ $('migration-confirm').onclick=async()=>{
 };
 $('reload').onclick=()=>load();
 async function load(){try{const r=await Promise.all(['/api/routing','/api/devices','/api/device-templates'].map(p=>fetch(p).then(x=>{if(!x.ok)throw Error(p+' nicht erreichbar');return x.json()})));[graph,devices,templates]=r;selected=null;dirty=false;render();notice('Routing geladen.')}catch(e){notice(e.message,true)}}
+window.addEventListener('resize',()=>requestAnimationFrame(()=>{alignNodes(graph.routes.filter(isFocused));drawLinks()}));
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
 load();
 </script></body></html>
