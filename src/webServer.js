@@ -141,7 +141,7 @@ class WebServer {
 
     // POST – add or update a group address
     this.app.post('/api/groupaddresses', (req, res) => {
-      const { address, name, dpt, comment, routes, direction, repeatInterval } = req.body || {};
+      const { address, name, dpt, comment, routes, direction } = req.body || {};
       if (!address) return res.status(400).json({ error: 'address is required' });
 
       const entry = {
@@ -155,9 +155,6 @@ class WebServer {
       if (!entry.routes) delete entry.routes;
       // Store direction only when it differs from the default ('both')
       if (direction && direction !== 'both') entry.direction = direction;
-      // Store repeatInterval only when it is a positive number
-      const ri = Number(repeatInterval);
-      if (ri > 0) entry.repeatInterval = ri;
 
       const idx = this.groupAddresses.findIndex((g) => g.address === address);
       const previous = idx >= 0 ? this.groupAddresses[idx] : null;
