@@ -189,12 +189,11 @@ class RoutingStore {
       if (r.from.type !== 'device' && r.to.type !== 'device') throw Error('One side must be a KNX device');
       if (r.from.type === 'device' && r.to.type === 'device') throw Error('Connect a KNX device to an MQTT endpoint');
       if (r.from.type === 'device' && !['both','knx2mqtt'].includes(src.ga.direction || 'both')) throw Error('Device signal is not readable');
-      if (r.to.type === 'device' && !['both','mqtt2knx'].includes(dst.ga.direction || 'both')) throw Error('Device signal is not writable');
+      if (r.to.type === 'device' && r.to.signal !== 'status' && !['both','mqtt2knx'].includes(dst.ga.direction || 'both')) throw Error('Device signal is not writable');
       if (r.from.type === 'mqttDevice' && !['output','both'].includes(src.direction)) throw Error('MQTT signal is not readable');
       if (r.to.type === 'mqttDevice' && !['input','both'].includes(dst.direction)) throw Error('MQTT signal is not writable');
       if (src.type !== dst.type && !r.transform) throw Error('Signal types differ; a conversion is required');
       if (r.transform) {
-        if (r.from.type !== 'device') throw Error('Transformations currently require a KNX source');
         if (r.transform.kind === 'map') {
           if (!r.transform.values || typeof r.transform.values !== 'object' || Array.isArray(r.transform.values) ||
             Object.keys(r.transform.values).length > 30 || !Object.values(r.transform.values).every(v => ['string','number','boolean'].includes(typeof v)) || (Object.hasOwn(r.transform,'defaultValue') && !['string','number','boolean'].includes(typeof r.transform.defaultValue))) throw Error('Invalid value map');
