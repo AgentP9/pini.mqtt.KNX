@@ -570,7 +570,7 @@
       const migratedTopics = new Set(activeMigrated.map(r => { try { return JSON.parse(r.legacyKey)[1]; } catch (_) { return r.id; } }));
       const legacyCount = Math.max(0, routeCount - migratedTopics.size);
       const routesBadge = migrated.length
-        ? `<a class="btn btn-sm btn-outline-primary" href="/routing.html?ga=${encodeURIComponent(ga.address)}" title="Im Routing Designer anzeigen"><i class="bi bi-diagram-3 me-1"></i>${activeMigrated.length} migriert</a>${legacyCount ? `<span class="badge bg-secondary ms-1">${legacyCount} alt</span>` : ''}`
+        ? `<a class="btn btn-sm btn-outline-primary" href="/routing.html?ga=${encodeURIComponent(ga.address)}" title="Im Routing Designer anzeigen"><i class="bi bi-diagram-3 me-1"></i>${activeMigrated.length ? `${activeMigrated.length} migriert` : `Routing Designer (inaktiv)`}</a>${legacyCount ? `<span class="badge bg-secondary ms-1">${legacyCount} alt</span>` : ''}`
         : routeCount > 0
           ? `<span class="badge bg-info text-dark" title="${escHtml(ga.routes.filter(r=>r.mqttTopic).map(r=>r.mqttTopic).join(', '))}">${routeCount} route${routeCount > 1 ? 's' : ''}</span>`
           : '<span class="text-muted">–</span>';
