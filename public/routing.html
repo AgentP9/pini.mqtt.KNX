@@ -7,8 +7,9 @@
 body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:420px;background:var(--bs-body-bg);border:1px solid var(--bs-border-color);border-radius:1rem;overflow:auto}.lanes{display:grid;grid-template-columns:minmax(230px,1fr) minmax(230px,1fr);gap:12%;padding:1.5rem;position:relative;z-index:2}.node{background:var(--bs-body-bg);border:1px solid var(--bs-border-color);border-radius:.8rem;padding:.75rem;margin-bottom:.75rem;box-shadow:0 2px 8px #0001}.node h3{font-size:1rem;margin:0 0 .5rem}.signal{display:flex;align-items:center;justify-content:space-between;gap:.5rem;border-top:1px solid var(--bs-border-color);padding:.4rem 0;font-size:.85rem}.signal button{white-space:nowrap}.signal button.selected{background:var(--bs-primary);color:white}.links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}.muted{color:var(--bs-secondary-color)}@media(max-width:650px){.lanes{gap:1rem;grid-template-columns:minmax(170px,1fr) minmax(170px,1fr);padding:.7rem}.node{padding:.5rem}.signal{flex-wrap:wrap}}
 </style></head><body>
 <main class="container-fluid py-3" style="max-width:1500px">
-<header class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3"><div><a href="/" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Dashboard</a><h1 class="h3 mt-2">Routing Designer</h1><p class="muted mb-0">Device-Signale mit MQTT-Topics verbinden. Keine Logikbausteine nötig.</p></div><div class="d-flex gap-2"><button class="btn btn-outline-secondary" id="reload">Verwerfen</button><button class="btn btn-primary" id="save">Änderungen aktivieren</button></div></header>
+<header class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3"><div><a href="/" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Dashboard</a><h1 class="h3 mt-2">Routing Designer</h1><p class="muted mb-0">Device-Signale mit MQTT-Topics verbinden. Keine Logikbausteine nötig.</p></div><div class="d-flex gap-2"><button class="btn btn-outline-info" id="migration-preview"><i class="bi bi-arrow-left-right"></i> Bestehende Routen migrieren</button><button class="btn btn-outline-secondary" id="reload">Verwerfen</button><button class="btn btn-primary" id="save">Änderungen aktivieren</button></div></header>
 <div id="notice" role="status" class="small mb-3"></div>
+<section id="migration-panel" class="card mb-3" hidden><div class="card-header d-flex justify-content-between"><strong>Migration bestehender GA-Routen</strong><button class="btn-close" id="migration-close" aria-label="Schließen"></button></div><div class="card-body"><p class="small text-muted">Nur eindeutig zuordenbare Routen ohne Wertumwandlung oder Wiederholungsintervall werden angeboten. Die bisherigen Einstellungen bleiben als Rückfalloption erhalten.</p><div id="migration-list"></div><div id="migration-skipped" class="small text-muted mt-2"></div><button class="btn btn-primary mt-3" id="migration-confirm">Ausgewählte Routen migrieren</button></div></section>
 <div class="row g-3"><div class="col-12 col-xl-9">
 <div class="d-flex justify-content-between align-items-center mb-2"><h2 class="h6 m-0">Signalübersicht</h2><span class="small muted">Zuerst Quelle, dann Ziel anklicken</span></div>
 <div class="workspace" id="workspace"><svg id="links" class="links" aria-hidden="true"></svg><div class="lanes"><section id="devices"><h2 class="h6 mb-3"><i class="bi bi-house"></i> Devices</h2></section><section id="mqtt"><h2 class="h6 mb-3"><i class="bi bi-broadcast"></i> MQTT-Endpunkte</h2></section></div></div>
@@ -22,7 +23,7 @@ body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:42
 <p class="small muted mt-3">Bestehende GA-Routen bleiben aktiv. Neue Verbindungen werden separat gespeichert. Vor dem Aktivieren werden Signaltypen und Schreibrichtungen geprüft.</p>
 </aside></div></main>
 <script>
-let graph={endpoints:[],routes:[]},devices=[],templates=[],selected=null,dirty=false;
+let graph={endpoints:[],routes:[]},devices=[],templates=[],selected=null,dirty=false,migration=null;
 const lastTraffic=new Map();
 const socket=io();socket.on('routing-traffic',entry=>{lastTraffic.set(entry.id,entry);renderRoutes();});
 const $=id=>document.getElementById(id);
@@ -57,6 +58,28 @@ document.addEventListener('click',e=>{const b=e.target.closest('.signal-btn');if
 document.addEventListener('change',e=>{if(e.target.matches('.route-enabled')){const r=graph.routes.find(r=>r.id===e.target.dataset.id);if(r){r.enabled=e.target.checked;dirty=true;render()}}});
 $('endpoint-form').addEventListener('submit',e=>{e.preventDefault();const topic=$('topic').value.trim();if(topic.startsWith('knx/')||/[+#\s]/.test(topic)||graph.endpoints.some(x=>x.topic===topic)){notice('Topic ungültig, reserviert oder bereits vorhanden.',true);return}graph.endpoints.push({id:uid(),name:$('topic-name').value.trim(),topic,payloadType:$('payload-type').value});dirty=true;e.target.reset();render();notice('MQTT-Endpunkt angelegt. Änderungen noch nicht aktiviert.')});
 $('save').onclick=async()=>{try{const r=await fetch('/api/routing',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(graph)});const d=await r.json();if(!r.ok)throw Error(d.error||'Speichern fehlgeschlagen');graph=d;dirty=false;notice('Routing gespeichert und aktiviert.');render()}catch(e){notice(e.message,true)}};
+$('migration-preview').onclick=async()=>{
+ if(dirty){notice('Bitte zunächst ungespeicherte Änderungen aktivieren oder verwerfen.',true);return}
+ try{
+  const r=await fetch('/api/routing/migration-preview');if(!r.ok)throw Error('Vorschau konnte nicht geladen werden');
+  migration=await r.json();
+  $('migration-panel').hidden=false;
+  $('migration-list').innerHTML=migration.candidates.length?migration.candidates.map(c=>'<label class="d-block border-bottom py-2"><input class="form-check-input me-2 migration-check" type="checkbox" value="'+esc(c.key)+'" checked> '+esc(c.deviceName)+' · '+esc(c.signal)+' ↔ '+esc(c.topic)+' <span class="text-muted">('+esc(c.direction)+')</span></label>').join(''):'<p>Keine automatisch migrierbaren Routen gefunden.</p>';
+  $('migration-skipped').textContent=migration.skipped.length?migration.skipped.length+' nicht automatisch migrierbar: '+migration.skipped.map(x=>x.address+' → '+x.topic+' ('+x.reason+')').join('; '):'';
+  $('migration-confirm').disabled=!migration.candidates.length;
+ }catch(e){notice(e.message,true)}
+};
+$('migration-close').onclick=()=>{$('migration-panel').hidden=true};
+$('migration-confirm').onclick=async()=>{
+ const keys=Array.from(document.querySelectorAll('.migration-check:checked')).map(x=>x.value);
+ if(!keys.length){notice('Bitte mindestens eine Route auswählen.',true);return}
+ if(!confirm(keys.length+' Routen migrieren? Die alten Routings bleiben gespeichert, werden aber für die übernommenen Signalrichtungen nicht mehr ausgeführt.'))return;
+ try{
+  const r=await fetch('/api/routing/migrate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keys})});
+  const d=await r.json();if(!r.ok)throw Error(d.error||'Migration fehlgeschlagen');
+  $('migration-panel').hidden=true;await load();notice(keys.length+' Routen migriert und aktiviert. Alte Routings bleiben gespeichert.');
+ }catch(e){notice(e.message,true)}
+};
 $('reload').onclick=()=>load();
 async function load(){try{const r=await Promise.all(['/api/routing','/api/devices','/api/device-templates'].map(p=>fetch(p).then(x=>{if(!x.ok)throw Error(p+' nicht erreichbar');return x.json()})));[graph,devices,templates]=r;selected=null;dirty=false;render();notice('Routing geladen.')}catch(e){notice(e.message,true)}}
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
