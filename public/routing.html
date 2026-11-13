@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="de" data-bs-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Routing Designer · pini.mqtt.KNX</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+<style>
+body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:420px;background:var(--bs-body-bg);border:1px solid var(--bs-border-color);border-radius:1rem;overflow:auto}.lanes{display:grid;grid-template-columns:minmax(230px,1fr) minmax(230px,1fr);gap:12%;padding:1.5rem;position:relative;z-index:2}.node{background:var(--bs-body-bg);border:1px solid var(--bs-border-color);border-radius:.8rem;padding:.75rem;margin-bottom:.75rem;box-shadow:0 2px 8px #0001}.node h3{font-size:1rem;margin:0 0 .5rem}.signal{display:flex;align-items:center;justify-content:space-between;gap:.5rem;border-top:1px solid var(--bs-border-color);padding:.4rem 0;font-size:.85rem}.signal button{white-space:nowrap}.signal button.selected{background:var(--bs-primary);color:white}.links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}.muted{color:var(--bs-secondary-color)}@media(max-width:650px){.lanes{gap:1rem;grid-template-columns:minmax(170px,1fr) minmax(170px,1fr);padding:.7rem}.node{padding:.5rem}.signal{flex-wrap:wrap}}
+</style></head><body>
+<main class="container-fluid py-3" style="max-width:1500px">
+<header class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3"><div><a href="/" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Dashboard</a><h1 class="h3 mt-2">Routing Designer</h1><p class="muted mb-0">Device-Signale mit MQTT-Topics verbinden. Keine Logikbausteine nötig.</p></div><div class="d-flex gap-2"><button class="btn btn-outline-secondary" id="reload">Verwerfen</button><button class="btn btn-primary" id="save">Änderungen aktivieren</button></div></header>
+<div id="notice" role="status" class="small mb-3"></div>
+<div class="row g-3"><div class="col-12 col-xl-9">
+<div class="d-flex justify-content-between align-items-center mb-2"><h2 class="h6 m-0">Signalübersicht</h2><span class="small muted">Zuerst Quelle, dann Ziel anklicken</span></div>
+<div class="workspace" id="workspace"><svg id="links" class="links" aria-hidden="true"></svg><div class="lanes"><section id="devices"><h2 class="h6 mb-3"><i class="bi bi-house"></i> Devices</h2></section><section id="mqtt"><h2 class="h6 mb-3"><i class="bi bi-broadcast"></i> MQTT-Endpunkte</h2></section></div></div>
+</div><aside class="col-12 col-xl-3">
+<div class="card mb-3"><div class="card-header fw-semibold">MQTT-Endpunkt anlegen</div><form id="endpoint-form" class="card-body">
+<label class="form-label" for="topic-name">Name</label><input class="form-control mb-2" id="topic-name" required maxlength="120" placeholder="Esszimmer Licht">
+<label class="form-label" for="topic">Topic</label><input class="form-control mb-2" id="topic" required maxlength="240" placeholder="home/dining/light/set">
+<label class="form-label" for="payload-type">Payload-Typ</label><select class="form-select mb-3" id="payload-type"><option value="boolean">Boolean</option><option value="number">Zahl</option><option value="text">Text</option></select>
+<button class="btn btn-outline-primary w-100" type="submit"><i class="bi bi-plus-lg"></i> MQTT hinzufügen</button></form></div>
+<div class="card"><div class="card-header fw-semibold">Verbindungen</div><div class="card-body" id="routes"><p class="muted">Noch keine Verbindungen</p></div></div>
+<p class="small muted mt-3">Bestehende GA-Routen bleiben aktiv. Neue Verbindungen werden separat gespeichert. Vor dem Aktivieren werden Signaltypen und Schreibrichtungen geprüft.</p>
+</aside></div></main>
+<script>
+let graph={endpoints:[],routes:[]},devices=[],templates=[],selected=null,dirty=false;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>crypto.randomUUID();
+const signalKey=r=>r.type+':'+r.id+':'+(r.signal||'');
+const signals=()=>devices.flatMap(d=>{const t=templates.find(t=>t.id===d.templateId);return (t?.objects||[]).filter(o=>d.addresses?.[o.key]).map(o=>({ref:{type:'device',id:d.id,signal:o.key},name:d.name+' · '+o.label,type:o.dpt.startsWith('1.')?'boolean':'number',dir:o.direction||'both',address:d.addresses[o.key]}))});
+const endpointSignals=()=>graph.endpoints.map(e=>({ref:{type:'mqtt',id:e.id},name:e.name+' · '+e.topic,type:e.payloadType}));
+function notice(message,error=false){$('notice').textContent=message;$('notice').className='small mb-3 '+(error?'text-danger':'text-success')}
+function render(){
+ const list=signals(),eps=endpointSignals();
+ $('devices').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-house"></i> Devices</h2>'+devices.map(d=>{
+  const own=list.filter(s=>s.ref.id===d.id);
+  return '<div class="node"><h3>'+esc(d.name)+'</h3>'+own.map(s=>signalHtml(s)).join('')+'</div>';
+ }).join('');
+ $('mqtt').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-broadcast"></i> MQTT-Endpunkte</h2>'+eps.map(s=>'<div class="node"><h3>'+esc(graph.endpoints.find(e=>e.id===s.ref.id).name)+'</h3>'+signalHtml(s)+'<button class="btn btn-sm btn-link text-danger delete-endpoint" data-id="'+esc(s.ref.id)+'">Entfernen</button></div>').join('');
+ $('routes').innerHTML=graph.routes.length?graph.routes.map(r=>{
+  const a=[...list,...eps].find(s=>signalKey(s.ref)===signalKey(r.from));
+  const b=[...list,...eps].find(s=>signalKey(s.ref)===signalKey(r.to));
+  return '<div class="border-bottom py-2"><div class="small fw-semibold">'+esc(a?.name||'Fehlende Quelle')+' → '+esc(b?.name||'Fehlendes Ziel')+'</div><div class="d-flex justify-content-between align-items-center mt-1"><label class="small"><input type="checkbox" class="route-enabled" data-id="'+esc(r.id)+'" '+(r.enabled?'checked':'')+'> Aktiv</label><button class="btn btn-sm btn-outline-danger delete-route" data-id="'+esc(r.id)+'" aria-label="Verbindung entfernen"><i class="bi bi-trash"></i></button></div></div>';
+ }).join(''):'<p class="muted">Noch keine Verbindungen</p>';
+ requestAnimationFrame(drawLinks);
+}
+function signalHtml(s){const key=signalKey(s.ref);return '<div class="signal"><span>'+esc(s.name.split(' · ').slice(1).join(' · '))+' <span class="muted">('+esc(s.type)+')</span></span><button class="btn btn-sm btn-outline-primary signal-btn '+(selected&&signalKey(selected.ref)===key?'selected':'')+'" data-key="'+esc(key)+'" title="Als Quelle oder Ziel wählen"><i class="bi bi-circle"></i></button></div>'}
+function drawLinks(){const svg=$('links'),root=$('workspace');const box=root.getBoundingClientRect();svg.setAttribute('viewBox','0 0 '+root.scrollWidth+' '+root.scrollHeight);svg.innerHTML='';for(const r of graph.routes){const a=document.querySelector('[data-key="'+CSS.escape(signalKey(r.from))+'"]'),b=document.querySelector('[data-key="'+CSS.escape(signalKey(r.to))+'"]');if(!a||!b)continue;const p=a.getBoundingClientRect(),q=b.getBoundingClientRect();const x=p.left+p.width/2-box.left+root.scrollLeft,y=p.top+p.height/2-box.top+root.scrollTop,u=q.left+q.width/2-box.left+root.scrollLeft,v=q.top+q.height/2-box.top+root.scrollTop;const path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d','M'+x+','+y+' C'+((x+u)/2)+','+y+' '+((x+u)/2)+','+v+' '+u+','+v);path.setAttribute('fill','none');path.setAttribute('stroke',r.enabled?'#0d6efd':'#adb5bd');path.setAttribute('stroke-width','2.5');svg.appendChild(path)}}
+function choose(ref){const all=[...signals(),...endpointSignals()];const next=all.find(s=>signalKey(s.ref)===signalKey(ref));if(!next)return;if(!selected){selected=next;notice('Quelle gewählt: '+next.name+'. Jetzt Ziel auswählen.');render();return}const from=selected;selected=null;if(from.ref.type===next.ref.type){notice('Eine Verbindung benötigt ein Device und einen MQTT-Endpunkt.',true);render();return}if(from.type!==next.type){notice('Datentypen passen nicht zusammen. Transformationen folgen später.',true);render();return}if(from.ref.type==='device'&&!['both','knx2mqtt'].includes(from.dir)){notice('Dieses Device-Signal kann nicht gelesen werden.',true);render();return}if(next.ref.type==='device'&&!['both','mqtt2knx'].includes(next.dir)){notice('Dieses Device-Signal ist nicht schreibbar.',true);render();return}if(graph.routes.some(r=>signalKey(r.to)===signalKey(next.ref))){notice('Dieses Ziel besitzt bereits eine Verbindung.',true);render();return}graph.routes.push({id:uid(),from:from.ref,to:next.ref,enabled:true});dirty=true;notice('Verbindung hinzugefügt. Mit „Änderungen aktivieren“ speichern.');render()}
+document.addEventListener('click',e=>{const b=e.target.closest('.signal-btn');if(b){const all=[...signals(),...endpointSignals()];const s=all.find(s=>signalKey(s.ref)===b.dataset.key);if(s)choose(s.ref)}const del=e.target.closest('.delete-route');if(del){graph.routes=graph.routes.filter(r=>r.id!==del.dataset.id);dirty=true;render()}const ep=e.target.closest('.delete-endpoint');if(ep){graph.endpoints=graph.endpoints.filter(x=>x.id!==ep.dataset.id);graph.routes=graph.routes.filter(r=>r.from.id!==ep.dataset.id&&r.to.id!==ep.dataset.id);dirty=true;render()}});
+document.addEventListener('change',e=>{if(e.target.matches('.route-enabled')){const r=graph.routes.find(r=>r.id===e.target.dataset.id);if(r){r.enabled=e.target.checked;dirty=true;render()}}});
+$('endpoint-form').addEventListener('submit',e=>{e.preventDefault();const topic=$('topic').value.trim();if(topic.startsWith('knx/')||/[+#\s]/.test(topic)||graph.endpoints.some(x=>x.topic===topic)){notice('Topic ungültig, reserviert oder bereits vorhanden.',true);return}graph.endpoints.push({id:uid(),name:$('topic-name').value.trim(),topic,payloadType:$('payload-type').value});dirty=true;e.target.reset();render();notice('MQTT-Endpunkt angelegt. Änderungen noch nicht aktiviert.')});
+$('save').onclick=async()=>{try{const r=await fetch('/api/routing',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(graph)});const d=await r.json();if(!r.ok)throw Error(d.error||'Speichern fehlgeschlagen');graph=d;dirty=false;notice('Routing gespeichert und aktiviert.');render()}catch(e){notice(e.message,true)}};
+$('reload').onclick=()=>load();
+async function load(){try{const r=await Promise.all(['/api/routing','/api/devices','/api/device-templates'].map(p=>fetch(p).then(x=>{if(!x.ok)throw Error(p+' nicht erreichbar');return x.json()})));[graph,devices,templates]=r;selected=null;dirty=false;render();notice('Routing geladen.')}catch(e){notice(e.message,true)}}
+window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
+window.addEventListener('resize',drawLinks);load();
+</script></body></html>
