@@ -187,3 +187,31 @@ piniMqtt4KNX/
 ## License
 
 MIT
+
+## Visual Routing Designer (preview)
+
+Open **Routing Designer** in the dashboard navbar, or visit `/routing.html`.
+This deliberately does **not** embed Node-RED. It uses the existing device
+templates as typed KNX signal endpoints and lets you add named MQTT topics.
+Select a source signal, then a target signal, to create a direct route.
+Enable/disable or remove routes in the right sidebar and select
+**Änderungen aktivieren** to validate and atomically save them.
+
+- Routes are persisted in `routing.json` next to `devices.json` by default.
+  Override with `ROUTING_PATH`. Back up this file with the config volume.
+- Existing `groupaddresses.json`, GA custom routes, and `devices.json`
+  remain unchanged. Both legacy and new routing run simultaneously.
+- MQTT payload types: boolean (`true`/`false`), number (as text).
+  Device signals use their configured DPTs; incompatible types are rejected.
+- KNX→MQTT routes publish on actual KNX group-value events.
+  MQTT→KNX routes write only to configured writable device signals.
+  The UI shows recent route activity, not KNX actuator confirmation.
+- A destination may have only one visual route; legacy topic collisions are
+  rejected where detectable. The reserved `knx/` topic prefix is not accepted
+  for visual MQTT endpoints.
+- The editor is intended for a trusted LAN: **no authentication** is provided
+  by this application. Do not expose the web port to the public Internet.
+- No conversion, conditions, scheduling, retain flags, or arbitrary JavaScript
+  nodes are included yet. Add these later as explicit, validated extensions.
+
+Run `node --test` for the routing-store validation tests.
