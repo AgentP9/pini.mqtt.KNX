@@ -165,7 +165,7 @@ class KnxHandler extends EventEmitter {
   write(address, rawValue) {
     if (!this.connection || !this.connected) {
       console.error('[KNX] Cannot write – not connected');
-      return;
+      return false;
     }
     const ga = this._findGA(address);
     const value = encodeKnxValue(rawValue, ga && ga.dpt);
@@ -180,8 +180,10 @@ class KnxHandler extends EventEmitter {
       // Mark address as recently written so the bus echo is suppressed
       this._recentWrites.add(address);
       setTimeout(() => this._recentWrites.delete(address), 500);
+      return true;
     } catch (err) {
       console.error('[KNX] Write error:', err.message);
+      return false;
     }
   }
 }
