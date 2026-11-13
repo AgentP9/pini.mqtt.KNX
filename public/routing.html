@@ -51,6 +51,17 @@ const uid=()=>{const bytes=new Uint8Array(16);crypto.getRandomValues(bytes);byte
 const signalKey=r=>r.type+':'+r.id+':'+(r.signal||'');
 const signals=()=>devices.flatMap(d=>{const t=templates.find(t=>t.id===d.templateId);return (t?.objects||[]).filter(o=>d.addresses?.[o.key]).map(o=>({ref:{type:'device',id:d.id,signal:o.key},name:d.name+' · '+o.label,type:o.dpt.startsWith('1.')?'boolean':'number',dir:o.direction||'both',address:d.addresses[o.key]}))});
 const endpointSignals=()=>[...graph.endpoints.map(e=>({ref:{type:'mqtt',id:e.id},name:e.name+' · '+e.topic,type:e.payloadType})),...(graph.mqttDevices||[]).flatMap(d=>d.signals.map(x=>({ref:{type:'mqttDevice',id:d.id,signal:x.key},name:d.name+' · '+x.topic,type:x.payloadType,topic:x.topic,direction:x.direction})))];
+const mqttTemplates={
+ sonos:[{key:'control',suffix:'/control',payloadType:'text',direction:'input'},{key:'volume',suffix:'/set/volume',payloadType:'number',direction:'input'},{key:'state',suffix:'/state',payloadType:'text',direction:'output'}],
+ generic:[{key:'command',suffix:'/set',payloadType:'text',direction:'input'},{key:'status',suffix:'/state',payloadType:'text',direction:'output'}]
+};
+function mqttTemplateUpgrade(device){
+ const template=mqttTemplates[device.templateId];if(!template)return null;
+ const base=device.baseTopic||(()=>{const known=device.signals.map(x=>template.find(t=>x.topic.endsWith(t.suffix))).filter(Boolean);const match=device.signals.find(x=>template.some(t=>x.topic.endsWith(t.suffix)));const suffix=template.find(t=>match?.topic.endsWith(t.suffix))?.suffix;return suffix?match.topic.slice(0,-suffix.length):null})();
+ if(!base)return null;
+ const additions=template.filter(t=>!device.signals.some(x=>x.topic===base+t.suffix));
+ return {base,additions};
+}
 function notice(message,error=false){$('notice').textContent=message;$('notice').className='small mb-3 '+(error?'text-danger':'text-success')}
 function isFocused(r){
  if(focusRoute)return r.id===focusRoute;
@@ -84,7 +95,7 @@ function render(){
   return {id:d.id,html:'<div class="node" data-node="device:'+esc(d.id)+'"><h3>'+esc(d.name)+'</h3>'+own.map(signalHtml).join('')+'</div>'};
  });
  const mqttCards=[
- ...(graph.mqttDevices||[]).filter(d=>!focusAddress&&!focusRoute||visibleMqttIds.has(d.id)).map(d=>({id:d.id,html:'<div class="node" data-node="mqttDevice:'+esc(d.id)+'"><h3><i class="bi bi-speaker"></i> '+esc(d.name)+'</h3>'+eps.filter(x=>x.ref.type==='mqttDevice'&&x.ref.id===d.id).map(signalHtml).join('')+'<button class="btn btn-sm btn-link text-danger delete-mqtt-device" data-id="'+esc(d.id)+'">Entfernen</button></div>'})),
+ ...(graph.mqttDevices||[]).filter(d=>!focusAddress&&!focusRoute||visibleMqttIds.has(d.id)).map(d=>({id:d.id,html:'<div class="node" data-node="mqttDevice:'+esc(d.id)+'"><h3><i class="bi bi-speaker"></i> '+esc(d.name)+'</h3>'+eps.filter(x=>x.ref.type==='mqttDevice'&&x.ref.id===d.id).map(signalHtml).join('')+(mqttTemplateUpgrade(d)?.additions.length?'<button class="btn btn-sm btn-outline-primary upgrade-mqtt-device me-2" data-id="'+esc(d.id)+'"><i class="bi bi-arrow-up-circle"></i> Template aktualisieren ('+mqttTemplateUpgrade(d).additions.length+')</button>':'')+'<button class="btn btn-sm btn-link text-danger delete-mqtt-device" data-id="'+esc(d.id)+'">Entfernen</button></div>'})),
  ...eps.filter(x=>x.ref.type==='mqtt'&&(!focusAddress&&!focusRoute||visibleMqttIds.has(x.ref.id))).map(x=>({id:x.ref.id,html:'<div class="node" data-node="mqtt:'+esc(x.ref.id)+'"><h3>'+esc(graph.endpoints.find(e=>e.id===x.ref.id).name)+'</h3>'+signalHtml(x)+'<button class="btn btn-sm btn-link text-danger delete-endpoint" data-id="'+esc(x.ref.id)+'">Entfernen</button></div>'}))
  ];
  // Order the right-hand cards by their connected KNX device, so related
@@ -169,6 +180,22 @@ document.addEventListener('click',e=>{
    }catch(err){notice('Ungültige Transformation: '+err.message,true)}}
   }
  }
+ const upgrade=e.target.closest('.upgrade-mqtt-device');
+ if(upgrade){
+  const device=graph.mqttDevices.find(d=>d.id===upgrade.dataset.id);
+  const plan=device&&mqttTemplateUpgrade(device);
+  if(!plan||!plan.additions.length){notice('Das Device ist bereits aktuell oder das Basistopic ist nicht erkennbar.',true);return}
+  const existingTopics=new Set([...graph.endpoints.map(x=>x.topic),...graph.mqttDevices.flatMap(d=>d.signals.map(x=>x.topic))]);
+  const collisions=plan.additions.filter(t=>existingTopics.has(plan.base+t.suffix));
+  if(collisions.length){notice('Upgrade nicht möglich: Topic bereits von anderem Endpunkt belegt: '+collisions.map(t=>plan.base+t.suffix).join(', '),true);return}
+  if(!confirm('Template von '+device.name+' aktualisieren? Neue Signale: '+plan.additions.map(t=>plan.base+t.suffix).join(', ')+'. Bestehende Signale und Verbindungen bleiben erhalten.'))return;
+  for(const t of plan.additions){
+   let key=t.key,number=2;while(device.signals.some(x=>x.key===key))key=t.key+number++;
+   device.signals.push({key,label:plan.base+t.suffix,topic:plan.base+t.suffix,payloadType:t.payloadType,direction:t.direction});
+  }
+  device.baseTopic=plan.base;dirty=true;render();notice('Template ergänzt. Bitte Änderungen aktivieren.');
+  return;
+ }
  const b=e.target.closest('.signal-btn');if(b){const all=[...signals(),...endpointSignals()];const s=all.find(s=>signalKey(s.ref)===b.dataset.key);if(s)choose(s.ref)}const del=e.target.closest('.delete-route');if(del){graph.routes=graph.routes.filter(r=>r.id!==del.dataset.id);dirty=true;render()}const md=e.target.closest('.delete-mqtt-device');if(md){graph.mqttDevices=graph.mqttDevices.filter(d=>d.id!==md.dataset.id);graph.routes=graph.routes.filter(r=>!(r.from.type==='mqttDevice'&&r.from.id===md.dataset.id)&&!(r.to.type==='mqttDevice'&&r.to.id===md.dataset.id));dirty=true;render()}
 const ep=e.target.closest('.delete-endpoint');if(ep){graph.endpoints=graph.endpoints.filter(x=>x.id!==ep.dataset.id);graph.routes=graph.routes.filter(r=>r.from.id!==ep.dataset.id&&r.to.id!==ep.dataset.id);dirty=true;render()}});
 document.addEventListener('change',e=>{if(e.target.matches('.route-enabled')){const r=graph.routes.find(r=>r.id===e.target.dataset.id);if(r){r.enabled=e.target.checked;dirty=true;render()}}});
@@ -182,7 +209,7 @@ $('mqtt-device-form').addEventListener('submit',e=>{
  [{key:'command',label:'Befehl',suffix:'/set',payloadType:'text',direction:'input'},{key:'status',label:'Status',suffix:'/state',payloadType:'text',direction:'output'}];
  const signals=definitions.map(d=>({key:d.key,label:d.label,topic:base+d.suffix,payloadType:d.payloadType,direction:d.direction}));
  if((graph.mqttDevices||[]).some(d=>d.signals.some(x=>signals.some(y=>y.topic===x.topic)))){notice('MQTT-Topic bereits vorhanden.',true);return}
- graph.mqttDevices.push({id:uid(),name,templateId,signals});dirty=true;e.target.reset();render();notice('MQTT-Device angelegt. Verbindungen noch nicht aktiviert.');
+ graph.mqttDevices.push({id:uid(),name,templateId,baseTopic:base,signals});dirty=true;e.target.reset();render();notice('MQTT-Device angelegt. Verbindungen noch nicht aktiviert.');
 });
 $('mqtt-signal-form').addEventListener('submit',e=>{
  e.preventDefault();
