@@ -991,7 +991,7 @@ const route = { mqttTopic };
             <div class="flex-grow-1 min-w-0"><h3 class="h6 mb-1">${escHtml(d.name)}</h3><div class="small text-muted">${escHtml(tpl ? tpl.name : d.templateId)}</div></div>
             <div class="d-flex align-items-center gap-2">
               ${status}
-              <button class="btn btn-sm btn-outline-secondary btn-edit-device" data-id="${escHtml(d.id)}" aria-label="Configure ${escHtml(d.name)}" title="Device settings"><i class="bi bi-gear"></i></button>
+              ${d.templateId === "switch" ? `<button class="btn btn-sm btn-outline-primary btn-upgrade-sonos" data-id="${escHtml(d.id)}" title="Auf Sonos-Template erweitern">Sonos-Upgrade</button>` : ""}<button class="btn btn-sm btn-outline-secondary btn-edit-device" data-id="${escHtml(d.id)}" aria-label="Configure ${escHtml(d.name)}" title="Device settings"><i class="bi bi-gear"></i></button>
             </div>
           </div>
           ${metrics}
@@ -1022,6 +1022,15 @@ const route = { mqttTopic };
       return `<div class="mb-3"><label class="form-label" for="device-object-${escHtml(o.key)}">${escHtml(o.label)} <small class="text-muted">DPT ${escHtml(o.dpt)}${o.optional ? ' · optional' : ''}</small></label><select class="form-select device-object" id="device-object-${escHtml(o.key)}" data-key="${escHtml(o.key)}"><option value="">Select address…</option>${options}</select></div>`;
     }).join('') : '';
   }
+  document.getElementById('device-list').addEventListener('click',event=>{
+    const button=event.target.closest('.btn-upgrade-sonos');
+    if(!button)return;
+    const device=devices.find(d=>d.id===button.dataset.id);
+    if(!device||device.templateId!=='switch')return;
+    // Preserve the device ID and existing command/status mappings.
+    // The two new addresses remain optional and must be chosen explicitly.
+    openDeviceEditor({...device,templateId:'sonos'});
+  });
   function openDeviceEditor(device) {
     editingDeviceId = device ? device.id : null;
     document.getElementById('btn-delete-device-dialog').classList.toggle('d-none', !device);
