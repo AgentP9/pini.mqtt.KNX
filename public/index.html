@@ -33,6 +33,31 @@
     crossorigin="anonymous"
   />
   <style>
+    .device-card { border: 1px solid var(--bs-border-color); border-radius: 1rem; overflow: hidden; transition: box-shadow .15s ease; }
+    .device-card:hover { box-shadow: 0 .35rem 1.2rem rgba(0,0,0,.08); }
+    .device-card .device-icon { display: inline-flex; width: 2.6rem; height: 2.6rem; border-radius: .8rem; align-items: center; justify-content: center; background: var(--bs-tertiary-bg); color: var(--bs-primary); font-size: 1.3rem; }
+    .device-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+    .device-metric { padding: 1rem; border-radius: .8rem; background: var(--bs-tertiary-bg); min-width: 0; }
+    .device-metric .metric-value { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 650; line-height: 1.2; font-variant-numeric: tabular-nums; }
+    .device-metric .metric-label { font-size: .78rem; color: var(--bs-secondary-color); margin-bottom: .4rem; }
+    .device-card details { border-top: 1px solid var(--bs-border-color); }
+    .device-card summary { cursor: pointer; padding: .7rem 1rem; color: var(--bs-secondary-color); font-size: .85rem; }
+    .device-card summary:hover { background: var(--bs-tertiary-bg); }
+    .device-switch-panel { border: 1px solid var(--bs-border-color); border-radius: .75rem; padding: 1rem; }
+    .device-switch-feedback { font-size: .9rem; }
+    .device-switch-message { min-height: 1.1rem; font-size: .78rem; }
+    .device-metric .metric-header { display: flex; align-items: center; justify-content: space-between; gap: .4rem; min-height: 1.8rem; }
+    .device-setpoint-edit { padding: .2rem .4rem; line-height: 1; }
+    .device-setpoint-form[hidden] { display: none !important; }
+    .device-setpoint-form { margin-top: .65rem; }
+    .device-setpoint-form .form-control { min-width: 0; }
+    .device-write-status { font-size: .75rem; min-height: 1rem; overflow-wrap: anywhere; }
+    .device-setpoint-actions { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; }
+    .device-card .device-detail { display: flex; gap: .5rem; align-items: center; justify-content: space-between; padding: .45rem 1rem; border-top: 1px solid var(--bs-border-color-translucent); font-size: .82rem; }
+    .device-card .device-detail code { font-size: .8rem; }
+    .view-tabs .nav-link { cursor: pointer; }
+    .view-panel[hidden] { display: none !important; }
+    .device-search { max-width: 22rem; }
     .badge-status { font-size: 0.85rem; padding: 0.4em 0.75em; }
     #traffic-body tr td:first-child {
       font-family: monospace; white-space: nowrap; font-size: 0.8rem;
@@ -131,6 +156,13 @@
     </div>
   </div>
 
+  <nav aria-label="Dashboard views" class="mb-3">
+    <ul class="nav nav-pills view-tabs gap-2" role="tablist">
+      <li class="nav-item" role="presentation"><button class="nav-link active" id="tab-devices" type="button" role="tab" aria-selected="true" aria-controls="view-devices"><i class="bi bi-grid me-1"></i> Devices</button></li>
+      <li class="nav-item" role="presentation"><button class="nav-link" id="tab-addresses" type="button" role="tab" aria-selected="false" aria-controls="view-addresses"><i class="bi bi-list-ul me-1"></i> Group Addresses <span class="badge bg-secondary" id="ga-count">0</span></button></li>
+    </ul>
+  </nav>
+  <section id="view-devices" class="view-panel" role="tabpanel" aria-labelledby="tab-devices">
   <!-- Device view: grouping only, never replaces individual KNX addresses -->
   <section class="card shadow-sm mb-4" aria-labelledby="devices-title">
     <div class="card-header d-flex justify-content-between align-items-center">
@@ -139,10 +171,25 @@
     </div>
     <div class="card-body">
       <p class="text-muted small mb-3">Devices group existing KNX group addresses. Individual addresses remain editable below.</p>
+      <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+        <input type="search" id="device-search" class="form-control device-search" placeholder="Search devices or addresses…" aria-label="Search devices">
+        <span class="small text-muted" id="device-count"></span>
+      </div>
       <div id="device-list" class="row g-3"><div class="col-12 text-muted">Loading devices…</div></div>
     </div>
   </section>
 
+  </section>
+  <section id="view-addresses" class="view-panel" role="tabpanel" aria-labelledby="tab-addresses" hidden>
+    <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+      <input type="search" id="ga-search" class="form-control device-search" placeholder="Search address, name, DPT…" aria-label="Search group addresses">
+      <select id="ga-filter" class="form-select" style="max-width: 14rem" aria-label="Filter group addresses">
+        <option value="all">All addresses</option>
+        <option value="assigned">Assigned to devices</option>
+        <option value="unassigned">Unassigned</option>
+      </select>
+      <span class="small text-muted" id="ga-filter-count"></span>
+    </div>
   <!-- Group Addresses card -->
   <div class="row mb-4">
     <div class="col-12">
@@ -165,6 +212,7 @@
                 <col class="col-comment">
                 <col class="col-dir">
                 <col class="col-routes">
+                <col class="col-device">
                 <col class="col-lastval">
                 <col class="col-actions">
               </colgroup>
@@ -176,12 +224,13 @@
                   <th data-sort="comment">Comment</th>
                   <th title="Routing direction">Dir</th>
                   <th title="Custom MQTT route topics">Routes</th>
+                  <th data-sort="device" title="Assigned device">Device</th>
                   <th>Last Value</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody id="ga-body">
-                <tr><td colspan="8" class="text-center empty-msg p-3">Loading…</td></tr>
+                <tr><td colspan="9" class="text-center empty-msg p-3">Loading…</td></tr>
               </tbody>
             </table>
           </div>
@@ -191,6 +240,8 @@
   </div>
 
 </div><!-- /container -->
+
+  </section>
 
   <!-- Live traffic drawer -->
   <div class="offcanvas offcanvas-end" tabindex="-1" id="trafficDrawer" aria-labelledby="trafficDrawerTitle">
@@ -220,6 +271,22 @@
   </div>
 
 
+<!-- Setpoint write dialog -->
+<div class="modal fade" id="setpointModal" tabindex="-1" aria-labelledby="setpointModalTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <form id="setpoint-write-form">
+      <div class="modal-header"><h5 class="modal-title" id="setpointModalTitle">Setpoint</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+      <div class="modal-body">
+        <label class="form-label" for="setpoint-modal-input">New setpoint</label>
+        <div class="input-group"><input type="number" class="form-control" id="setpoint-modal-input" min="5" max="35" step="0.1" required><span class="input-group-text">°C</span></div>
+        <div class="small text-muted mt-2" id="setpoint-modal-address"></div>
+        <div class="small mt-2" id="setpoint-modal-status" role="status">KNX write will be sent; device confirmation is separate.</div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary" id="setpoint-modal-send"><i class="bi bi-send me-1"></i>Send to KNX</button></div>
+    </form>
+  </div></div>
+</div>
+
 <!-- Device editor -->
 <div class="modal fade" id="deviceModal" tabindex="-1" aria-labelledby="deviceModalTitle" aria-hidden="true">
   <div class="modal-dialog"><div class="modal-content">
@@ -233,7 +300,10 @@
       <div id="device-objects"></div>
       <p class="small text-muted mt-2 mb-0">Select existing group addresses explicitly. No sequential address assumptions or automatic changes to DPT/direction.</p>
     </div>
-    <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary" id="btn-save-device">Save Device</button></div>
+    <div class="modal-footer justify-content-between">
+      <button type="button" class="btn btn-outline-danger d-none" id="btn-delete-device-dialog"><i class="bi bi-trash me-1"></i>Delete device</button>
+      <div class="d-flex gap-2 ms-auto"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary" id="btn-save-device">Save Device</button></div>
+    </div>
   </div></div>
 </div>
 
@@ -394,14 +464,19 @@
 
   // ── Group addresses table ─────────────────────────────────────────────────────
   let configuredGAs = [];
+  const pendingGAValues = new Map();
   let sortCol = null;
   let sortDir = 1; // 1 = asc, -1 = desc
+
+  function assignedDevices(address) {
+    return devices.flatMap(d => Object.entries(d.addresses || {}).filter(([, ga]) => ga === address).map(([key]) => ({ name: d.name, role: (deviceTemplates.find(t => t.id === d.templateId)?.objects || []).find(o => o.key === key)?.label || key })));
+  }
 
   function sortedGAs() {
     if (!sortCol) return configuredGAs.slice();
     return configuredGAs.slice().sort((a, b) => {
-      const av = (a[sortCol] || '').toLowerCase();
-      const bv = (b[sortCol] || '').toLowerCase();
+      const av = String(sortCol === 'device' ? assignedDevices(a.address).map(d => d.name).join(', ') : a[sortCol] || '').toLowerCase();
+      const bv = String(sortCol === 'device' ? assignedDevices(b.address).map(d => d.name).join(', ') : b[sortCol] || '').toLowerCase();
       return av < bv ? -sortDir : av > bv ? sortDir : 0;
     });
   }
@@ -410,9 +485,18 @@
     configuredGAs = addresses;
     renderDevices();
     const gaBody = document.getElementById('ga-body');
-    const sorted = sortedGAs();
+    const search = document.getElementById('ga-search').value.trim().toLowerCase();
+    const filter = document.getElementById('ga-filter').value;
+    const assigned = new Set(devices.flatMap(d => Object.values(d.addresses || {})));
+    const sorted = sortedGAs().filter(ga => {
+      if (filter === 'assigned' && !assigned.has(ga.address)) return false;
+      if (filter === 'unassigned' && assigned.has(ga.address)) return false;
+      return [ga.address, ga.name, ga.dpt, ga.comment, ...assignedDevices(ga.address).flatMap(d => [d.name, d.role])].some(v => String(v || '').toLowerCase().includes(search));
+    });
+    document.getElementById('ga-count').textContent = configuredGAs.length;
+    document.getElementById('ga-filter-count').textContent = sorted.length + ' of ' + configuredGAs.length;
     if (!sorted.length) {
-      gaBody.innerHTML = '<tr><td colspan="8" class="text-center empty-msg p-3">No group addresses configured.</td></tr>';
+      gaBody.innerHTML = '<tr><td colspan="9" class="text-center empty-msg p-3">No group addresses configured.</td></tr>';
       return;
     }
     gaBody.innerHTML = sorted.map((ga) => {
@@ -423,6 +507,8 @@
       const repeatBadge = ga.repeatInterval > 0
         ? `<span class="badge bg-warning text-dark repeat-icon ms-1" title="Repeat every ${escHtml(String(ga.repeatInterval))}s">↻${escHtml(String(ga.repeatInterval))}s</span>`
         : '';
+      const assignments = assignedDevices(ga.address);
+      const deviceCell = assignments.length ? assignments.map(d => `<div><span class="fw-semibold">${escHtml(d.name)}</span><span class="small text-muted ms-1">(${escHtml(d.role)})</span></div>`).join('') : '<span class="text-muted">–</span>';
       const dir = ga.direction || 'both';
       const dirIcon = dir === 'knx2mqtt' ? '<i class="bi bi-arrow-right" title="KNX → MQTT only"></i>'
                     : dir === 'mqtt2knx' ? '<i class="bi bi-arrow-left"  title="MQTT → KNX only"></i>'
@@ -435,6 +521,7 @@
         <td><small class="text-muted">${escHtml(ga.comment || '')}</small></td>
         <td class="text-center">${dirIcon}</td>
         <td>${routesBadge}${repeatBadge}</td>
+        <td>${deviceCell}</td>
         <td><strong>${escHtml(ga.lastValue !== undefined && ga.lastValue !== null ? formatValue(ga.lastValue, ga.dpt) : '–')}</strong></td>
         <td class="text-end text-nowrap">
           <button class="btn btn-sm btn-outline-secondary btn-edit-ga me-1" data-address="${escHtml(ga.address)}" aria-label="Edit"><i class="bi bi-pencil-fill"></i></button>
@@ -468,20 +555,21 @@
 
   /** Update the Last Value cell for a GA row without re-rendering the whole table. */
   function updateGALastValue(entry) {
+    const ga = configuredGAs.find(g => g.address === entry.address);
+    if (ga) ga.lastValue = entry.value;
     // Find the row whose first cell contains the matching address
     const rows = document.getElementById('ga-body').rows;
     for (const row of rows) {
       const codeEl = row.cells[0] && row.cells[0].querySelector('code');
       if (codeEl && codeEl.textContent === entry.address) {
         // Update the in-memory GA object so modal edits reflect current DPT
-        const ga = configuredGAs.find((g) => g.address === entry.address);
-        if (ga) ga.lastValue = entry.value;
-        // Update the cell (column index 6 – after the Direction and Routes columns)
-        const cell = row.cells[6];
+        // Update the Last Value cell (index 7, after Device).
+        const cell = row.cells[7];
         if (cell) cell.innerHTML = `<strong>${escHtml(formatValue(entry.value, entry.dpt))}</strong>`;
         break;
       }
     }
+    renderDevices();
   }
 
   // Delegate edit / delete clicks in the GA table
@@ -693,12 +781,30 @@
   socket.on('traffic', (entry) => {
     appendRow(entry);
     updateCounters(entry);
-    if (entry.configured !== false) updateGALastValue(entry);
+    // Value updates arrive separately via ga-value; traffic remains log-only.
   });
 
   socket.on('status', ({ service, connected }) => updateBadge(service, connected));
 
   socket.on('groupaddresses', renderGATable);
+  socket.on('ga-value', ({ address, value, confirmed }) => {
+    if (confirmed) {
+      pendingGAValues.delete(address);
+      updateGALastValue({ address, value });
+    } else {
+      pendingGAValues.set(address, value);
+      renderDevices();
+    }
+  });
+  socket.on('value-snapshot', ({ values, pending }) => {
+    pendingGAValues.clear();
+    Object.entries(pending || {}).forEach(([address, value]) => pendingGAValues.set(address, value));
+    Object.entries(values || {}).forEach(([address, value]) => {
+      const ga = configuredGAs.find(g => g.address === address);
+      if (ga) ga.lastValue = value;
+    });
+    renderDevices();
+  });
 
   document.getElementById('btn-restart-mqtt').addEventListener('click', () => {
     socket.emit('mqtt-restart');
@@ -727,23 +833,84 @@
   // ── Hybrid device templates ──────────────────────────────────────────────────
   let devices = [], deviceTemplates = [], editingDeviceId = null;
   const deviceModal = new bootstrap.Modal(document.getElementById('deviceModal'));
+  const setpointModal = new bootstrap.Modal(document.getElementById('setpointModal'));
+  document.getElementById('setpointModal').addEventListener('shown.bs.modal', () => document.getElementById('setpoint-modal-input').focus());
+  let setpointDeviceId = null;
   const deviceError = document.getElementById('device-error');
   const deviceObjects = document.getElementById('device-objects');
   const deviceTemplateSelect = document.getElementById('device-template');
   function deviceTemplate(id) { return deviceTemplates.find(t => t.id === id); }
   function renderDevices() {
     const target = document.getElementById('device-list');
-    if (!devices.length) { target.innerHTML = '<div class="col-12 text-muted">No devices yet. Existing group addresses are still active.</div>'; return; }
-    target.innerHTML = devices.map(d => {
+    const term = document.getElementById('device-search').value.trim().toLowerCase();
+    const visible = devices.filter(d => [d.name, d.templateId, ...Object.values(d.addresses || {})].some(v => String(v).toLowerCase().includes(term)));
+    document.getElementById('device-count').textContent = visible.length + ' of ' + devices.length + ' devices';
+    if (!visible.length) {
+      target.innerHTML = '<div class="col-12 text-muted">' + (devices.length ? 'No matching devices.' : 'No devices yet. Create a device using existing group addresses; individual addresses stay active.') + '</div>';
+      return;
+    }
+    // Preserve expanded technical details across live value refreshes.
+    const expanded = new Set([...target.querySelectorAll('details[open][data-device-id]')].map(el => el.dataset.deviceId));
+    const gaByAddress = new Map(configuredGAs.map(ga => [ga.address, ga]));
+    const metric = (d, key, label, actions = '', editor = '') => {
+      const address = d.addresses && d.addresses[key];
+      const ga = address ? gaByAddress.get(address) : null;
+      const pending = address && pendingGAValues.has(address);
+      const raw = pending ? pendingGAValues.get(address) : ga && ga.lastValue;
+      const numeric = raw !== undefined && raw !== null && raw !== '' ? Number(raw) : NaN;
+      const value = Number.isFinite(numeric) ? numeric.toLocaleString(undefined, { maximumFractionDigits: 1 }) + ' °C' : '–';
+      const hint = !address ? 'Not assigned' : !ga ? 'Address missing' : pending ? address + ' · sent, not confirmed' : !Number.isFinite(numeric) ? 'No live value' : address;
+      return `<div class="device-metric"><div class="metric-header"><div class="metric-label mb-0">${escHtml(label)}</div>${actions}</div><div class="metric-value">${escHtml(value)}</div><div class="small text-muted mt-2">${escHtml(hint)}</div>${editor}</div>`;
+    };
+    target.innerHTML = visible.map(d => {
       const tpl = deviceTemplate(d.templateId);
-      const rows = (tpl ? tpl.objects : []).filter(o => d.addresses[o.key]).map(o => {
+      const isHeating = d.templateId === 'room-heating';
+      const isSwitch = d.templateId === 'switch';
+      const missing = Object.values(d.addresses || {}).filter(address => !gaByAddress.has(address));
+      const detailRows = (tpl ? tpl.objects : []).filter(o => d.addresses && d.addresses[o.key]).map(o => {
         const address = d.addresses[o.key];
-        const ga = configuredGAs.find(g => g.address === address);
+        const ga = gaByAddress.get(address);
         const value = ga && ga.lastValue != null ? formatValue(ga.lastValue, ga.dpt) : '–';
-        return `<tr><td>${escHtml(o.label)}</td><td><code>${escHtml(address)}</code></td><td class="text-end">${escHtml(value)}</td></tr>`;
+        return `<div class="device-detail"><span>${escHtml(o.label)} <code class="ms-1">${escHtml(address)}</code></span><span class="text-end">${escHtml(value)}</span></div>`;
       }).join('');
-      const missing = d.missing && d.missing.length ? '<span class="badge bg-warning text-dark">Missing address</span>' : '';
-      return `<div class="col-12 col-xl-6"><div class="card h-100"><div class="card-header d-flex justify-content-between align-items-center"><div><strong>${escHtml(d.name)}</strong> <small class="text-muted">${escHtml(tpl ? tpl.name : d.templateId)}</small> ${missing}</div><div><button class="btn btn-sm btn-outline-secondary btn-edit-device" data-id="${escHtml(d.id)}" aria-label="Edit device"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-outline-danger btn-delete-device" data-id="${escHtml(d.id)}" aria-label="Delete device"><i class="bi bi-trash"></i></button></div></div><div class="table-responsive"><table class="table table-sm mb-0"><tbody>${rows}</tbody></table></div></div></div>`;
+      const status = missing.length ? '<span class="badge text-bg-warning">Mapping incomplete</span>' : '<span class="badge text-bg-secondary">Configured</span>';
+      const setpointGA = d.addresses && gaByAddress.get(d.addresses.setpoint);
+      const writable = isHeating && setpointGA && setpointGA.dpt === '9.001' && (!setpointGA.direction || ['both', 'mqtt2knx'].includes(setpointGA.direction));
+      const setpointRaw = d.addresses && pendingGAValues.has(d.addresses.setpoint) ? pendingGAValues.get(d.addresses.setpoint) : setpointGA && setpointGA.lastValue;
+      const defaultSetpoint = Number.isFinite(Number(setpointRaw)) && setpointRaw !== undefined && setpointRaw !== null && setpointRaw !== '' ? Number(setpointRaw).toFixed(1) : '21.0';
+      const editButton = writable ? `<button type="button" class="btn btn-sm btn-outline-secondary device-setpoint-edit" data-id="${escHtml(d.id)}" aria-label="Edit setpoint for ${escHtml(d.name)}" title="Write new setpoint to KNX"><i class="bi bi-pencil"></i></button>` : '';
+      const metrics = isHeating ? `<div class="device-metrics">${metric(d, 'temperature', 'Current temperature')}${metric(d, 'setpoint', 'Setpoint', editButton)}</div>` : '';
+      const switchStatusAddress = isSwitch && d.addresses && d.addresses.status;
+      const switchStatusGA = switchStatusAddress && gaByAddress.get(switchStatusAddress);
+      const switchRaw = switchStatusGA && switchStatusGA.lastValue;
+      const switchState = switchRaw === true || switchRaw === 1 || ['1', 'true', 'on', 'ein'].includes(String(switchRaw).toLowerCase()) ? true
+        : switchRaw === false || switchRaw === 0 || ['0', 'false', 'off', 'aus'].includes(String(switchRaw).toLowerCase()) ? false : null;
+      const switchCommandGA = isSwitch && d.addresses && gaByAddress.get(d.addresses.command);
+      const switchWritable = isSwitch && switchCommandGA && switchCommandGA.dpt === '1.001' && ['both', 'mqtt2knx'].includes(switchCommandGA.direction || 'both');
+      const switchPanel = isSwitch ? `<div class="device-switch-panel">
+        <div class="d-flex align-items-center justify-content-between gap-3">
+          <div><div class="small text-muted">Actuator feedback</div><div class="device-switch-feedback fw-semibold">${switchState === null ? 'Unknown' : switchState ? 'On' : 'Off'}</div><div class="small text-muted">${escHtml(switchStatusAddress || 'Status not assigned')}</div></div>
+          <div class="form-check form-switch">
+            <input class="form-check-input device-switch-toggle" type="checkbox" role="switch" data-id="${escHtml(d.id)}" aria-label="Switch ${escHtml(d.name)}" ${switchState === true ? 'checked' : ''} ${switchWritable ? '' : 'disabled'} style="width:2.8rem;height:1.5rem">
+          </div>
+        </div>
+        <div class="device-switch-message text-muted mt-2" data-id="${escHtml(d.id)}" role="status"></div>
+      </div>` : '';
+      return `<div class="col-12 col-xl-6"><article class="card device-card h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-start gap-3 mb-3">
+            <div class="device-icon" aria-hidden="true"><i class="bi ${isHeating ? 'bi-thermometer-half' : 'bi-grid'}"></i></div>
+            <div class="flex-grow-1 min-w-0"><h3 class="h6 mb-1">${escHtml(d.name)}</h3><div class="small text-muted">${escHtml(tpl ? tpl.name : d.templateId)}</div></div>
+            <div class="d-flex align-items-center gap-2">
+              ${status}
+              <button class="btn btn-sm btn-outline-secondary btn-edit-device" data-id="${escHtml(d.id)}" aria-label="Configure ${escHtml(d.name)}" title="Device settings"><i class="bi bi-gear"></i></button>
+            </div>
+          </div>
+          ${metrics}
+          ${switchPanel}
+        </div>
+        <details data-device-id="${escHtml(d.id)}" ${expanded.has(d.id) ? 'open' : ''}><summary>Technical details · ${Object.keys(d.addresses || {}).length} group addresses</summary>${detailRows || '<div class="px-3 pb-3 text-muted small">No addresses assigned</div>'}</details>
+      </article></div>`;
     }).join('');
   }
   function renderDeviceFields(mapping = {}) {
@@ -756,6 +923,7 @@
   }
   function openDeviceEditor(device) {
     editingDeviceId = device ? device.id : null;
+    document.getElementById('btn-delete-device-dialog').classList.toggle('d-none', !device);
     deviceError.classList.add('d-none');
     document.getElementById('deviceModalTitle').textContent = device ? 'Edit Device' : 'Add Device';
     document.getElementById('device-name').value = device ? device.name : '';
@@ -764,16 +932,101 @@
     renderDeviceFields(device ? device.addresses : {});
     deviceModal.show();
   }
+  document.getElementById('setpoint-write-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const id = setpointDeviceId;
+    const input = document.getElementById('setpoint-modal-input');
+    const button = document.getElementById('setpoint-modal-send');
+    const status = document.getElementById('setpoint-modal-status');
+    const value = Number(input.value);
+    if (!id || !input.value.trim() || !Number.isFinite(value) || value < 5 || value > 35 || Math.abs(value * 10 - Math.round(value * 10)) > 1e-7) {
+      status.textContent = 'Enter a temperature between 5 and 35 °C in 0.1 °C steps.';
+      status.className = 'small text-danger mt-2';
+      return;
+    }
+    button.disabled = true;
+    status.textContent = 'Sending KNX write…';
+    status.className = 'small text-muted mt-2';
+    try {
+      const response = await fetch('/api/devices/' + encodeURIComponent(id) + '/setpoint', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Write failed');
+      setpointModal.hide();
+    } catch (err) {
+      status.textContent = 'Write failed: ' + err.message;
+      status.className = 'small text-danger mt-2';
+    } finally { button.disabled = false; }
+  });
+  document.getElementById('setpointModal').addEventListener('hidden.bs.modal', () => { setpointDeviceId = null; });
+  document.getElementById('device-list').addEventListener('change', async e => {
+    const toggle = e.target.closest('.device-switch-toggle');
+    if (!toggle) return;
+    const device = devices.find(d => d.id === toggle.dataset.id);
+    if (!device || device.templateId !== 'switch') return;
+    const ga = configuredGAs.find(g => g.address === device.addresses.status);
+    const raw = ga && ga.lastValue;
+    const actualOn = raw === true || raw === 1 || ['1', 'true', 'on', 'ein'].includes(String(raw).toLowerCase());
+    const desired = toggle.checked;
+    // Keep the switch showing feedback, not the unconfirmed command.
+    toggle.checked = actualOn;
+    toggle.disabled = true;
+    const message = toggle.closest('.device-switch-panel').querySelector('.device-switch-message');
+    message.textContent = 'Sending command…';
+    try {
+      const response = await fetch('/api/devices/' + encodeURIComponent(device.id) + '/switch', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value: desired }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Switch write failed');
+      message.textContent = 'Command sent; awaiting actuator status feedback.';
+      message.className = 'device-switch-message text-muted mt-2';
+    } catch (err) {
+      message.textContent = 'Write failed: ' + err.message;
+      message.className = 'device-switch-message text-danger mt-2';
+    } finally { toggle.disabled = false; }
+  });
   document.getElementById('btn-add-device').addEventListener('click', () => openDeviceEditor());
   deviceTemplateSelect.addEventListener('change', () => renderDeviceFields());
   document.getElementById('device-list').addEventListener('click', e => {
-    const edit = e.target.closest('.btn-edit-device'), del = e.target.closest('.btn-delete-device');
-    if (edit) openDeviceEditor(devices.find(d => d.id === edit.dataset.id));
-    if (del && confirm('Delete device grouping? Group addresses will remain untouched.')) {
-      fetch('/api/devices/' + encodeURIComponent(del.dataset.id), { method: 'DELETE' })
-        .then(async r => { if (!r.ok) throw new Error((await r.json()).error); })
-        .catch(err => alert('Delete failed: ' + err.message));
+    const setpointEdit = e.target.closest('.device-setpoint-edit');
+    if (setpointEdit) {
+      const device = devices.find(d => d.id === setpointEdit.dataset.id);
+      if (!device || device.templateId !== 'room-heating') return;
+      const address = device.addresses && device.addresses.setpoint;
+      const ga = configuredGAs.find(g => g.address === address);
+      if (!ga || ga.dpt !== '9.001' || !['both', 'mqtt2knx'].includes(ga.direction || 'both')) return;
+      setpointDeviceId = device.id;
+      document.getElementById('setpointModalTitle').textContent = device.name + ' – Setpoint';
+      document.getElementById('setpoint-modal-address').textContent = 'KNX group address: ' + address;
+      const raw = pendingGAValues.has(address) ? pendingGAValues.get(address) : ga.lastValue;
+      document.getElementById('setpoint-modal-input').value = raw !== undefined && raw !== null && raw !== '' && Number.isFinite(Number(raw)) ? Number(raw).toFixed(1) : '';
+      const status = document.getElementById('setpoint-modal-status');
+      status.textContent = 'Write will be sent to KNX; bus/device confirmation is separate.';
+      status.className = 'small text-muted mt-2';
+      setpointModal.show();
+      return;
     }
+    const edit = e.target.closest('.btn-edit-device');
+    if (edit) openDeviceEditor(devices.find(d => d.id === edit.dataset.id));
+  });
+  document.getElementById('btn-delete-device-dialog').addEventListener('click', async () => {
+    const id = editingDeviceId;
+    const device = devices.find(d => d.id === id);
+    if (!device) return;
+    if (!confirm('Delete device "' + device.name + '"? Its group addresses will remain untouched.')) return;
+    const button = document.getElementById('btn-delete-device-dialog');
+    button.disabled = true;
+    try {
+      const response = await fetch('/api/devices/' + encodeURIComponent(id), { method: 'DELETE' });
+      if (!response.ok) throw new Error((await response.json()).error || 'Delete failed');
+      deviceModal.hide();
+      editingDeviceId = null;
+    } catch (err) {
+      deviceError.textContent = 'Delete failed: ' + err.message;
+      deviceError.classList.remove('d-none');
+    } finally { button.disabled = false; }
   });
   document.getElementById('btn-save-device').addEventListener('click', async () => {
     const addresses = {};
@@ -787,8 +1040,25 @@
     } catch (err) { deviceError.textContent = err.message; deviceError.classList.remove('d-none'); }
   });
   fetch('/api/device-templates').then(r => r.json()).then(t => { deviceTemplates = t; renderDevices(); }).catch(err => console.error('Templates unavailable', err));
-  fetch('/api/devices').then(r => r.json()).then(d => { devices = d; renderDevices(); }).catch(err => console.error('Devices unavailable', err));
-  socket.on('devices', d => { devices = d; renderDevices(); });
+  fetch('/api/devices').then(r => r.json()).then(d => { devices = d; renderDevices(); renderGATable(configuredGAs); }).catch(err => console.error('Devices unavailable', err));
+  socket.on('devices', d => { devices = d; renderDevices(); renderGATable(configuredGAs); });
+  document.getElementById('device-search').addEventListener('input', renderDevices);
+  document.getElementById('ga-search').addEventListener('input', () => renderGATable(configuredGAs));
+  document.getElementById('ga-filter').addEventListener('change', () => renderGATable(configuredGAs));
+  function switchView(view) {
+    const addresses = view === 'addresses';
+    document.getElementById('view-devices').hidden = addresses;
+    document.getElementById('view-addresses').hidden = !addresses;
+    for (const [id, selected] of [['tab-devices', !addresses], ['tab-addresses', addresses]]) {
+      const tab = document.getElementById(id);
+      tab.classList.toggle('active', selected);
+      tab.setAttribute('aria-selected', String(selected));
+    }
+    try { localStorage.setItem('dashboard-view', view); } catch (_) {}
+  }
+  document.getElementById('tab-devices').addEventListener('click', () => switchView('devices'));
+  document.getElementById('tab-addresses').addEventListener('click', () => switchView('addresses'));
+  switchView(localStorage.getItem('dashboard-view') === 'addresses' ? 'addresses' : 'devices');
 
   // ── PWA service worker ────────────────────────────────────────────────────────
   if ('serviceWorker' in navigator) {

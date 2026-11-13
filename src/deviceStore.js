@@ -6,6 +6,13 @@ const crypto = require('crypto');
 // Devices are metadata referencing existing KNX addresses, never replacements for them.
 // The sidecar file keeps legacy groupaddresses.json byte-for-byte compatible.
 const TEMPLATES = Object.freeze({
+  'switch': {
+    id: 'switch', name: 'Switch',
+    objects: [
+      { key: 'command', label: 'Switch command', dpt: '1.001', direction: 'both' },
+      { key: 'status', label: 'Switch status', dpt: '1.011', direction: 'knx2mqtt' },
+    ],
+  },
   'room-heating': {
     id: 'room-heating', name: 'Room heating',
     objects: [

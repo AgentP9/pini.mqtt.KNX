@@ -53,6 +53,52 @@ class WebServer {
       } catch (err) { return res.status(500).json({ error: err.message }); }
     });
 
+    // Diagnostic write only for an existing room-heating device's setpoint object.
+    // This endpoint never changes configuration or fabricates a confirmed device value.
+    this.app.post('/api/devices/:id/setpoint', (req, res) => {
+      const device = this.deviceStore.devices.find(d => d.id === req.params.id);
+      if (!device) return res.status(404).json({ error: 'Device not found' });
+      if (device.templateId !== 'room-heating') return res.status(400).json({ error: 'Not a heating device' });
+      const address = device.addresses && device.addresses.setpoint;
+      const ga = this.groupAddresses.find(g => g.address === address);
+      if (!ga || ga.dpt !== '9.001' || !['both', 'mqtt2knx'].includes(ga.direction || 'both')) {
+        return res.status(409).json({ error: 'Setpoint GA missing or not writable as DPT 9.001' });
+      }
+      const value = req.body && req.body.value;
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < 5 || value > 35 || Math.abs(value * 10 - Math.round(value * 10)) > 1e-7) {
+        return res.status(400).json({ error: 'Setpoint must be 5–35 °C in 0.1 °C increments' });
+      }
+      if (this._status.KNX !== true) return res.status(503).json({ error: 'KNX disconnected' });
+      if (this.eventEmitter.listenerCount('device-setpoint-write') !== 1) return res.status(503).json({ error: 'KNX write handler unavailable' });
+      let answered = false;
+      this.eventEmitter.emit('device-setpoint-write', { address, value, respond: result => {
+        if (answered) return;
+        answered = true;
+        res.status(result.status || (result.ok ? 202 : 502)).json(result);
+      } });
+    });
+
+    // Switch command is distinct from feedback; never treat a send as an actuator status.
+    this.app.post('/api/devices/:id/switch', (req, res) => {
+      const device = this.deviceStore.devices.find(d => d.id === req.params.id);
+      if (!device) return res.status(404).json({ error: 'Device not found' });
+      if (device.templateId !== 'switch') return res.status(400).json({ error: 'Not a switch device' });
+      const address = device.addresses && device.addresses.command;
+      const ga = this.groupAddresses.find(g => g.address === address);
+      if (!ga || ga.dpt !== '1.001' || !['both', 'mqtt2knx'].includes(ga.direction || 'both')) {
+        return res.status(409).json({ error: 'Switch command GA missing or not writable as DPT 1.001' });
+      }
+      if (typeof req.body?.value !== 'boolean') return res.status(400).json({ error: 'Switch value must be boolean' });
+      if (this._status.KNX !== true) return res.status(503).json({ error: 'KNX disconnected' });
+      if (this.eventEmitter.listenerCount('device-switch-write') !== 1) return res.status(503).json({ error: 'KNX write handler unavailable' });
+      let answered = false;
+      this.eventEmitter.emit('device-switch-write', { address, value: req.body.value, respond: result => {
+        if (answered) return;
+        answered = true;
+        res.status(result.status || (result.ok ? 202 : 502)).json(result);
+      } });
+    });
+
     // ── REST: group addresses ──────────────────────────────────────────────────
 
     // GET all configured group addresses
@@ -169,6 +215,7 @@ class WebServer {
 
     // Last received value per group address (address → value string)
     this._lastValues = {};
+    this._pendingValues = {};
 
     this.io.on('connection', (socket) => {
       console.log('[WEB] Client connected');
@@ -179,6 +226,7 @@ class WebServer {
       });
       socket.emit('groupaddresses', this._enrichGAs());
       socket.emit('devices', this.deviceStore.list());
+      socket.emit('value-snapshot', { values: this._lastValues, pending: this._pendingValues });
       socket.on('mqtt-restart', () => this.eventEmitter.emit('mqtt-restart'));
       socket.on('disconnect', () => console.log('[WEB] Client disconnected'));
     });
@@ -187,9 +235,17 @@ class WebServer {
     eventEmitter.on('traffic', (entry) => {
       this._log.push(entry);
       if (this._log.length > 200) this._log.shift();
-      // Track last value for configured group addresses
-      if (entry.configured !== false) {
-        this._lastValues[entry.address] = entry.value;
+      // Send incremental value changes over Socket.IO; no page reload/polling.
+      // Outbound commands are shown as pending, never as confirmed bus feedback.
+      if (entry.configured !== false && entry.address) {
+        if (entry.direction === 'KNX→MQTT' && !entry.outbound) {
+          this._lastValues[entry.address] = entry.value;
+          delete this._pendingValues[entry.address];
+          this.io.emit('ga-value', { address: entry.address, value: entry.value, confirmed: true });
+        } else if (entry.direction === 'MQTT→KNX' || entry.direction === 'WEB→KNX') {
+          this._pendingValues[entry.address] = entry.value;
+          this.io.emit('ga-value', { address: entry.address, value: entry.value, confirmed: false });
+        }
       }
       this.io.emit('traffic', entry);
     });
