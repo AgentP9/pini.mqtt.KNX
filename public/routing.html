@@ -12,7 +12,7 @@ body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:42
 .aligned-line{position:absolute;left:-1rem;right:-1rem;top:50%;border-top:3px solid var(--bs-primary)}
 .aligned-line.inactive{border-top-style:dashed;border-top-color:var(--bs-secondary-color)}
 .aligned-connector .transform-chip{position:relative;z-index:1;background:var(--bs-body-bg);max-width:100%;overflow-wrap:anywhere}
-.route-actions{display:flex;align-items:center;justify-content:center;gap:.45rem;margin-top:.35rem}.route-actions input{cursor:pointer}.route-actions .btn{padding:.12rem .3rem}.floating-route-actions{position:absolute;z-index:5;transform:translate(-50%,0);background:var(--bs-body-bg);border-radius:.35rem;padding:.12rem .3rem;box-shadow:0 1px 3px #0002}</style></head><body>
+.route-actions{display:flex;align-items:center;justify-content:center;gap:.45rem;margin-top:.35rem}.route-actions input{cursor:pointer}.route-actions .btn{padding:.12rem .3rem}.floating-route-actions{position:absolute;z-index:5;transform:translate(-50%,0);background:var(--bs-body-bg);border-radius:.35rem;padding:.12rem .3rem;box-shadow:0 1px 3px #0002}#route-dialog{border:1px solid var(--bs-border-color);border-radius:1rem;max-width:min(94vw,560px);width:100%;background:var(--bs-body-bg);color:var(--bs-body-color);box-shadow:0 20px 60px #0004}#route-dialog::backdrop{background:#0007}.aligned-route{padding:1.6rem 0;gap:1.75rem}.aligned-connector{min-height:64px}.lanes{gap:20%;padding:2rem 1.5rem}.signal{min-height:56px}.route-transform{max-width:170px;padding:.35rem .6rem}.node{padding:1rem}@media(max-width:700px){.aligned-route{gap:.6rem;padding:1rem 0}.lanes{gap:1rem;padding:1rem .7rem}.node{padding:.6rem}}</style></head><body>
 <main class="container-fluid py-3" style="max-width:1500px">
 <header class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3"><div><a href="/" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Dashboard</a><h1 class="h3 mt-2">Routing Designer</h1><p class="muted mb-0">Device-Signale mit MQTT-Topics verbinden. Keine Logikbausteine nötig.</p></div><div class="d-flex gap-2"><button class="btn btn-outline-info" id="migration-preview"><i class="bi bi-arrow-left-right"></i> Bestehende Routen migrieren</button><button class="btn btn-outline-secondary" id="reload">Verwerfen</button><button class="btn btn-primary" id="save">Änderungen aktivieren</button></div></header>
 <div id="notice" role="status" class="small mb-3"></div><div id="focus-bar" class="alert alert-info py-2" hidden><span id="focus-label"></span> <button class="btn btn-sm btn-outline-primary ms-2" id="clear-focus">Alle Devices anzeigen</button></div>
@@ -39,7 +39,7 @@ body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:42
 <button class="btn btn-outline-primary w-100" type="submit"><i class="bi bi-plus-lg"></i> MQTT hinzufügen</button></form></div>
 
 <p class="small muted mt-3">Bestehende GA-Routen bleiben aktiv. Neue Verbindungen werden separat gespeichert. Vor dem Aktivieren werden Signaltypen und Schreibrichtungen geprüft.</p>
-</aside></div></main>
+</aside></div></main><dialog id="route-dialog" aria-labelledby="route-dialog-title"><form id="route-dialog-form" class="p-3"><h3 class="h5 mb-3" id="route-dialog-title">Verbindung bearbeiten</h3><div id="route-dialog-path" class="small text-secondary mb-3"></div><label class="form-label" for="route-dialog-map">Wertumwandlung (JSON)</label><textarea class="form-control mb-3" id="route-dialog-map" rows="5" spellcheck="false"></textarea><div class="form-check mb-4"><input class="form-check-input" type="checkbox" id="route-dialog-enabled"><label class="form-check-label" for="route-dialog-enabled">Verbindung aktiv</label></div><div class="d-flex gap-2 justify-content-between"><button type="button" class="btn btn-outline-danger" id="route-dialog-delete">Verbindung löschen</button><div class="d-flex gap-2"><button type="button" class="btn btn-outline-secondary" id="route-dialog-cancel">Abbrechen</button><button type="submit" class="btn btn-primary">Übernehmen</button></div></div><p class="small text-secondary mt-3 mb-0">Änderungen anschließend aktivieren.</p></form></dialog>
 <script>
 let graph={endpoints:[],mqttDevices:[],routes:[]},devices=[],templates=[],selected=null,dirty=false,migration=null;
 let focusAddress=new URLSearchParams(location.search).get("ga"),focusRoute=new URLSearchParams(location.search).get("route");
@@ -90,7 +90,7 @@ function render(){
    const left=r.from.type==='device'?from:to;
    const right=r.from.type==='device'?to:from;
    const card=x=>'<div class="node"><strong>'+esc(x?.name?.split(' · ')[0]||'Fehlender Endpunkt')+'</strong><div class="small">'+esc(x?.name?.split(' · ').slice(1).join(' · ')||'')+'</div></div>';
-   return '<div class="aligned-route" data-route="'+esc(r.id)+'">'+card(left)+'<div class="aligned-connector"><span class="aligned-line'+(r.enabled?'':' inactive')+'"></span><button class="btn btn-sm btn-light border transform-chip edit-transform" data-id="'+esc(r.id)+'" title="Wertumwandlung bearbeiten">'+esc(transformLabel(r))+'</button><div class="route-actions"><label title="Verbindung aktivieren/deaktivieren"><input type="checkbox" class="route-enabled" data-id="'+esc(r.id)+'" '+(r.enabled?'checked':'')+' aria-label="Verbindung aktiv"></label><button type="button" class="btn btn-sm btn-outline-danger delete-route" data-id="'+esc(r.id)+'" title="Verbindung löschen"><i class="bi bi-trash"></i></button></div></div>'+card(right)+'</div>';
+   return '<div class="aligned-route" data-route="'+esc(r.id)+'">'+card(left)+'<div class="aligned-connector"><span class="aligned-line'+(r.enabled?'':' inactive')+'"></span><button class="btn btn-sm btn-light border transform-chip edit-transform" data-id="'+esc(r.id)+'" title="Wertumwandlung bearbeiten">'+esc(transformLabel(r))+'</button></div>'+card(right)+'</div>';
  }).join('');
  const visibleDevices=focusAddress||focusRoute?devices.filter(d=>focused.some(r=>[r.from,r.to].some(ref=>ref.type==='device'&&ref.id===d.id))):devices;
  const visibleMqttIds=new Set(focused.flatMap(r=>[r.from,r.to].filter(ref=>ref.type!=='device').map(ref=>ref.id)));
@@ -135,7 +135,7 @@ function alignNodes(routes){
 }
 function drawLinks(routes=graph.routes.filter(isFocused)){
  const root=$('workspace'),svg=$('links');
- root.querySelectorAll('.route-transform, .floating-route-actions').forEach(x=>x.remove());
+ root.querySelectorAll('.route-transform').forEach(x=>x.remove());
  const rect=root.getBoundingClientRect(),width=root.scrollWidth,height=root.scrollHeight;
  svg.setAttribute('viewBox','0 0 '+width+' '+height);svg.setAttribute('width',width);svg.setAttribute('height',height);
  svg.innerHTML='';
@@ -154,33 +154,51 @@ function drawLinks(routes=graph.routes.filter(isFocused)){
   const chip=document.createElement('button');chip.type='button';chip.className='btn btn-sm btn-light border route-transform edit-transform'+(r.enabled?'':' inactive');
   chip.dataset.id=r.id;chip.textContent=transformLabel(r);chip.title='Wertumwandlung bearbeiten';
   chip.style.left=mid+'px';chip.style.top=((y1+y2)/2)+'px';root.appendChild(chip);
-  const actions=document.createElement('div');actions.className='route-actions floating-route-actions';
-  actions.style.left=mid+'px';actions.style.top=((y1+y2)/2+25)+'px';
-  actions.innerHTML='<label title="Verbindung aktivieren/deaktivieren"><input type="checkbox" class="route-enabled" data-id="'+esc(r.id)+'" '+(r.enabled?'checked':'')+' aria-label="Verbindung aktiv"></label><button type="button" class="btn btn-sm btn-outline-danger delete-route" data-id="'+esc(r.id)+'" title="Verbindung löschen"><i class="bi bi-trash"></i></button>';
-  root.appendChild(actions);
+  
  }
 }
 $('clear-focus').onclick=()=>{focusAddress=null;focusRoute=null;history.replaceState(null,'',location.pathname);render()};
 function renderRoutes(){ /* Connections are managed directly on the canvas. */ }
 function signalHtml(s){const key=signalKey(s.ref);const button='<button class="btn btn-sm btn-outline-primary signal-btn '+(selected&&signalKey(selected.ref)===key?'selected':'')+'" data-key="'+esc(key)+'" title="Als Quelle oder Ziel wählen"><i class="bi bi-circle"></i></button>';const label='<span>'+esc(s.name.split(' · ').slice(1).join(' · '))+' <span class="muted">'+(s.ref.type==='device'?' · '+esc(s.address)+' · DPT '+esc(s.dpt):' ('+esc(s.type)+')')+'</span></span>';return '<div class="signal">'+(s.ref.type==='device'?label+button:button+label)+'</div>'}
 function choose(ref){const all=[...signals(),...endpointSignals()];const next=all.find(s=>signalKey(s.ref)===signalKey(ref));if(!next)return;if(!selected){selected=next;notice('Quelle gewählt: '+next.name+'. Jetzt Ziel auswählen.');render();return}const from=selected;selected=null;if((from.ref.type==='device')===(next.ref.type==='device')){notice('Eine Verbindung benötigt ein Device und einen MQTT-Endpunkt.',true);render();return}if(from.type!==next.type){notice('Datentypen unterscheiden sich. Nach dem Verbinden eine Wertumwandlung konfigurieren.',true)}if(from.ref.type==='device'&&!['both','knx2mqtt'].includes(from.dir)){notice('Dieses Device-Signal kann nicht gelesen werden.',true);render();return}if(next.ref.type==='device'&&next.ref.signal!=='status'&&!['both','mqtt2knx'].includes(next.dir)){notice('Dieses Device-Signal ist nicht schreibbar.',true);render();return}if(next.ref.type==='mqttDevice'&&!['input','both'].includes(next.direction)){notice('Dieses MQTT-Signal ist kein Eingang.',true);render();return}if(from.ref.type==='mqttDevice'&&!['output','both'].includes(from.direction)){notice('Dieses MQTT-Signal ist kein Ausgang.',true);render();return}if(graph.routes.some(r=>signalKey(r.to)===signalKey(next.ref))){notice('Dieses Ziel besitzt bereits eine Verbindung.',true);render();return}graph.routes.push({id:uid(),from:from.ref,to:next.ref,enabled:true,...(from.type!==next.type?{transform:{kind:'map',values:{}}}:{})});dirty=true;notice('Verbindung hinzugefügt. Mit „Änderungen aktivieren“ speichern.');render()}
+
+let editingRouteId=null;
+function routeMapText(r){
+ if(r.transform?.kind==='map')return JSON.stringify({...r.transform.values,...(Object.hasOwn(r.transform,'defaultValue')?{'*':r.transform.defaultValue}:{})},null,2);
+ if(r.transform?.kind==='constant')return JSON.stringify({constant:r.transform.value},null,2);
+ return '{}';
+}
+function openRouteDialog(id){
+ const r=graph.routes.find(r=>r.id===id);if(!r)return;
+ editingRouteId=id;
+ const all=[...signals(),...endpointSignals()];
+ const name=ref=>all.find(x=>signalKey(x.ref)===signalKey(ref))?.name||'Unbekannt';
+ $('route-dialog-path').textContent=name(r.from)+' → '+name(r.to);
+ $('route-dialog-map').value=routeMapText(r);
+ $('route-dialog-enabled').checked=r.enabled;
+ $('route-dialog').showModal();
+}
+$('route-dialog-cancel').onclick=()=>$('route-dialog').close();
+$('route-dialog-delete').onclick=()=>{
+ if(!editingRouteId||!confirm('Diese Verbindung wirklich löschen?'))return;
+ graph.routes=graph.routes.filter(r=>r.id!==editingRouteId);
+ dirty=true;$('route-dialog').close();editingRouteId=null;render();notice('Verbindung entfernt. Bitte Änderungen aktivieren.');
+};
+$('route-dialog-form').addEventListener('submit',e=>{
+ e.preventDefault();const r=graph.routes.find(r=>r.id===editingRouteId);if(!r)return;
+ try{
+  const parsed=JSON.parse($('route-dialog-map').value);
+  if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))throw Error('JSON-Objekt erwartet');
+  let transform;
+  if(Object.hasOwn(parsed,'constant')&&Object.keys(parsed).length===1)transform={kind:'constant',value:parsed.constant};
+  else if(Object.keys(parsed).length){const {'*':fallback,...values}=parsed;transform={kind:'map',values,...(Object.hasOwn(parsed,'*')?{defaultValue:fallback}:{})}}
+  if(transform)r.transform=transform;else delete r.transform;
+  r.enabled=$('route-dialog-enabled').checked;
+  dirty=true;$('route-dialog').close();editingRouteId=null;render();notice('Verbindung aktualisiert. Bitte Änderungen aktivieren.');
+ }catch(err){notice('Ungültige Wertumwandlung: '+err.message,true);$('route-dialog-map').focus()}
+});
 document.addEventListener('click',e=>{
- const edit=e.target.closest('.edit-transform');
- if(edit){
-  const r=graph.routes.find(r=>r.id===edit.dataset.id);
-  if(r){
-   const initial=r.transform?.kind==='map'?JSON.stringify({...r.transform.values,...(Object.hasOwn(r.transform,'defaultValue')?{'*':r.transform.defaultValue}:{})},null,2):r.transform?.kind==='constant'?JSON.stringify({constant:r.transform.value},null,2):'{}';
-   const raw=prompt('Wertumwandlung: {"ON":"PLAY","OFF":"PAUSE"} oder {"constant":20}. Leeres Objekt = direkte Weiterleitung.',initial);
-   if(raw!==null){try{
-    const parsed=JSON.parse(raw);
-    if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))throw Error('JSON-Objekt erwartet');
-    if(Object.hasOwn(parsed,'constant')&&Object.keys(parsed).length===1)r.transform={kind:'constant',value:parsed.constant};
-    else if(Object.keys(parsed).length){const {'*':fallback,...values}=parsed;r.transform={kind:'map',values,...(Object.hasOwn(parsed,'*')?{defaultValue:fallback}:{})}}
-    else delete r.transform;
-    dirty=true;render();notice('Transformation geändert. Bitte Änderungen aktivieren.');
-   }catch(err){notice('Ungültige Transformation: '+err.message,true)}}
-  }
- }
+ const edit=e.target.closest('.edit-transform');if(edit){openRouteDialog(edit.dataset.id);return}
  const upgrade=e.target.closest('.upgrade-mqtt-device');
  if(upgrade){
   const device=graph.mqttDevices.find(d=>d.id===upgrade.dataset.id);
