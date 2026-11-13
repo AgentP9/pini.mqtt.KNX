@@ -83,8 +83,8 @@ const ep=e.target.closest('.delete-endpoint');if(ep){graph.endpoints=graph.endpo
 document.addEventListener('change',e=>{if(e.target.matches('.route-enabled')){const r=graph.routes.find(r=>r.id===e.target.dataset.id);if(r){r.enabled=e.target.checked;dirty=true;render()}}});
 $('mqtt-device-form').addEventListener('submit',e=>{
  e.preventDefault();
- const name=$('mqtt-device-name').value.trim(),base=$('mqtt-device-base').value.trim().replace(/\\/$/,'');
- if(!name||!base||/[+#\\s]/.test(base)||base.startsWith('knx/')){notice('Ungültiges Basistopic.',true);return}
+ const name=$('mqtt-device-name').value.trim(),base=$('mqtt-device-base').value.trim().replace(/\/$/,'');
+ if(!name||!base||/[+#\s]/.test(base)||base.startsWith('knx/')){notice('Ungültiges Basistopic.',true);return}
  const templateId=$('mqtt-device-template').value;
  const definitions=templateId==='sonos'?
  [{key:'control',label:'Wiedergabe',suffix:'/control',payloadType:'text',direction:'input'},{key:'volume',label:'Lautstärke setzen',suffix:'/set/volume',payloadType:'number',direction:'input'}]:
