@@ -75,7 +75,7 @@ function routePayload(value, type, toKnx, transform) {
     const raw = String(value);
     const normalized = ['1','true','on'].includes(raw.toLowerCase()) ? 'ON' : ['0','false','off'].includes(raw.toLowerCase()) ? 'OFF' : raw;
     const mapped = transform.values[raw] ?? transform.values[normalized];
-    return mapped === undefined ? raw : String(mapped);
+    return mapped === undefined ? (Object.hasOwn(transform,'defaultValue') ? String(transform.defaultValue) : raw) : String(mapped);
   }
   if (type !== 'boolean') return String(value);
   const v = String(value).trim().toLowerCase();
