@@ -194,6 +194,7 @@ class WebServer {
 
     // Last received value per group address (address → value string)
     this._lastValues = {};
+    this._pendingValues = {};
 
     this.io.on('connection', (socket) => {
       console.log('[WEB] Client connected');
@@ -204,6 +205,7 @@ class WebServer {
       });
       socket.emit('groupaddresses', this._enrichGAs());
       socket.emit('devices', this.deviceStore.list());
+      socket.emit('value-snapshot', { values: this._lastValues, pending: this._pendingValues });
       socket.on('mqtt-restart', () => this.eventEmitter.emit('mqtt-restart'));
       socket.on('disconnect', () => console.log('[WEB] Client disconnected'));
     });
@@ -212,9 +214,17 @@ class WebServer {
     eventEmitter.on('traffic', (entry) => {
       this._log.push(entry);
       if (this._log.length > 200) this._log.shift();
-      // Track last value for configured group addresses
-      if (entry.configured !== false && !entry.outbound && entry.direction === 'KNX→MQTT') {
-        this._lastValues[entry.address] = entry.value;
+      // Send incremental value changes over Socket.IO; no page reload/polling.
+      // Outbound commands are shown as pending, never as confirmed bus feedback.
+      if (entry.configured !== false && entry.address) {
+        if (entry.direction === 'KNX→MQTT' && !entry.outbound) {
+          this._lastValues[entry.address] = entry.value;
+          delete this._pendingValues[entry.address];
+          this.io.emit('ga-value', { address: entry.address, value: entry.value, confirmed: true });
+        } else if (entry.direction === 'MQTT→KNX' || entry.direction === 'WEB→KNX') {
+          this._pendingValues[entry.address] = entry.value;
+          this.io.emit('ga-value', { address: entry.address, value: entry.value, confirmed: false });
+        }
       }
       this.io.emit('traffic', entry);
     });
