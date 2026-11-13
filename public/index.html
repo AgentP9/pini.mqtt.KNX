@@ -266,6 +266,22 @@
   </div>
 
 
+<!-- Setpoint write dialog -->
+<div class="modal fade" id="setpointModal" tabindex="-1" aria-labelledby="setpointModalTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <form id="setpoint-write-form">
+      <div class="modal-header"><h5 class="modal-title" id="setpointModalTitle">Setpoint</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+      <div class="modal-body">
+        <label class="form-label" for="setpoint-modal-input">New setpoint</label>
+        <div class="input-group"><input type="number" class="form-control" id="setpoint-modal-input" min="5" max="35" step="0.1" required><span class="input-group-text">°C</span></div>
+        <div class="small text-muted mt-2" id="setpoint-modal-address"></div>
+        <div class="small mt-2" id="setpoint-modal-status" role="status">KNX write will be sent; device confirmation is separate.</div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary" id="setpoint-modal-send"><i class="bi bi-send me-1"></i>Send to KNX</button></div>
+    </form>
+  </div></div>
+</div>
+
 <!-- Device editor -->
 <div class="modal fade" id="deviceModal" tabindex="-1" aria-labelledby="deviceModalTitle" aria-hidden="true">
   <div class="modal-dialog"><div class="modal-content">
@@ -805,6 +821,9 @@
   // ── Hybrid device templates ──────────────────────────────────────────────────
   let devices = [], deviceTemplates = [], editingDeviceId = null;
   const deviceModal = new bootstrap.Modal(document.getElementById('deviceModal'));
+  const setpointModal = new bootstrap.Modal(document.getElementById('setpointModal'));
+  document.getElementById('setpointModal').addEventListener('shown.bs.modal', () => document.getElementById('setpoint-modal-input').focus());
+  let setpointDeviceId = null;
   const deviceError = document.getElementById('device-error');
   const deviceObjects = document.getElementById('device-objects');
   const deviceTemplateSelect = document.getElementById('device-template');
@@ -820,9 +839,6 @@
     }
     // Preserve expanded technical details across live value refreshes.
     const expanded = new Set([...target.querySelectorAll('details[open][data-device-id]')].map(el => el.dataset.deviceId));
-    const writeInputs = new Map([...target.querySelectorAll('.device-setpoint-input')].map(el => [el.dataset.id, el.value]));
-    const openSetpointEditors = new Set([...target.querySelectorAll('.device-setpoint-form:not([hidden])')].map(el => el.dataset.id));
-    const writeMessages = new Map([...target.querySelectorAll('.device-write-status')].map(el => [el.dataset.id, { text: el.textContent, className: el.className }]));
     const gaByAddress = new Map(configuredGAs.map(ga => [ga.address, ga]));
     const metric = (d, key, label, actions = '', editor = '') => {
       const address = d.addresses && d.addresses[key];
@@ -851,17 +867,8 @@
       const defaultSetpoint = Number.isFinite(Number(setpointRaw)) && setpointRaw !== undefined && setpointRaw !== null && setpointRaw !== '' ? Number(setpointRaw).toFixed(1) : '21.0';
       const writeInput = writeInputs.has(d.id) ? writeInputs.get(d.id) : defaultSetpoint;
       const previousMessage = writeMessages.get(d.id);
-      const editButton = writable ? `<button type="button" class="btn btn-sm btn-outline-secondary device-setpoint-edit" data-id="${escHtml(d.id)}" aria-label="Edit setpoint for ${escHtml(d.name)}" aria-expanded="${openSetpointEditors.has(d.id)}" title="Write new setpoint to KNX"><i class="bi bi-pencil"></i></button>` : '';
-      const writeControl = isHeating && writable ? `<form class="device-setpoint-form" data-id="${escHtml(d.id)}" ${openSetpointEditors.has(d.id) ? '' : 'hidden'}>
-        <label class="form-label small fw-semibold" for="setpoint-${escHtml(d.id)}">New setpoint</label>
-        <div class="device-setpoint-actions">
-          <div class="input-group input-group-sm" style="width: 8.5rem"><input type="number" id="setpoint-${escHtml(d.id)}" class="form-control device-setpoint-input" data-id="${escHtml(d.id)}" value="${escHtml(writeInput)}" min="5" max="35" step="0.1" required><span class="input-group-text">°C</span></div>
-          <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-send me-1"></i>Send</button>
-          <button type="button" class="btn btn-sm btn-outline-secondary device-setpoint-cancel" data-id="${escHtml(d.id)}">Cancel</button>
-        </div>
-      </form>` : '';
-      const writeStatus = isHeating && writable ? `<div class="${previousMessage ? escHtml(previousMessage.className) : 'device-write-status text-muted mt-2'}" data-id="${escHtml(d.id)}" role="status">${previousMessage ? escHtml(previousMessage.text) : ''}</div>` : '';
-      const metrics = isHeating ? `<div class="device-metrics">${metric(d, 'temperature', 'Current temperature')}${metric(d, 'setpoint', 'Setpoint', editButton, writeControl + writeStatus)}</div>` : '';
+      const editButton = writable ? `<button type="button" class="btn btn-sm btn-outline-secondary device-setpoint-edit" data-id="${escHtml(d.id)}" aria-label="Edit setpoint for ${escHtml(d.name)}" title="Write new setpoint to KNX"><i class="bi bi-pencil"></i></button>` : '';
+      const metrics = isHeating ? `<div class="device-metrics">${metric(d, 'temperature', 'Current temperature')}${metric(d, 'setpoint', 'Setpoint', editButton)}</div>` : '';
       return `<div class="col-12 col-xl-6"><article class="card device-card h-100">
         <div class="card-body">
           <div class="d-flex align-items-start gap-3 mb-3">
@@ -897,51 +904,53 @@
     renderDeviceFields(device ? device.addresses : {});
     deviceModal.show();
   }
-  document.getElementById('device-list').addEventListener('submit', async e => {
-    const form = e.target.closest('.device-setpoint-form');
-    if (!form) return;
+  document.getElementById('setpoint-write-form').addEventListener('submit', async e => {
     e.preventDefault();
-    const input = form.querySelector('.device-setpoint-input');
-    const button = form.querySelector('button[type="submit"]');
-    const status = form.parentElement.querySelector('.device-write-status');
+    const id = setpointDeviceId;
+    const input = document.getElementById('setpoint-modal-input');
+    const button = document.getElementById('setpoint-modal-send');
+    const status = document.getElementById('setpoint-modal-status');
     const value = Number(input.value);
-    if (!input.value.trim() || !Number.isFinite(value) || value < 5 || value > 35 || Math.abs(value * 10 - Math.round(value * 10)) > 1e-7) {
+    if (!id || !input.value.trim() || !Number.isFinite(value) || value < 5 || value > 35 || Math.abs(value * 10 - Math.round(value * 10)) > 1e-7) {
       status.textContent = 'Enter a temperature between 5 and 35 °C in 0.1 °C steps.';
-      status.className = 'device-write-status text-danger mt-2';
+      status.className = 'small text-danger mt-2';
       return;
     }
     button.disabled = true;
     status.textContent = 'Sending KNX write…';
-    status.className = 'device-write-status text-muted mt-2';
+    status.className = 'small text-muted mt-2';
     try {
-      const response = await fetch('/api/devices/' + encodeURIComponent(form.dataset.id) + '/setpoint', {
+      const response = await fetch('/api/devices/' + encodeURIComponent(id) + '/setpoint', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }),
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Write failed');
-      status.textContent = 'Write submitted to KNX. Check bus monitor or device feedback for confirmation.';
-      status.className = 'device-write-status text-success mt-2';
-      form.hidden = true;
-      const editButton = form.parentElement.querySelector('.device-setpoint-edit');
-      if (editButton) editButton.setAttribute('aria-expanded', 'false');
+      setpointModal.hide();
     } catch (err) {
       status.textContent = 'Write failed: ' + err.message;
-      status.className = 'device-write-status text-danger mt-2';
+      status.className = 'small text-danger mt-2';
     } finally { button.disabled = false; }
   });
+  document.getElementById('setpointModal').addEventListener('hidden.bs.modal', () => { setpointDeviceId = null; });
   document.getElementById('btn-add-device').addEventListener('click', () => openDeviceEditor());
   deviceTemplateSelect.addEventListener('change', () => renderDeviceFields());
   document.getElementById('device-list').addEventListener('click', e => {
     const setpointEdit = e.target.closest('.device-setpoint-edit');
-    const setpointCancel = e.target.closest('.device-setpoint-cancel');
-    if (setpointEdit || setpointCancel) {
-      const button = setpointEdit || setpointCancel;
-      const tile = button.closest('.device-metric');
-      const form = tile.querySelector('.device-setpoint-form');
-      form.hidden = setpointCancel ? true : !form.hidden;
-      const pencil = tile.querySelector('.device-setpoint-edit');
-      if (pencil) pencil.setAttribute('aria-expanded', String(!form.hidden));
-      if (!form.hidden) form.querySelector('input').focus();
+    if (setpointEdit) {
+      const device = devices.find(d => d.id === setpointEdit.dataset.id);
+      if (!device || device.templateId !== 'room-heating') return;
+      const address = device.addresses && device.addresses.setpoint;
+      const ga = configuredGAs.find(g => g.address === address);
+      if (!ga || ga.dpt !== '9.001' || !['both', 'mqtt2knx'].includes(ga.direction || 'both')) return;
+      setpointDeviceId = device.id;
+      document.getElementById('setpointModalTitle').textContent = device.name + ' – Setpoint';
+      document.getElementById('setpoint-modal-address').textContent = 'KNX group address: ' + address;
+      const raw = pendingGAValues.has(address) ? pendingGAValues.get(address) : ga.lastValue;
+      document.getElementById('setpoint-modal-input').value = raw !== undefined && raw !== null && raw !== '' && Number.isFinite(Number(raw)) ? Number(raw).toFixed(1) : '';
+      const status = document.getElementById('setpoint-modal-status');
+      status.textContent = 'Write will be sent to KNX; bus/device confirmation is separate.';
+      status.className = 'small text-muted mt-2';
+      setpointModal.show();
       return;
     }
     const edit = e.target.closest('.btn-edit-device');
