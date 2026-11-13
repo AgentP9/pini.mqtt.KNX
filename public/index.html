@@ -33,6 +33,18 @@
     crossorigin="anonymous"
   />
   <style>
+    .device-card { border: 1px solid var(--bs-border-color); border-radius: 1rem; overflow: hidden; transition: box-shadow .15s ease; }
+    .device-card:hover { box-shadow: 0 .35rem 1.2rem rgba(0,0,0,.08); }
+    .device-card .device-icon { display: inline-flex; width: 2.6rem; height: 2.6rem; border-radius: .8rem; align-items: center; justify-content: center; background: var(--bs-tertiary-bg); color: var(--bs-primary); font-size: 1.3rem; }
+    .device-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+    .device-metric { padding: 1rem; border-radius: .8rem; background: var(--bs-tertiary-bg); min-width: 0; }
+    .device-metric .metric-value { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 650; line-height: 1.2; font-variant-numeric: tabular-nums; }
+    .device-metric .metric-label { font-size: .78rem; color: var(--bs-secondary-color); margin-bottom: .4rem; }
+    .device-card details { border-top: 1px solid var(--bs-border-color); }
+    .device-card summary { cursor: pointer; padding: .7rem 1rem; color: var(--bs-secondary-color); font-size: .85rem; }
+    .device-card summary:hover { background: var(--bs-tertiary-bg); }
+    .device-card .device-detail { display: flex; gap: .5rem; align-items: center; justify-content: space-between; padding: .45rem 1rem; border-top: 1px solid var(--bs-border-color-translucent); font-size: .82rem; }
+    .device-card .device-detail code { font-size: .8rem; }
     .view-tabs .nav-link { cursor: pointer; }
     .view-panel[hidden] { display: none !important; }
     .device-search { max-width: 22rem; }
@@ -772,17 +784,49 @@
     const term = document.getElementById('device-search').value.trim().toLowerCase();
     const visible = devices.filter(d => [d.name, d.templateId, ...Object.values(d.addresses || {})].some(v => String(v).toLowerCase().includes(term)));
     document.getElementById('device-count').textContent = visible.length + ' of ' + devices.length + ' devices';
-    if (!visible.length) { target.innerHTML = '<div class="col-12 text-muted">No devices yet. Existing group addresses are still active.</div>'; return; }
+    if (!visible.length) {
+      target.innerHTML = '<div class="col-12 text-muted">' + (devices.length ? 'No matching devices.' : 'No devices yet. Create a device using existing group addresses; individual addresses stay active.') + '</div>';
+      return;
+    }
+    // Preserve expanded technical details across live value refreshes.
+    const expanded = new Set([...target.querySelectorAll('details[open][data-device-id]')].map(el => el.dataset.deviceId));
+    const gaByAddress = new Map(configuredGAs.map(ga => [ga.address, ga]));
+    const metric = (d, key, label) => {
+      const address = d.addresses && d.addresses[key];
+      const ga = address ? gaByAddress.get(address) : null;
+      const raw = ga && ga.lastValue;
+      const numeric = raw !== undefined && raw !== null && raw !== '' ? Number(raw) : NaN;
+      const value = Number.isFinite(numeric) ? numeric.toLocaleString(undefined, { maximumFractionDigits: 1 }) + ' °C' : '–';
+      const hint = !address ? 'Not assigned' : !ga ? 'Address missing' : !Number.isFinite(numeric) ? 'No live value' : address;
+      return `<div class="device-metric"><div class="metric-label">${escHtml(label)}</div><div class="metric-value">${escHtml(value)}</div><div class="small text-muted mt-2">${escHtml(hint)}</div></div>`;
+    };
     target.innerHTML = visible.map(d => {
       const tpl = deviceTemplate(d.templateId);
-      const rows = (tpl ? tpl.objects : []).filter(o => d.addresses[o.key]).map(o => {
+      const isHeating = d.templateId === 'room-heating';
+      const missing = Object.values(d.addresses || {}).filter(address => !gaByAddress.has(address));
+      const detailRows = (tpl ? tpl.objects : []).filter(o => d.addresses && d.addresses[o.key]).map(o => {
         const address = d.addresses[o.key];
-        const ga = configuredGAs.find(g => g.address === address);
+        const ga = gaByAddress.get(address);
         const value = ga && ga.lastValue != null ? formatValue(ga.lastValue, ga.dpt) : '–';
-        return `<tr><td>${escHtml(o.label)}</td><td><code>${escHtml(address)}</code></td><td class="text-end">${escHtml(value)}</td></tr>`;
+        return `<div class="device-detail"><span>${escHtml(o.label)} <code class="ms-1">${escHtml(address)}</code></span><span class="text-end">${escHtml(value)}</span></div>`;
       }).join('');
-      const missing = d.missing && d.missing.length ? '<span class="badge bg-warning text-dark">Missing address</span>' : '';
-      return `<div class="col-12 col-xl-6"><div class="card h-100"><div class="card-header d-flex justify-content-between align-items-center"><div><strong>${escHtml(d.name)}</strong> <small class="text-muted">${escHtml(tpl ? tpl.name : d.templateId)}</small> ${missing}</div><div><button class="btn btn-sm btn-outline-secondary btn-edit-device" data-id="${escHtml(d.id)}" aria-label="Edit device"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-outline-danger btn-delete-device" data-id="${escHtml(d.id)}" aria-label="Delete device"><i class="bi bi-trash"></i></button></div></div><div class="table-responsive"><table class="table table-sm mb-0"><tbody>${rows}</tbody></table></div></div></div>`;
+      const status = missing.length ? '<span class="badge text-bg-warning">Mapping incomplete</span>' : '<span class="badge text-bg-secondary">Configured</span>';
+      const metrics = isHeating ? `<div class="device-metrics">${metric(d, 'temperature', 'Current temperature')}${metric(d, 'setpoint', 'Setpoint')}</div>` : '';
+      return `<div class="col-12 col-xl-6"><article class="card device-card h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-start gap-3 mb-3">
+            <div class="device-icon" aria-hidden="true"><i class="bi ${isHeating ? 'bi-thermometer-half' : 'bi-grid'}"></i></div>
+            <div class="flex-grow-1 min-w-0"><h3 class="h6 mb-1">${escHtml(d.name)}</h3><div class="small text-muted">${escHtml(tpl ? tpl.name : d.templateId)}</div></div>
+            <div class="d-flex gap-1">
+              <button class="btn btn-sm btn-outline-secondary btn-edit-device" data-id="${escHtml(d.id)}" aria-label="Edit ${escHtml(d.name)}"><i class="bi bi-pencil"></i></button>
+              <button class="btn btn-sm btn-outline-danger btn-delete-device" data-id="${escHtml(d.id)}" aria-label="Delete ${escHtml(d.name)}"><i class="bi bi-trash"></i></button>
+            </div>
+          </div>
+          ${metrics}
+          <div class="mt-3">${status}</div>
+        </div>
+        <details data-device-id="${escHtml(d.id)}" ${expanded.has(d.id) ? 'open' : ''}><summary>Technical details · ${Object.keys(d.addresses || {}).length} group addresses</summary>${detailRows || '<div class="px-3 pb-3 text-muted small">No addresses assigned</div>'}</details>
+      </article></div>`;
     }).join('');
   }
   function renderDeviceFields(mapping = {}) {
