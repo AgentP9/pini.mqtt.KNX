@@ -579,7 +579,7 @@
         : '';
       const assignments = assignedDevices(ga.address);
       const suggestion = assignments.length ? null : suggestDeviceForGA(ga);
-      const deviceCell = assignments.length ? assignments.map(d => `<div><span class="fw-semibold">${escHtml(d.name)}</span><span class="small text-muted ms-1">(${escHtml(d.role)})</span></div>`).join('') : suggestion ? `<button type="button" class="btn btn-sm btn-outline-primary btn-suggest-device text-start" data-address="${escHtml(ga.address)}" title="Review suggested device mapping"><i class="bi bi-lightbulb me-1"></i>${escHtml(suggestion.name)} <span class="text-muted">(${escHtml(suggestion.templateName)})</span></button>` : '<span class="text-muted">–</span>';
+      const deviceCell = assignments.length ? assignments.map(d => `<div><span class="fw-semibold">${escHtml(d.name)}</span><span class="small text-muted ms-1">(${escHtml(d.role)})</span></div>`).join('') : suggestion ? `<button type="button" class="btn btn-sm btn-outline-primary btn-suggest-device text-start" data-address="${escHtml(ga.address)}" title="Review suggested device mapping"><i class="bi bi-lightbulb me-1"></i>${escHtml(suggestion.templateName)}</button>` : '<span class="text-muted">–</span>';
       const dir = ga.direction || 'both';
       const dirIcon = dir === 'knx2mqtt' ? '<i class="bi bi-arrow-right" title="KNX → MQTT only"></i>'
                     : dir === 'mqtt2knx' ? '<i class="bi bi-arrow-left"  title="MQTT → KNX only"></i>'
