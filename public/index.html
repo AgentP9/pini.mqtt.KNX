@@ -469,7 +469,7 @@
   let sortDir = 1; // 1 = asc, -1 = desc
 
   function assignedDevices(address) {
-    return devices.flatMap(d => Object.entries(d.addresses || {}).filter(([, ga]) => ga === address).map(([key]) => ({ name: d.name, role: (deviceTemplates.find(t => t.id === d.templateId)?.objects || []).find(o => o.key === key)?.label || key })));
+    return devices.flatMap(d => Object.entries(d.addresses || {}).filter(([, ga]) => ga === address).map(([key]) => ({ id: d.id, name: d.name, role: (deviceTemplates.find(t => t.id === d.templateId)?.objects || []).find(o => o.key === key)?.label || key })));
   }
 
   // Conservative, read-only device suggestions. Never create or modify devices automatically.
@@ -555,7 +555,7 @@
     // A sort/filter can split a group; each contiguous run gets its own cell.
     const deviceGroups = sorted.map(ga => {
       const assigned = assignedDevices(ga.address);
-      if (assigned.length === 1) return { key: 'configured:' + assigned[0].name, kind: 'configured' };
+      if (assigned.length === 1) return { key: 'configured:' + assigned[0].id, kind: 'configured' };
       if (assigned.length) return null;
       const suggestion = suggestDeviceForGA(ga);
       return suggestion ? { key: 'suggested:' + suggestion.templateId + ':' + suggestion.name.toLowerCase() + ':' + Object.entries(suggestion.addresses).sort().map(([k, v]) => k + '=' + v).join('|'), kind: 'suggested' } : null;
