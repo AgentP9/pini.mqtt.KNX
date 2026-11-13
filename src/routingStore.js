@@ -197,6 +197,10 @@ class RoutingStore {
         if (r.transform.kind === 'map') {
           if (!r.transform.values || typeof r.transform.values !== 'object' || Array.isArray(r.transform.values) ||
             Object.keys(r.transform.values).length > 30 || !Object.values(r.transform.values).every(v => ['string','number','boolean'].includes(typeof v)) || (Object.hasOwn(r.transform,'defaultValue') && !['string','number','boolean'].includes(typeof r.transform.defaultValue))) throw Error('Invalid value map');
+        } else if (r.transform.kind === 'json') {
+          if (typeof r.transform.path !== 'string' || !/^[a-zA-Z_$][\\w$]*(?:\\.[a-zA-Z_$][\\w$]*){0,9}$/.test(r.transform.path)) throw Error('Invalid JSON field path');
+          if (r.transform.values !== undefined && (!r.transform.values || typeof r.transform.values !== 'object' || Array.isArray(r.transform.values) || Object.keys(r.transform.values).length > 30 || !Object.values(r.transform.values).every(v => ['string','number','boolean'].includes(typeof v)))) throw Error('Invalid JSON value map');
+          if (Object.hasOwn(r.transform,'defaultValue') && !['string','number','boolean'].includes(typeof r.transform.defaultValue)) throw Error('Invalid JSON default value');
         } else if (r.transform.kind === 'constant') {
           if (!['string','number','boolean'].includes(typeof r.transform.value)) throw Error('Invalid constant');
         } else throw Error('Unsupported transformation');
