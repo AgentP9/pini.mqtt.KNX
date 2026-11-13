@@ -436,6 +436,7 @@
 
   // ── Group addresses table ─────────────────────────────────────────────────────
   let configuredGAs = [];
+  const pendingGAValues = new Map();
   let sortCol = null;
   let sortDir = 1; // 1 = asc, -1 = desc
 
@@ -745,12 +746,30 @@
   socket.on('traffic', (entry) => {
     appendRow(entry);
     updateCounters(entry);
-    if (entry.configured !== false && entry.direction === 'KNX→MQTT') updateGALastValue(entry);
+    // Value updates arrive separately via ga-value; traffic remains log-only.
   });
 
   socket.on('status', ({ service, connected }) => updateBadge(service, connected));
 
   socket.on('groupaddresses', renderGATable);
+  socket.on('ga-value', ({ address, value, confirmed }) => {
+    if (confirmed) {
+      pendingGAValues.delete(address);
+      updateGALastValue({ address, value });
+    } else {
+      pendingGAValues.set(address, value);
+      renderDevices();
+    }
+  });
+  socket.on('value-snapshot', ({ values, pending }) => {
+    pendingGAValues.clear();
+    Object.entries(pending || {}).forEach(([address, value]) => pendingGAValues.set(address, value));
+    Object.entries(values || {}).forEach(([address, value]) => {
+      const ga = configuredGAs.find(g => g.address === address);
+      if (ga) ga.lastValue = value;
+    });
+    renderDevices();
+  });
 
   document.getElementById('btn-restart-mqtt').addEventListener('click', () => {
     socket.emit('mqtt-restart');
@@ -800,10 +819,11 @@
     const metric = (d, key, label) => {
       const address = d.addresses && d.addresses[key];
       const ga = address ? gaByAddress.get(address) : null;
-      const raw = ga && ga.lastValue;
+      const pending = address && pendingGAValues.has(address);
+      const raw = pending ? pendingGAValues.get(address) : ga && ga.lastValue;
       const numeric = raw !== undefined && raw !== null && raw !== '' ? Number(raw) : NaN;
       const value = Number.isFinite(numeric) ? numeric.toLocaleString(undefined, { maximumFractionDigits: 1 }) + ' °C' : '–';
-      const hint = !address ? 'Not assigned' : !ga ? 'Address missing' : !Number.isFinite(numeric) ? 'No live value' : address;
+      const hint = !address ? 'Not assigned' : !ga ? 'Address missing' : pending ? address + ' · sent, not confirmed' : !Number.isFinite(numeric) ? 'No live value' : address;
       return `<div class="device-metric"><div class="metric-label">${escHtml(label)}</div><div class="metric-value">${escHtml(value)}</div><div class="small text-muted mt-2">${escHtml(hint)}</div></div>`;
     };
     target.innerHTML = visible.map(d => {
@@ -819,7 +839,7 @@
       const status = missing.length ? '<span class="badge text-bg-warning">Mapping incomplete</span>' : '<span class="badge text-bg-secondary">Configured</span>';
       const setpointGA = d.addresses && gaByAddress.get(d.addresses.setpoint);
       const writable = isHeating && setpointGA && setpointGA.dpt === '9.001' && (!setpointGA.direction || ['both', 'mqtt2knx'].includes(setpointGA.direction));
-      const setpointRaw = setpointGA && setpointGA.lastValue;
+      const setpointRaw = d.addresses && pendingGAValues.has(d.addresses.setpoint) ? pendingGAValues.get(d.addresses.setpoint) : setpointGA && setpointGA.lastValue;
       const defaultSetpoint = Number.isFinite(Number(setpointRaw)) && setpointRaw !== undefined && setpointRaw !== null && setpointRaw !== '' ? Number(setpointRaw).toFixed(1) : '21.0';
       const writeInput = writeInputs.has(d.id) ? writeInputs.get(d.id) : defaultSetpoint;
       const previousMessage = writeMessages.get(d.id);
