@@ -551,7 +551,26 @@
       gaBody.innerHTML = '<tr><td colspan="9" class="text-center empty-msg p-3">No group addresses configured.</td></tr>';
       return;
     }
-    gaBody.innerHTML = sorted.map((ga) => {
+    // Rowspan only contiguous visible rows belonging to the same device.
+    // A sort/filter can split a group; each contiguous run gets its own cell.
+    const deviceGroups = sorted.map(ga => {
+      const assigned = assignedDevices(ga.address);
+      if (assigned.length === 1) return { key: 'configured:' + assigned[0].name, kind: 'configured' };
+      if (assigned.length) return null;
+      const suggestion = suggestDeviceForGA(ga);
+      return suggestion ? { key: 'suggested:' + suggestion.templateId + ':' + suggestion.name.toLowerCase() + ':' + Object.entries(suggestion.addresses).sort().map(([k, v]) => k + '=' + v).join('|'), kind: 'suggested' } : null;
+    });
+    const spans = sorted.map(() => 1);
+    for (let i = 0; i < sorted.length;) {
+      const group = deviceGroups[i];
+      if (!group) { i++; continue; }
+      let end = i + 1;
+      while (end < sorted.length && deviceGroups[end] && deviceGroups[end].key === group.key) end++;
+      spans[i] = end - i;
+      for (let j = i + 1; j < end; j++) spans[j] = 0;
+      i = end;
+    }
+    gaBody.innerHTML = sorted.map((ga, rowIndex) => {
       const routeCount = Array.isArray(ga.routes) ? ga.routes.filter((r) => r.mqttTopic).length : 0;
       const routesBadge = routeCount > 0
         ? `<span class="badge bg-info text-dark" title="${escHtml(ga.routes.filter((r) => r.mqttTopic).map((r) => r.mqttTopic).join(', '))}">${routeCount} route${routeCount > 1 ? 's' : ''}</span>`
@@ -574,8 +593,8 @@
         <td><small class="text-muted">${escHtml(ga.comment || '')}</small></td>
         <td class="text-center">${dirIcon}</td>
         <td>${routesBadge}${repeatBadge}</td>
-        <td>${deviceCell}</td>
-        <td><strong>${escHtml(ga.lastValue !== undefined && ga.lastValue !== null ? formatValue(ga.lastValue, ga.dpt) : '–')}</strong></td>
+        ${spans[rowIndex] ? `<td rowspan="${spans[rowIndex]}" class="align-middle">${deviceCell}</td>` : ''}
+        <td class="ga-last-value"><strong>${escHtml(ga.lastValue !== undefined && ga.lastValue !== null ? formatValue(ga.lastValue, ga.dpt) : '–')}</strong></td>
         <td class="text-end text-nowrap">
           <button class="btn btn-sm btn-outline-secondary btn-edit-ga me-1" data-address="${escHtml(ga.address)}" aria-label="Edit"><i class="bi bi-pencil-fill"></i></button>
           <button class="btn btn-sm btn-outline-danger btn-delete-ga"       data-address="${escHtml(ga.address)}" aria-label="Delete"><i class="bi bi-trash-fill"></i></button>
@@ -616,8 +635,8 @@
       const codeEl = row.cells[0] && row.cells[0].querySelector('code');
       if (codeEl && codeEl.textContent === entry.address) {
         // Update the in-memory GA object so modal edits reflect current DPT
-        // Update the Last Value cell (index 7, after Device).
-        const cell = row.cells[7];
+        // Rowspans change cell indexes; select by class instead.
+        const cell = row.querySelector('.ga-last-value');
         if (cell) cell.innerHTML = `<strong>${escHtml(formatValue(entry.value, entry.dpt))}</strong>`;
         break;
       }
