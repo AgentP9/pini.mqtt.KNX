@@ -28,7 +28,6 @@ body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:42
 <button class="btn btn-outline-primary w-100" type="submit">MQTT-Device hinzufügen</button></form></div>
 <div class="card mb-3"><div class="card-header fw-semibold">MQTT-Device-Signal hinzufügen</div><form class="card-body" id="mqtt-signal-form">
 <label class="form-label" for="signal-device">MQTT-Device</label><select class="form-select mb-2" id="signal-device" required></select>
-<label class="form-label" for="signal-label">Signalname</label><input class="form-control mb-2" id="signal-label" maxlength="120" required placeholder="Mute">
 <label class="form-label" for="signal-topic">MQTT-Topic</label><input class="form-control mb-2" id="signal-topic" maxlength="240" required placeholder="sonos/devices/Esszimmer/set/mute">
 <label class="form-label" for="signal-type">Payload-Typ</label><select class="form-select mb-2" id="signal-type"><option value="boolean">Boolean</option><option value="number">Zahl</option><option value="text">Text</option></select>
 <label class="form-label" for="signal-direction">Signalrichtung</label><select class="form-select mb-3" id="signal-direction"><option value="input">Eingang (Nachricht an Device)</option><option value="output">Ausgang (Nachricht vom Device)</option><option value="both">Beide Richtungen</option></select>
@@ -189,11 +188,11 @@ $('mqtt-signal-form').addEventListener('submit',e=>{
  e.preventDefault();
  const device=graph.mqttDevices.find(d=>d.id===$('signal-device').value);
  if(!device){notice('Bitte zunächst ein MQTT-Device anlegen.',true);return}
- const topic=$('signal-topic').value.trim(),label=$('signal-label').value.trim();
- if(!label||!topic||/[+#\\s]/.test(topic)||topic.startsWith('knx/')||[...graph.endpoints.map(x=>x.topic),...graph.mqttDevices.flatMap(d=>d.signals.map(x=>x.topic))].includes(topic)){notice('Ungültiges oder bereits verwendetes Topic.',true);return}
+ const topic=$('signal-topic').value.trim();
+ if(!topic||/[+#\\s]/.test(topic)||topic.startsWith('knx/')||[...graph.endpoints.map(x=>x.topic),...graph.mqttDevices.flatMap(d=>d.signals.map(x=>x.topic))].includes(topic)){notice('Ungültiges oder bereits verwendetes Topic.',true);return}
  let key='signal'+(device.signals.length+1);
  while(device.signals.some(x=>x.key===key))key='signal'+(Number(key.slice(6))+1);
- device.signals.push({key,label,topic,payloadType:$('signal-type').value,direction:$('signal-direction').value});
+ device.signals.push({key,label:topic,topic,payloadType:$('signal-type').value,direction:$('signal-direction').value});
  dirty=true;e.target.reset();render();notice('Signal hinzugefügt. Bitte Änderungen aktivieren.');
 });
 $('endpoint-form').addEventListener('submit',e=>{e.preventDefault();const topic=$('topic').value.trim();if(topic.startsWith('knx/')||/[+#\s]/.test(topic)||graph.endpoints.some(x=>x.topic===topic)){notice('Topic ungültig, reserviert oder bereits vorhanden.',true);return}graph.endpoints.push({id:uid(),name:$('topic-name').value.trim(),topic,payloadType:$('payload-type').value});dirty=true;e.target.reset();render();notice('MQTT-Endpunkt angelegt. Änderungen noch nicht aktiviert.')});
