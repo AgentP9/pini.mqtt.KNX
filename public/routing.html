@@ -62,7 +62,7 @@ function isFocused(r){
 function transformLabel(r){
  if(!r.transform)return 'Direkt';
  if(r.transform.kind==='constant')return 'Konstant: '+String(r.transform.value);
- return Object.entries(r.transform.values||{}).map(([k,v])=>k+' → '+v).join(' · ')||'Wertetabelle (leer)';
+ return [...Object.entries(r.transform.values||{}).map(([k,v])=>k+' → '+v),...(Object.hasOwn(r.transform,'defaultValue')?['Sonst → '+r.transform.defaultValue]:[])].join(' · ')||'Wertetabelle (leer)';
 }
 function render(){
  const list=signals(),eps=endpointSignals();
@@ -158,13 +158,13 @@ document.addEventListener('click',e=>{
  if(edit){
   const r=graph.routes.find(r=>r.id===edit.dataset.id);
   if(r){
-   const initial=r.transform?.kind==='map'?JSON.stringify(r.transform.values,null,2):r.transform?.kind==='constant'?JSON.stringify({constant:r.transform.value},null,2):'{}';
+   const initial=r.transform?.kind==='map'?JSON.stringify({...r.transform.values,...(Object.hasOwn(r.transform,'defaultValue')?{'*':r.transform.defaultValue}:{})},null,2):r.transform?.kind==='constant'?JSON.stringify({constant:r.transform.value},null,2):'{}';
    const raw=prompt('Wertumwandlung: {"ON":"PLAY","OFF":"PAUSE"} oder {"constant":20}. Leeres Objekt = direkte Weiterleitung.',initial);
    if(raw!==null){try{
     const parsed=JSON.parse(raw);
     if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))throw Error('JSON-Objekt erwartet');
     if(Object.hasOwn(parsed,'constant')&&Object.keys(parsed).length===1)r.transform={kind:'constant',value:parsed.constant};
-    else if(Object.keys(parsed).length)r.transform={kind:'map',values:parsed};
+    else if(Object.keys(parsed).length){const {'*':fallback,...values}=parsed;r.transform={kind:'map',values,...(Object.hasOwn(parsed,'*')?{defaultValue:fallback}:{})}}
     else delete r.transform;
     dirty=true;render();notice('Transformation geändert. Bitte Änderungen aktivieren.');
    }catch(err){notice('Ungültige Transformation: '+err.message,true)}}
@@ -179,7 +179,7 @@ $('mqtt-device-form').addEventListener('submit',e=>{
  if(!name||!base||/[+#\s]/.test(base)||base.startsWith('knx/')){notice('Ungültiges Basistopic.',true);return}
  const templateId=$('mqtt-device-template').value;
  const definitions=templateId==='sonos'?
- [{key:'control',label:'Wiedergabe',suffix:'/control',payloadType:'text',direction:'input'},{key:'volume',label:'Lautstärke setzen',suffix:'/set/volume',payloadType:'number',direction:'input'}]:
+ [{key:'control',label:'Wiedergabe',suffix:'/control',payloadType:'text',direction:'input'},{key:'volume',label:'Lautstärke setzen',suffix:'/set/volume',payloadType:'number',direction:'input'},{key:'state',label:'Wiedergabestatus',suffix:'/state',payloadType:'text',direction:'output'}]:
  [{key:'command',label:'Befehl',suffix:'/set',payloadType:'text',direction:'input'},{key:'status',label:'Status',suffix:'/state',payloadType:'text',direction:'output'}];
  const signals=definitions.map(d=>({key:d.key,label:d.label,topic:base+d.suffix,payloadType:d.payloadType,direction:d.direction}));
  if((graph.mqttDevices||[]).some(d=>d.signals.some(x=>signals.some(y=>y.topic===x.topic)))){notice('MQTT-Topic bereits vorhanden.',true);return}
