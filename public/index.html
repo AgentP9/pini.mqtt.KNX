@@ -43,6 +43,9 @@
     .device-card details { border-top: 1px solid var(--bs-border-color); }
     .device-card summary { cursor: pointer; padding: .7rem 1rem; color: var(--bs-secondary-color); font-size: .85rem; }
     .device-card summary:hover { background: var(--bs-tertiary-bg); }
+    .device-write { border-top: 1px solid var(--bs-border-color); padding-top: .85rem; margin-top: .85rem; }
+    .device-write .form-control { max-width: 8rem; }
+    .device-write-status { font-size: .78rem; min-height: 1.2rem; }
     .device-card .device-detail { display: flex; gap: .5rem; align-items: center; justify-content: space-between; padding: .45rem 1rem; border-top: 1px solid var(--bs-border-color-translucent); font-size: .82rem; }
     .device-card .device-detail code { font-size: .8rem; }
     .view-tabs .nav-link { cursor: pointer; }
@@ -790,6 +793,8 @@
     }
     // Preserve expanded technical details across live value refreshes.
     const expanded = new Set([...target.querySelectorAll('details[open][data-device-id]')].map(el => el.dataset.deviceId));
+    const writeInputs = new Map([...target.querySelectorAll('.device-setpoint-input')].map(el => [el.dataset.id, el.value]));
+    const writeMessages = new Map([...target.querySelectorAll('.device-write-status')].map(el => [el.dataset.id, { text: el.textContent, className: el.className }]));
     const gaByAddress = new Map(configuredGAs.map(ga => [ga.address, ga]));
     const metric = (d, key, label) => {
       const address = d.addresses && d.addresses[key];
@@ -811,6 +816,20 @@
         return `<div class="device-detail"><span>${escHtml(o.label)} <code class="ms-1">${escHtml(address)}</code></span><span class="text-end">${escHtml(value)}</span></div>`;
       }).join('');
       const status = missing.length ? '<span class="badge text-bg-warning">Mapping incomplete</span>' : '<span class="badge text-bg-secondary">Configured</span>';
+      const setpointGA = d.addresses && gaByAddress.get(d.addresses.setpoint);
+      const writable = isHeating && setpointGA && setpointGA.dpt === '9.001' && (!setpointGA.direction || ['both', 'mqtt2knx'].includes(setpointGA.direction));
+      const setpointRaw = setpointGA && setpointGA.lastValue;
+      const defaultSetpoint = Number.isFinite(Number(setpointRaw)) && setpointRaw !== undefined && setpointRaw !== null && setpointRaw !== '' ? Number(setpointRaw).toFixed(1) : '21.0';
+      const writeInput = writeInputs.has(d.id) ? writeInputs.get(d.id) : defaultSetpoint;
+      const previousMessage = writeMessages.get(d.id);
+      const writeControl = isHeating ? `<form class="device-write device-setpoint-form" data-id="${escHtml(d.id)}">
+        <label class="form-label small fw-semibold" for="setpoint-${escHtml(d.id)}">Test KNX setpoint write</label>
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          <div class="input-group input-group-sm" style="width: 9rem"><input type="number" id="setpoint-${escHtml(d.id)}" class="form-control device-setpoint-input" data-id="${escHtml(d.id)}" value="${escHtml(writeInput)}" min="5" max="35" step="0.1" required ${writable ? '' : 'disabled'}><span class="input-group-text">°C</span></div>
+          <button type="submit" class="btn btn-sm btn-outline-primary" ${writable ? '' : 'disabled'}><i class="bi bi-send me-1"></i>Send to KNX</button>
+        </div>
+        <div class="${previousMessage ? escHtml(previousMessage.className) : 'device-write-status text-muted mt-2'}" data-id="${escHtml(d.id)}" role="status">${previousMessage ? escHtml(previousMessage.text) : (writable ? 'Sends a KNX write; device confirmation is not guaranteed.' : 'Setpoint address is not configured for writing.')}</div>
+      </form>` : '';
       const metrics = isHeating ? `<div class="device-metrics">${metric(d, 'temperature', 'Current temperature')}${metric(d, 'setpoint', 'Setpoint')}</div>` : '';
       return `<div class="col-12 col-xl-6"><article class="card device-card h-100">
         <div class="card-body">
@@ -823,6 +842,7 @@
             </div>
           </div>
           ${metrics}
+          ${writeControl}
           <div class="mt-3">${status}</div>
         </div>
         <details data-device-id="${escHtml(d.id)}" ${expanded.has(d.id) ? 'open' : ''}><summary>Technical details · ${Object.keys(d.addresses || {}).length} group addresses</summary>${detailRows || '<div class="px-3 pb-3 text-muted small">No addresses assigned</div>'}</details>
@@ -847,6 +867,35 @@
     renderDeviceFields(device ? device.addresses : {});
     deviceModal.show();
   }
+  document.getElementById('device-list').addEventListener('submit', async e => {
+    const form = e.target.closest('.device-setpoint-form');
+    if (!form) return;
+    e.preventDefault();
+    const input = form.querySelector('.device-setpoint-input');
+    const button = form.querySelector('button[type="submit"]');
+    const status = form.querySelector('.device-write-status');
+    const value = Number(input.value);
+    if (!input.value.trim() || !Number.isFinite(value) || value < 5 || value > 35 || Math.abs(value * 10 - Math.round(value * 10)) > 1e-7) {
+      status.textContent = 'Enter a temperature between 5 and 35 °C in 0.1 °C steps.';
+      status.className = 'device-write-status text-danger mt-2';
+      return;
+    }
+    button.disabled = true;
+    status.textContent = 'Sending KNX write…';
+    status.className = 'device-write-status text-muted mt-2';
+    try {
+      const response = await fetch('/api/devices/' + encodeURIComponent(form.dataset.id) + '/setpoint', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Write failed');
+      status.textContent = 'Write submitted to KNX. Check bus monitor or device feedback for confirmation.';
+      status.className = 'device-write-status text-success mt-2';
+    } catch (err) {
+      status.textContent = 'Write failed: ' + err.message;
+      status.className = 'device-write-status text-danger mt-2';
+    } finally { button.disabled = false; }
+  });
   document.getElementById('btn-add-device').addEventListener('click', () => openDeviceEditor());
   deviceTemplateSelect.addEventListener('change', () => renderDeviceFields());
   document.getElementById('device-list').addEventListener('click', e => {
