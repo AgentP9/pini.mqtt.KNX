@@ -33,7 +33,7 @@ body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:42
 <button class="btn btn-outline-primary w-100" type="submit"><i class="bi bi-plus-lg"></i> MQTT hinzufügen</button></form></div>
 
 <p class="small muted mt-3">Bestehende GA-Routen bleiben aktiv. Neue Verbindungen werden separat gespeichert. Vor dem Aktivieren werden Signaltypen und Schreibrichtungen geprüft.</p>
-</aside></div></main><dialog id="route-dialog" aria-labelledby="route-dialog-title"><form id="route-dialog-form" class="p-3"><h3 class="h5 mb-3" id="route-dialog-title">Verbindung bearbeiten</h3><div id="route-dialog-path" class="small text-secondary mb-3"></div><label class="form-label" for="route-dialog-direction">Datenfluss</label><select class="form-select mb-3" id="route-dialog-direction"><option value="knx2mqtt">KNX → MQTT</option><option value="mqtt2knx">MQTT → KNX</option></select><div class="small text-secondary mb-3" id="route-dialog-direction-hint"></div><label class="form-label" for="route-dialog-map">Wertumwandlung (JSON)</label><textarea class="form-control mb-3" id="route-dialog-map" rows="5" spellcheck="false"></textarea><div class="form-check mb-4"><input class="form-check-input" type="checkbox" id="route-dialog-enabled"><label class="form-check-label" for="route-dialog-enabled">Verbindung aktiv</label></div><div class="d-flex gap-2 justify-content-between"><button type="button" class="btn btn-outline-danger" id="route-dialog-delete">Verbindung löschen</button><div class="d-flex gap-2"><button type="button" class="btn btn-outline-secondary" id="route-dialog-cancel">Abbrechen</button><button type="submit" class="btn btn-primary">Übernehmen</button></div></div><p class="small text-secondary mt-3 mb-0">Änderungen anschließend aktivieren.</p></form></dialog>
+</aside></div></main><dialog id="route-dialog" aria-labelledby="route-dialog-title"><form id="route-dialog-form" class="p-3"><h3 class="h5 mb-3" id="route-dialog-title">Verbindung bearbeiten</h3><div id="route-dialog-path" class="small text-secondary mb-3"></div><label class="form-label" for="route-dialog-direction">Datenfluss</label><select class="form-select mb-3" id="route-dialog-direction"><option value="knx2mqtt">KNX → MQTT</option><option value="mqtt2knx">MQTT → KNX</option></select><div class="small text-secondary mb-3" id="route-dialog-direction-hint"></div><label class="form-label" for="route-dialog-map">Wertumwandlung (JSON)</label><textarea class="form-control mb-2" id="route-dialog-map" rows="5" spellcheck="false"></textarea><p class="small text-secondary mb-3">JSON-Feld aus MQTT extrahieren: <code>{"jsonPath":"output","values":{"true":"ON","false":"OFF"}}</code>. Verschachtelte Felder: <code>aenergy.total</code>.</p><div class="form-check mb-4"><input class="form-check-input" type="checkbox" id="route-dialog-enabled"><label class="form-check-label" for="route-dialog-enabled">Verbindung aktiv</label></div><div class="d-flex gap-2 justify-content-between"><button type="button" class="btn btn-outline-danger" id="route-dialog-delete">Verbindung löschen</button><div class="d-flex gap-2"><button type="button" class="btn btn-outline-secondary" id="route-dialog-cancel">Abbrechen</button><button type="submit" class="btn btn-primary">Übernehmen</button></div></div><p class="small text-secondary mt-3 mb-0">Änderungen anschließend aktivieren.</p></form></dialog>
 <script>
 let graph={endpoints:[],mqttDevices:[],routes:[]},devices=[],templates=[],selected=null,dirty=false,migration=null;
 let focusAddress=new URLSearchParams(location.search).get("ga"),focusRoute=new URLSearchParams(location.search).get("route"),focusDevice=new URLSearchParams(location.search).get("device");
@@ -72,6 +72,7 @@ function isFocused(r){
 function transformLabel(r){
  if(!r.transform)return 'Direkt';
  if(r.transform.kind==='constant')return 'Konstant: '+String(r.transform.value);
+ if(r.transform.kind==='json')return 'JSON: '+r.transform.path+(r.transform.values?' · '+Object.entries(r.transform.values).map(([k,v])=>k+' → '+v).join(' · '):'');
  return [...Object.entries(r.transform.values||{}).map(([k,v])=>k+' → '+v),...(Object.hasOwn(r.transform,'defaultValue')?['Sonst → '+r.transform.defaultValue]:[])].join(' · ')||'Wertetabelle (leer)';
 }
 function render(){
@@ -162,6 +163,7 @@ let editingRouteId=null;
 function routeMapText(r){
  if(r.transform?.kind==='map')return JSON.stringify({...r.transform.values,...(Object.hasOwn(r.transform,'defaultValue')?{'*':r.transform.defaultValue}:{})},null,2);
  if(r.transform?.kind==='constant')return JSON.stringify({constant:r.transform.value},null,2);
+ if(r.transform?.kind==='json')return JSON.stringify({jsonPath:r.transform.path,...(r.transform.values?{values:r.transform.values}:{}),...(Object.hasOwn(r.transform,'defaultValue')?{'*':r.transform.defaultValue}:{})},null,2);
  return '{}';
 }
 function openRouteDialog(id){
@@ -189,7 +191,12 @@ $('route-dialog-form').addEventListener('submit',e=>{
   const parsed=JSON.parse($('route-dialog-map').value);
   if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))throw Error('JSON-Objekt erwartet');
   let transform;
-  if(Object.hasOwn(parsed,'constant')&&Object.keys(parsed).length===1)transform={kind:'constant',value:parsed.constant};
+  if(Object.hasOwn(parsed,'jsonPath')){
+    if(typeof parsed.jsonPath!=='string'||!/^[a-zA-Z_$][\\w$]*(?:\\.[a-zA-Z_$][\\w$]*){0,9}$/.test(parsed.jsonPath))throw Error('Ungültiger JSON-Feldpfad');
+    if(parsed.values!==undefined&&(!parsed.values||typeof parsed.values!=='object'||Array.isArray(parsed.values)))throw Error('Ungültige JSON-Wertetabelle');
+    transform={kind:'json',path:parsed.jsonPath,...(parsed.values?{values:parsed.values}:{}),...(Object.hasOwn(parsed,'*')?{defaultValue:parsed['*']}:{})};
+   }
+  else if(Object.hasOwn(parsed,'constant')&&Object.keys(parsed).length===1)transform={kind:'constant',value:parsed.constant};
   else if(Object.keys(parsed).length){const {'*':fallback,...values}=parsed;transform={kind:'map',values,...(Object.hasOwn(parsed,'*')?{defaultValue:fallback}:{})}}
   const direction=$('route-dialog-direction').value;
   const currentDirection=r.from.type==='device'?'knx2mqtt':'mqtt2knx';
