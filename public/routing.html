@@ -193,7 +193,6 @@ $('route-dialog-form').addEventListener('submit',e=>{
   let transform;
   if(Object.hasOwn(parsed,'constant')&&Object.keys(parsed).length===1)transform={kind:'constant',value:parsed.constant};
   else if(Object.keys(parsed).length){const {'*':fallback,...values}=parsed;transform={kind:'map',values,...(Object.hasOwn(parsed,'*')?{defaultValue:fallback}:{})}}
-  if(transform)r.transform=transform;else delete r.transform;
   const direction=$('route-dialog-direction').value;
   const currentDirection=r.from.type==='device'?'knx2mqtt':'mqtt2knx';
   if(direction!==currentDirection){
@@ -211,9 +210,10 @@ $('route-dialog-form').addEventListener('submit',e=>{
    if(src.type!==dst.type&&!transform)throw Error('Für unterschiedliche Datentypen ist eine Wertumwandlung erforderlich.');
    r.from=from;r.to=to;
   }
+  if(transform)r.transform=transform;else delete r.transform;
   r.enabled=$('route-dialog-enabled').checked;
   dirty=true;$('route-dialog').close();editingRouteId=null;render();notice('Verbindung aktualisiert. Bitte Änderungen aktivieren.');
- }catch(err){notice('Ungültige Wertumwandlung: '+err.message,true);$('route-dialog-map').focus()}
+ }catch(err){notice('Verbindung konnte nicht geändert werden: '+err.message,true);$('route-dialog-map').focus()}
 });
 document.addEventListener('click',e=>{
  const edit=e.target.closest('.edit-transform');if(edit){openRouteDialog(edit.dataset.id);return}
