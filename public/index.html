@@ -474,7 +474,7 @@
 
   // Conservative, read-only device suggestions. Never create or modify devices automatically.
   function gaBaseName(name) {
-    return String(name || '').replace(/(?:[\\s_-]+(?:play\\s*\\/\\s*stop|schaltbefehl|schalten|schaltstatus|status|rückmeldung|rueckmeldung|feedback|command|ein\\s*\\/\\s*aus|on\\s*\\/\\s*off))\\s*$/i, '').trim();
+    return String(name || '').replace(/(?:[\s_-]+(?:play\s*\/\s*stop|schaltbefehl|schalten|schaltstatus|status|rückmeldung|rueckmeldung|feedback|command|ein\s*\/\s*aus|on\s*\/\s*off))\s*$/i, '').trim();
   }
   function gaPosition(address) {
     const parts = String(address).split('/').map(Number);
