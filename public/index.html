@@ -131,6 +131,18 @@
     </div>
   </div>
 
+  <!-- Device view: grouping only, never replaces individual KNX addresses -->
+  <section class="card shadow-sm mb-4" aria-labelledby="devices-title">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span class="fw-semibold" id="devices-title"><i class="bi bi-grid me-2"></i>Devices</span>
+      <button class="btn btn-sm btn-success" id="btn-add-device">+ Add Device</button>
+    </div>
+    <div class="card-body">
+      <p class="text-muted small mb-3">Devices group existing KNX group addresses. Individual addresses remain editable below.</p>
+      <div id="device-list" class="row g-3"><div class="col-12 text-muted">Loading devices…</div></div>
+    </div>
+  </section>
+
   <!-- Group Addresses card -->
   <div class="row mb-4">
     <div class="col-12">
@@ -207,6 +219,23 @@
     </div>
   </div>
 
+
+<!-- Device editor -->
+<div class="modal fade" id="deviceModal" tabindex="-1" aria-labelledby="deviceModalTitle" aria-hidden="true">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title" id="deviceModalTitle">Add Device</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+    <div class="modal-body">
+      <div class="alert alert-danger d-none" id="device-error" role="alert"></div>
+      <label class="form-label" for="device-name">Device name</label>
+      <input class="form-control mb-3" id="device-name" maxlength="120" placeholder="e.g. Office heating">
+      <label class="form-label" for="device-template">Template</label>
+      <select class="form-select mb-3" id="device-template"></select>
+      <div id="device-objects"></div>
+      <p class="small text-muted mt-2 mb-0">Select existing group addresses explicitly. No sequential address assumptions or automatic changes to DPT/direction.</p>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary" id="btn-save-device">Save Device</button></div>
+  </div></div>
+</div>
 
 <!-- Add / Edit Group Address Modal -->
 <div class="modal fade" id="gaModal" tabindex="-1" aria-labelledby="gaModalTitle" aria-hidden="true">
@@ -379,6 +408,7 @@
 
   function renderGATable(addresses) {
     configuredGAs = addresses;
+    renderDevices();
     const gaBody = document.getElementById('ga-body');
     const sorted = sortedGAs();
     if (!sorted.length) {
@@ -693,6 +723,72 @@
       applyTheme(html.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark');
     });
   })();
+
+  // ── Hybrid device templates ──────────────────────────────────────────────────
+  let devices = [], deviceTemplates = [], editingDeviceId = null;
+  const deviceModal = new bootstrap.Modal(document.getElementById('deviceModal'));
+  const deviceError = document.getElementById('device-error');
+  const deviceObjects = document.getElementById('device-objects');
+  const deviceTemplateSelect = document.getElementById('device-template');
+  function deviceTemplate(id) { return deviceTemplates.find(t => t.id === id); }
+  function renderDevices() {
+    const target = document.getElementById('device-list');
+    if (!devices.length) { target.innerHTML = '<div class="col-12 text-muted">No devices yet. Existing group addresses are still active.</div>'; return; }
+    target.innerHTML = devices.map(d => {
+      const tpl = deviceTemplate(d.templateId);
+      const rows = (tpl ? tpl.objects : []).filter(o => d.addresses[o.key]).map(o => {
+        const address = d.addresses[o.key];
+        const ga = configuredGAs.find(g => g.address === address);
+        const value = ga && ga.lastValue != null ? formatValue(ga.lastValue, ga.dpt) : '–';
+        return `<tr><td>${escHtml(o.label)}</td><td><code>${escHtml(address)}</code></td><td class="text-end">${escHtml(value)}</td></tr>`;
+      }).join('');
+      const missing = d.missing && d.missing.length ? '<span class="badge bg-warning text-dark">Missing address</span>' : '';
+      return `<div class="col-12 col-xl-6"><div class="card h-100"><div class="card-header d-flex justify-content-between align-items-center"><div><strong>${escHtml(d.name)}</strong> <small class="text-muted">${escHtml(tpl ? tpl.name : d.templateId)}</small> ${missing}</div><div><button class="btn btn-sm btn-outline-secondary btn-edit-device" data-id="${escHtml(d.id)}" aria-label="Edit device"><i class="bi bi-pencil"></i></button> <button class="btn btn-sm btn-outline-danger btn-delete-device" data-id="${escHtml(d.id)}" aria-label="Delete device"><i class="bi bi-trash"></i></button></div></div><div class="table-responsive"><table class="table table-sm mb-0"><tbody>${rows}</tbody></table></div></div></div>`;
+    }).join('');
+  }
+  function renderDeviceFields(mapping = {}) {
+    const tpl = deviceTemplate(deviceTemplateSelect.value);
+    deviceObjects.innerHTML = tpl ? tpl.objects.map(o => {
+      const candidates = configuredGAs.filter(g => (!g.dpt || g.dpt === o.dpt) && (o.direction !== 'both' || !g.direction || g.direction === 'both') && (o.direction !== 'knx2mqtt' || g.direction !== 'mqtt2knx'));
+      const options = candidates.map(g => `<option value="${escHtml(g.address)}" ${mapping[o.key] === g.address ? 'selected' : ''}>${escHtml(g.address + ' – ' + (g.name || 'Unnamed'))}</option>`).join('');
+      return `<div class="mb-3"><label class="form-label" for="device-object-${escHtml(o.key)}">${escHtml(o.label)} <small class="text-muted">DPT ${escHtml(o.dpt)}${o.optional ? ' · optional' : ''}</small></label><select class="form-select device-object" id="device-object-${escHtml(o.key)}" data-key="${escHtml(o.key)}"><option value="">Select address…</option>${options}</select></div>`;
+    }).join('') : '';
+  }
+  function openDeviceEditor(device) {
+    editingDeviceId = device ? device.id : null;
+    deviceError.classList.add('d-none');
+    document.getElementById('deviceModalTitle').textContent = device ? 'Edit Device' : 'Add Device';
+    document.getElementById('device-name').value = device ? device.name : '';
+    deviceTemplateSelect.innerHTML = deviceTemplates.map(t => `<option value="${escHtml(t.id)}">${escHtml(t.name)}</option>`).join('');
+    if (device) deviceTemplateSelect.value = device.templateId;
+    renderDeviceFields(device ? device.addresses : {});
+    deviceModal.show();
+  }
+  document.getElementById('btn-add-device').addEventListener('click', () => openDeviceEditor());
+  deviceTemplateSelect.addEventListener('change', () => renderDeviceFields());
+  document.getElementById('device-list').addEventListener('click', e => {
+    const edit = e.target.closest('.btn-edit-device'), del = e.target.closest('.btn-delete-device');
+    if (edit) openDeviceEditor(devices.find(d => d.id === edit.dataset.id));
+    if (del && confirm('Delete device grouping? Group addresses will remain untouched.')) {
+      fetch('/api/devices/' + encodeURIComponent(del.dataset.id), { method: 'DELETE' })
+        .then(async r => { if (!r.ok) throw new Error((await r.json()).error); })
+        .catch(err => alert('Delete failed: ' + err.message));
+    }
+  });
+  document.getElementById('btn-save-device').addEventListener('click', async () => {
+    const addresses = {};
+    deviceObjects.querySelectorAll('.device-object').forEach(el => { if (el.value) addresses[el.dataset.key] = el.value; });
+    const body = { name: document.getElementById('device-name').value.trim(), templateId: deviceTemplateSelect.value, addresses };
+    try {
+      const url = editingDeviceId ? '/api/devices/' + encodeURIComponent(editingDeviceId) : '/api/devices';
+      const r = await fetch(url, { method: editingDeviceId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+      deviceModal.hide();
+    } catch (err) { deviceError.textContent = err.message; deviceError.classList.remove('d-none'); }
+  });
+  fetch('/api/device-templates').then(r => r.json()).then(t => { deviceTemplates = t; renderDevices(); }).catch(err => console.error('Templates unavailable', err));
+  fetch('/api/devices').then(r => r.json()).then(d => { devices = d; renderDevices(); }).catch(err => console.error('Devices unavailable', err));
+  socket.on('devices', d => { devices = d; renderDevices(); });
 
   // ── PWA service worker ────────────────────────────────────────────────────────
   if ('serviceWorker' in navigator) {
