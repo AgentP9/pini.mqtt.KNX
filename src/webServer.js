@@ -6,6 +6,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const DeviceStore = require('./deviceStore');
+const RoutingStore = require('./routingStore');
 
 class WebServer {
   /**
@@ -20,6 +21,7 @@ class WebServer {
     this.groupAddresses = groupAddresses;
     this.groupAddressesPath = groupAddressesPath;
     this.deviceStore = new DeviceStore(groupAddresses, groupAddressesPath);
+    this.routingStore = new RoutingStore(this.deviceStore, groupAddresses);
     this.app = express();
     this.server = http.createServer(this.app);
     this.io = new Server(this.server);
@@ -51,6 +53,16 @@ class WebServer {
         publishDevices();
         return res.json({ ok: true });
       } catch (err) { return res.status(500).json({ error: err.message }); }
+    });
+
+    // Visual routing designer: save a complete validated graph atomically.
+    this.app.get('/api/routing', (_req, res) => res.json(this.routingStore.list()));
+    this.app.put('/api/routing', (req, res) => {
+      try {
+        const data = this.routingStore.save(req.body || {});
+        this.eventEmitter.emit('routing-changed', data);
+        res.json(data);
+      } catch (err) { res.status(400).json({ error: err.message }); }
     });
 
     // Diagnostic write only for an existing room-heating device's setpoint object.
