@@ -6,7 +6,7 @@
 <style>
 body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:420px;background:var(--bs-body-bg);border:1px solid var(--bs-border-color);border-radius:1rem;overflow:auto}.lanes{display:grid;grid-template-columns:minmax(230px,1fr) minmax(230px,1fr);gap:12%;padding:1.5rem;position:relative;z-index:2}.node{background:var(--bs-body-bg);border:1px solid var(--bs-border-color);border-radius:.8rem;padding:.75rem;margin-bottom:.75rem;box-shadow:0 2px 8px #0001}.node h3{font-size:1rem;margin:0 0 .5rem}.signal{display:flex;align-items:center;justify-content:space-between;gap:.5rem;border-top:1px solid var(--bs-border-color);padding:.4rem 0;font-size:.85rem}.signal button{white-space:nowrap;flex-shrink:0}#mqtt .signal{justify-content:flex-start}#mqtt .signal .signal-btn{margin-right:.25rem}.signal button.selected{background:var(--bs-primary);color:white}.links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}.muted{color:var(--bs-secondary-color)}@media(max-width:650px){.lanes{gap:1rem;grid-template-columns:minmax(170px,1fr) minmax(170px,1fr);padding:.7rem}.node{padding:.5rem}.signal{flex-wrap:wrap}}
 .aligned-route{display:grid;grid-template-columns:minmax(180px,1fr) minmax(150px,.9fr) minmax(180px,1fr);gap:1rem;align-items:center;border-bottom:1px solid var(--bs-border-color);padding:1rem 0}.aligned-route .node{margin:0}.transform-chip{display:block;text-align:center;font-size:.8rem;white-space:normal;overflow-wrap:anywhere}.aligned-route .arrow{text-align:center;color:var(--bs-primary)}@media(max-width:700px){.aligned-route{gap:.4rem;grid-template-columns:minmax(90px,1fr) minmax(90px,1fr) minmax(90px,1fr)}.aligned-route .node{padding:.4rem}}.workspace{overflow:auto}.lanes{display:grid;grid-template-columns:minmax(230px,1fr) minmax(230px,1fr);gap:16%;padding:1.5rem;position:relative;z-index:2;align-items:start}.node{position:relative}.node h3{min-height:1.5rem}.signal{min-height:43px}.links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3;overflow:visible}.connection-label{font-size:12px;fill:var(--bs-body-color);paint-order:stroke;stroke:var(--bs-body-bg);stroke-width:5px;stroke-linejoin:round}.connection-path{fill:none;stroke:var(--bs-primary);stroke-width:2.5;opacity:.8}.connection-path.inactive{stroke:var(--bs-secondary-color);stroke-dasharray:6 5;opacity:.55}.route-transform{position:absolute;z-index:4;transform:translate(-50%,-50%);font-size:.73rem;max-width:190px;white-space:normal;overflow-wrap:anywhere;box-shadow:0 1px 4px #0002}.route-transform.inactive{opacity:.65}
-.route-actions{display:flex;align-items:center;justify-content:center;gap:.45rem;margin-top:.35rem}.route-actions input{cursor:pointer}.route-actions .btn{padding:.12rem .3rem}.floating-route-actions{position:absolute;z-index:5;transform:translate(-50%,0);background:var(--bs-body-bg);border-radius:.35rem;padding:.12rem .3rem;box-shadow:0 1px 3px #0002}#route-dialog{border:1px solid var(--bs-border-color);border-radius:1rem;max-width:min(94vw,560px);width:100%;background:var(--bs-body-bg);color:var(--bs-body-color);box-shadow:0 20px 60px #0004}#route-dialog::backdrop{background:#0007}.aligned-route{padding:1.6rem 0;gap:1.75rem}.aligned-connector{min-height:64px}.lanes{gap:20%;padding:2rem 1.5rem}.signal{min-height:56px}.route-transform{max-width:170px;padding:.35rem .6rem}.node{padding:1rem}@media(max-width:700px){.aligned-route{gap:.6rem;padding:1rem 0}.lanes{gap:1rem;padding:1rem .7rem}.node{padding:.6rem}}</style></head><body>
+.route-actions{display:flex;align-items:center;justify-content:center;gap:.45rem;margin-top:.35rem}.route-actions input{cursor:pointer}.route-actions .btn{padding:.12rem .3rem}.floating-route-actions{position:absolute;z-index:5;transform:translate(-50%,0);background:var(--bs-body-bg);border-radius:.35rem;padding:.12rem .3rem;box-shadow:0 1px 3px #0002}#route-dialog{border:1px solid var(--bs-border-color);border-radius:1rem;max-width:min(94vw,560px);width:100%;background:var(--bs-body-bg);color:var(--bs-body-color);box-shadow:0 20px 60px #0004}#route-dialog::backdrop{background:#0007}.aligned-route{padding:1.6rem 0;gap:1.75rem}.aligned-connector{min-height:64px}.lanes{gap:20%;padding:2rem 1.5rem}.signal{min-height:56px}.route-transform{max-width:170px;padding:.35rem .6rem}.node{padding:1rem}@media(max-width:700px){.aligned-route{gap:.6rem;padding:1rem 0}.lanes{gap:1rem;padding:1rem .7rem}.node{padding:.6rem}}.connection-arrow{fill:none;stroke:var(--bs-primary);stroke-width:2.8;stroke-linecap:round;stroke-linejoin:round}.connection-arrow.inactive{stroke:var(--bs-secondary-color);opacity:.55}</style></head><body>
 <main class="container-fluid py-3" style="max-width:1500px">
 <header class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3"><div><a href="/" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Dashboard</a><h1 class="h3 mt-2">Routing Designer</h1><p class="muted mb-0">Device-Signale mit MQTT-Topics verbinden. Keine Logikbausteine nötig.</p></div><div class="d-flex gap-2"><button class="btn btn-outline-info" id="migration-preview"><i class="bi bi-arrow-left-right"></i> Bestehende Routen migrieren</button><button class="btn btn-outline-secondary" id="reload">Verwerfen</button><button class="btn btn-primary" id="save">Änderungen aktivieren</button></div></header>
 <div id="notice" role="status" class="small mb-3"></div><div id="focus-bar" class="alert alert-info py-2" hidden><span id="focus-label"></span> <button class="btn btn-sm btn-outline-primary ms-2" id="clear-focus">Alle Devices anzeigen</button></div>
@@ -33,7 +33,7 @@ body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:42
 <button class="btn btn-outline-primary w-100" type="submit"><i class="bi bi-plus-lg"></i> MQTT hinzufügen</button></form></div>
 
 <p class="small muted mt-3">Bestehende GA-Routen bleiben aktiv. Neue Verbindungen werden separat gespeichert. Vor dem Aktivieren werden Signaltypen und Schreibrichtungen geprüft.</p>
-</aside></div></main><dialog id="route-dialog" aria-labelledby="route-dialog-title"><form id="route-dialog-form" class="p-3"><h3 class="h5 mb-3" id="route-dialog-title">Verbindung bearbeiten</h3><div id="route-dialog-path" class="small text-secondary mb-3"></div><label class="form-label" for="route-dialog-map">Wertumwandlung (JSON)</label><textarea class="form-control mb-3" id="route-dialog-map" rows="5" spellcheck="false"></textarea><div class="form-check mb-4"><input class="form-check-input" type="checkbox" id="route-dialog-enabled"><label class="form-check-label" for="route-dialog-enabled">Verbindung aktiv</label></div><div class="d-flex gap-2 justify-content-between"><button type="button" class="btn btn-outline-danger" id="route-dialog-delete">Verbindung löschen</button><div class="d-flex gap-2"><button type="button" class="btn btn-outline-secondary" id="route-dialog-cancel">Abbrechen</button><button type="submit" class="btn btn-primary">Übernehmen</button></div></div><p class="small text-secondary mt-3 mb-0">Änderungen anschließend aktivieren.</p></form></dialog>
+</aside></div></main><dialog id="route-dialog" aria-labelledby="route-dialog-title"><form id="route-dialog-form" class="p-3"><h3 class="h5 mb-3" id="route-dialog-title">Verbindung bearbeiten</h3><div id="route-dialog-path" class="small text-secondary mb-3"></div><label class="form-label" for="route-dialog-direction">Datenfluss</label><select class="form-select mb-3" id="route-dialog-direction"><option value="knx2mqtt">KNX → MQTT</option><option value="mqtt2knx">MQTT → KNX</option></select><div class="small text-secondary mb-3" id="route-dialog-direction-hint"></div><label class="form-label" for="route-dialog-map">Wertumwandlung (JSON)</label><textarea class="form-control mb-3" id="route-dialog-map" rows="5" spellcheck="false"></textarea><div class="form-check mb-4"><input class="form-check-input" type="checkbox" id="route-dialog-enabled"><label class="form-check-label" for="route-dialog-enabled">Verbindung aktiv</label></div><div class="d-flex gap-2 justify-content-between"><button type="button" class="btn btn-outline-danger" id="route-dialog-delete">Verbindung löschen</button><div class="d-flex gap-2"><button type="button" class="btn btn-outline-secondary" id="route-dialog-cancel">Abbrechen</button><button type="submit" class="btn btn-primary">Übernehmen</button></div></div><p class="small text-secondary mt-3 mb-0">Änderungen anschließend aktivieren.</p></form></dialog>
 <script>
 let graph={endpoints:[],mqttDevices:[],routes:[]},devices=[],templates=[],selected=null,dirty=false,migration=null;
 let focusAddress=new URLSearchParams(location.search).get("ga"),focusRoute=new URLSearchParams(location.search).get("route");
@@ -136,6 +136,19 @@ function drawLinks(routes=graph.routes.filter(isFocused)){
   path.setAttribute('d','M '+x1+' '+y1+' C '+mid+' '+y1+', '+mid+' '+y2+', '+x2+' '+y2);
   path.setAttribute('class','connection-path'+(r.enabled?'':' inactive'));
   svg.appendChild(path);
+  // Place a directional arrow on the curve, away from the edit button.
+  const forward=r.from.type==='device';
+  const t=forward?.76:.24;
+  const bx=(1-t)**3*x1+3*(1-t)**2*t*mid+3*(1-t)*t*t*mid+t**3*x2;
+  const by=(1-t)**3*y1+3*(1-t)**2*t*y1+3*(1-t)*t*t*y2+t**3*y2;
+  const dx=3*(1-t)**2*(mid-x1)+3*t*t*(x2-mid);
+  const dy=6*(1-t)*t*(y2-y1);
+  const angle=Math.atan2(forward?dy:-dy,forward?dx:-dx);
+  const arrow=document.createElementNS(ns,'path');
+  arrow.setAttribute('d','M -9 -5 L 0 0 L -9 5');
+  arrow.setAttribute('transform','translate('+bx+' '+by+') rotate('+(angle*180/Math.PI)+')');
+  arrow.setAttribute('class','connection-arrow'+(r.enabled?'':' inactive'));
+  svg.appendChild(arrow);
   const chip=document.createElement('button');chip.type='button';chip.className='btn btn-sm btn-light border route-transform edit-transform'+(r.enabled?'':' inactive');
   chip.dataset.id=r.id;chip.textContent=transformLabel(r);chip.title='Wertumwandlung bearbeiten';
   chip.style.left=mid+'px';chip.style.top=((y1+y2)/2)+'px';root.appendChild(chip);
@@ -160,6 +173,9 @@ function openRouteDialog(id){
  const name=ref=>all.find(x=>signalKey(x.ref)===signalKey(ref))?.name||'Unbekannt';
  $('route-dialog-path').textContent=name(r.from)+' → '+name(r.to);
  $('route-dialog-map').value=routeMapText(r);
+ $('route-dialog-direction').value=r.from.type==='device'?'knx2mqtt':'mqtt2knx';
+ $('route-dialog-direction').disabled=Boolean(r.legacyKey);
+ $('route-dialog-direction-hint').textContent=r.legacyKey?'Migrierte Legacy-Verbindung: Richtung erst nach Ablösen der Legacy-Route änderbar.':'Die Richtung bestimmt, welches Signal sendet und welches empfängt.';
  $('route-dialog-enabled').checked=r.enabled;
  $('route-dialog').showModal();
 }
@@ -178,6 +194,23 @@ $('route-dialog-form').addEventListener('submit',e=>{
   if(Object.hasOwn(parsed,'constant')&&Object.keys(parsed).length===1)transform={kind:'constant',value:parsed.constant};
   else if(Object.keys(parsed).length){const {'*':fallback,...values}=parsed;transform={kind:'map',values,...(Object.hasOwn(parsed,'*')?{defaultValue:fallback}:{})}}
   if(transform)r.transform=transform;else delete r.transform;
+  const direction=$('route-dialog-direction').value;
+  const currentDirection=r.from.type==='device'?'knx2mqtt':'mqtt2knx';
+  if(direction!==currentDirection){
+   if(r.legacyKey)throw Error('Migrierte Legacy-Verbindung kann nicht umgedreht werden.');
+   const from=r.to,to=r.from;
+   const all=[...signals(),...endpointSignals()];
+   const src=all.find(x=>signalKey(x.ref)===signalKey(from));
+   const dst=all.find(x=>signalKey(x.ref)===signalKey(to));
+   if(!src||!dst)throw Error('Quell- oder Zielsignal fehlt.');
+   if(from.type==='device'&&!['both','knx2mqtt'].includes(src.dir))throw Error('KNX-Signal ist nicht lesbar.');
+   if(to.type==='device'&&to.signal!=='status'&&!['both','mqtt2knx'].includes(dst.dir))throw Error('KNX-Signal ist nicht schreibbar.');
+   if(from.type==='mqttDevice'&&!['output','both'].includes(src.direction))throw Error('MQTT-Signal ist kein Ausgang.');
+   if(to.type==='mqttDevice'&&!['input','both'].includes(dst.direction))throw Error('MQTT-Signal ist kein Eingang.');
+   if(graph.routes.some(other=>other.id!==r.id&&signalKey(other.to)===signalKey(to)))throw Error('Das neue Ziel besitzt bereits eine Verbindung.');
+   if(src.type!==dst.type&&!transform)throw Error('Für unterschiedliche Datentypen ist eine Wertumwandlung erforderlich.');
+   r.from=from;r.to=to;
+  }
   r.enabled=$('route-dialog-enabled').checked;
   dirty=true;$('route-dialog').close();editingRouteId=null;render();notice('Verbindung aktualisiert. Bitte Änderungen aktivieren.');
  }catch(err){notice('Ungültige Wertumwandlung: '+err.message,true);$('route-dialog-map').focus()}
