@@ -555,7 +555,7 @@
     // background inside each spanning cell after layout.
     const deviceGroups = sorted.map(ga => {
       const assigned = assignedDevices(ga.address);
-      if (assigned.length === 1) return { key: 'configured:' + assigned[0].id, kind: 'configured' };
+      // Configured mappings must stay visible on every row: each GA has a distinct object role.
       if (assigned.length) return null;
       const suggestion = suggestDeviceForGA(ga);
       return suggestion ? { key: 'suggested:' + suggestion.templateId + ':' + suggestion.name.toLowerCase() + ':' + Object.entries(suggestion.addresses).sort().map(([k, v]) => k + '=' + v).join('|'), kind: 'suggested' } : null;
