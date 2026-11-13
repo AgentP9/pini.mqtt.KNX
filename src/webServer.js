@@ -5,6 +5,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const DeviceStore = require('./deviceStore');
 
 class WebServer {
   /**
@@ -18,6 +19,7 @@ class WebServer {
     this.eventEmitter = eventEmitter;
     this.groupAddresses = groupAddresses;
     this.groupAddressesPath = groupAddressesPath;
+    this.deviceStore = new DeviceStore(groupAddresses, groupAddressesPath);
     this.app = express();
     this.server = http.createServer(this.app);
     this.io = new Server(this.server);
@@ -26,6 +28,30 @@ class WebServer {
 
     // Serve static frontend
     this.app.use(express.static(path.join(__dirname, '../public')));
+
+    // Device templates only reference existing group addresses. Existing GA routes stay untouched.
+    this.app.get('/api/device-templates', (_req, res) => res.json(this.deviceStore.templates()));
+    this.app.get('/api/devices', (_req, res) => res.json(this.deviceStore.list()));
+    const publishDevices = () => this.io.emit('devices', this.deviceStore.list());
+    const saveDevice = (req, res, id) => {
+      try {
+        const device = this.deviceStore.save(req.body, id);
+        if (!device) return res.status(404).json({ error: 'Device not found' });
+        publishDevices();
+        return res.json(device);
+      } catch (err) {
+        return res.status(err.message.includes('persist') || err.code ? 500 : 400).json({ error: err.message });
+      }
+    };
+    this.app.post('/api/devices', (req, res) => saveDevice(req, res));
+    this.app.put('/api/devices/:id', (req, res) => saveDevice(req, res, req.params.id));
+    this.app.delete('/api/devices/:id', (req, res) => {
+      try {
+        if (!this.deviceStore.remove(req.params.id)) return res.status(404).json({ error: 'Device not found' });
+        publishDevices();
+        return res.json({ ok: true });
+      } catch (err) { return res.status(500).json({ error: err.message }); }
+    });
 
     // ── REST: group addresses ──────────────────────────────────────────────────
 
@@ -66,6 +92,7 @@ class WebServer {
       if (this._saveGroupAddresses()) {
         this.eventEmitter.emit('ga-saved', entry);
         this.io.emit('groupaddresses', this._enrichGAs());
+        publishDevices();
         return res.json(entry);
       }
 
@@ -151,6 +178,7 @@ class WebServer {
         socket.emit('status', { service, connected });
       });
       socket.emit('groupaddresses', this._enrichGAs());
+      socket.emit('devices', this.deviceStore.list());
       socket.on('mqtt-restart', () => this.eventEmitter.emit('mqtt-restart'));
       socket.on('disconnect', () => console.log('[WEB] Client disconnected'));
     });
