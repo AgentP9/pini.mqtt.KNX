@@ -279,7 +279,10 @@
       <div id="device-objects"></div>
       <p class="small text-muted mt-2 mb-0">Select existing group addresses explicitly. No sequential address assumptions or automatic changes to DPT/direction.</p>
     </div>
-    <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary" id="btn-save-device">Save Device</button></div>
+    <div class="modal-footer justify-content-between">
+      <button type="button" class="btn btn-outline-danger d-none" id="btn-delete-device-dialog"><i class="bi bi-trash me-1"></i>Delete device</button>
+      <div class="d-flex gap-2 ms-auto"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary" id="btn-save-device">Save Device</button></div>
+    </div>
   </div></div>
 </div>
 
@@ -864,13 +867,12 @@
           <div class="d-flex align-items-start gap-3 mb-3">
             <div class="device-icon" aria-hidden="true"><i class="bi ${isHeating ? 'bi-thermometer-half' : 'bi-grid'}"></i></div>
             <div class="flex-grow-1 min-w-0"><h3 class="h6 mb-1">${escHtml(d.name)}</h3><div class="small text-muted">${escHtml(tpl ? tpl.name : d.templateId)}</div></div>
-            <div class="d-flex gap-1">
+            <div class="d-flex align-items-center gap-2">
+              ${status}
               <button class="btn btn-sm btn-outline-secondary btn-edit-device" data-id="${escHtml(d.id)}" aria-label="Edit ${escHtml(d.name)}"><i class="bi bi-pencil"></i></button>
-              <button class="btn btn-sm btn-outline-danger btn-delete-device" data-id="${escHtml(d.id)}" aria-label="Delete ${escHtml(d.name)}"><i class="bi bi-trash"></i></button>
             </div>
           </div>
           ${metrics}
-          <div class="mt-3">${status}</div>
         </div>
         <details data-device-id="${escHtml(d.id)}" ${expanded.has(d.id) ? 'open' : ''}><summary>Technical details · ${Object.keys(d.addresses || {}).length} group addresses</summary>${detailRows || '<div class="px-3 pb-3 text-muted small">No addresses assigned</div>'}</details>
       </article></div>`;
@@ -886,6 +888,7 @@
   }
   function openDeviceEditor(device) {
     editingDeviceId = device ? device.id : null;
+    document.getElementById('btn-delete-device-dialog').classList.toggle('d-none', !device);
     deviceError.classList.add('d-none');
     document.getElementById('deviceModalTitle').textContent = device ? 'Edit Device' : 'Add Device';
     document.getElementById('device-name').value = device ? device.name : '';
@@ -941,13 +944,25 @@
       if (!form.hidden) form.querySelector('input').focus();
       return;
     }
-    const edit = e.target.closest('.btn-edit-device'), del = e.target.closest('.btn-delete-device');
+    const edit = e.target.closest('.btn-edit-device');
     if (edit) openDeviceEditor(devices.find(d => d.id === edit.dataset.id));
-    if (del && confirm('Delete device grouping? Group addresses will remain untouched.')) {
-      fetch('/api/devices/' + encodeURIComponent(del.dataset.id), { method: 'DELETE' })
-        .then(async r => { if (!r.ok) throw new Error((await r.json()).error); })
-        .catch(err => alert('Delete failed: ' + err.message));
-    }
+  });
+  document.getElementById('btn-delete-device-dialog').addEventListener('click', async () => {
+    const id = editingDeviceId;
+    const device = devices.find(d => d.id === id);
+    if (!device) return;
+    if (!confirm('Delete device "' + device.name + '"? Its group addresses will remain untouched.')) return;
+    const button = document.getElementById('btn-delete-device-dialog');
+    button.disabled = true;
+    try {
+      const response = await fetch('/api/devices/' + encodeURIComponent(id), { method: 'DELETE' });
+      if (!response.ok) throw new Error((await response.json()).error || 'Delete failed');
+      deviceModal.hide();
+      editingDeviceId = null;
+    } catch (err) {
+      deviceError.textContent = 'Delete failed: ' + err.message;
+      deviceError.classList.remove('d-none');
+    } finally { button.disabled = false; }
   });
   document.getElementById('btn-save-device').addEventListener('click', async () => {
     const addresses = {};
