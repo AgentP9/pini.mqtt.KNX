@@ -615,7 +615,7 @@
       const stops = [];
       for (let i = first; i < Math.min(first + count, rows.length); i++) {
         const height = rows[i].getBoundingClientRect().height;
-        const stripe = i % 2 === 1 ? 'var(--bs-table-striped-bg)' : 'transparent';
+        const stripe = i % 2 === 0 ? 'var(--bs-table-striped-bg)' : 'transparent';
         stops.push(stripe + ' ' + offset + 'px', stripe + ' ' + (offset + height) + 'px');
         offset += height;
       }
