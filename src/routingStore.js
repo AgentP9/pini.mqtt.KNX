@@ -40,8 +40,7 @@ class RoutingStore {
           if (planned.has(key)) continue;
           const info = { address: ga.address, topic, direction, key };
           let reason = '';
-          if (Number(legacy.repeatInterval) > 0) reason = 'Repeat interval not yet supported';
-          else if (direction === 'mqtt2knx' && legacy.valueMap && Object.keys(legacy.valueMap).length) reason = 'Reverse value mapping requires manual review';
+          if (direction === 'mqtt2knx' && legacy.valueMap && Object.keys(legacy.valueMap).length) reason = 'Reverse value mapping requires manual review';
           else if (topic.startsWith('knx/')) reason = 'Reserved topic';
           const matches = [];
           for (const device of this.deviceStore.devices) {
