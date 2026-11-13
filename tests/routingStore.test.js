@@ -129,3 +129,28 @@ test('rejects forged legacy migration marker', () => {
   assert.throws(()=>f.store.save({endpoints:[],mqttDevices:[md],routes:[{id:'r1',from:{type:'device',id:'d1',signal:'command'},to:{type:'mqttDevice',id:'sonos1',signal:'control'},enabled:true,transform:{kind:'map',values:{ON:'PLAY'}},legacyKey:'not-real'}]}),/Invalid legacy migration reference/);
  } finally { f.cleanup(); }
 });
+
+test('supports Sonos state feedback with default OFF mapping', () => {
+ const f=fixture();
+ try {
+  const md={id:'sonos1',name:'Sonos Dining',templateId:'sonos',signals:[{key:'state',label:'Wiedergabestatus',topic:'sonos/devices/Dining/state',payloadType:'text',direction:'output'}]};
+  const route={id:'state-to-knx',from:{type:'mqttDevice',id:'sonos1',signal:'state'},to:{type:'device',id:'d1',signal:'command'},enabled:true,transform:{kind:'map',values:{PLAYING:'ON'},defaultValue:'OFF'}};
+  f.store.save({endpoints:[],mqttDevices:[md],routes:[route]});
+  assert.equal(f.store.routes[0].transform.defaultValue,'OFF');
+ } finally {f.cleanup()}
+});
+test('detaching legacy fallback preserves a migrated route after legacy cleanup', () => {
+ const f=fixture();
+ try {
+  f.gas[0].routes=[{mqttTopic:'home/dining/set'}];
+  const candidate=f.store.migrationPreview().candidates.find(c=>c.direction==='knx2mqtt');
+  assert.ok(candidate);
+  f.store.migrate([candidate.key]);
+  const migrated=f.store.routes[0];
+  f.gas[0].routes=[];
+  const {legacyKey,...detached}=migrated;
+  f.store.save({...f.store.list(),routes:[detached]});
+  assert.equal(f.store.routes.length,1);
+  assert.equal(f.store.routes[0].legacyKey,undefined);
+ } finally {f.cleanup()}
+});
