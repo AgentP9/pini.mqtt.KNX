@@ -287,6 +287,21 @@ eventEmitter.on('device-setpoint-write', ({ address, value, respond }) => {
   respond({ ok: true, status: 202, message: 'Write sent to KNX library; bus/device confirmation pending' });
 });
 
+// Switch command: send only; state is exclusively derived from status group address.
+eventEmitter.on('device-switch-write', ({ address, value, respond }) => {
+  if (!knxHandler.connected) return respond({ ok: false, status: 503, error: 'KNX disconnected' });
+  const raw = value ? '1' : '0';
+  const ok = knxHandler.write(address, raw);
+  if (!ok) return respond({ ok: false, status: 502, error: 'KNX write failed' });
+  eventEmitter.emit('traffic', {
+    direction: 'WEB→KNX', address,
+    name: (config.groupAddresses.find(g => g.address === address) || {}).name || address,
+    topic: null, value: raw, dpt: '1.001', configured: true,
+    outbound: true, timestamp: new Date().toISOString(),
+  });
+  respond({ ok: true, status: 202, message: 'Switch command submitted; status feedback pending' });
+});
+
 // ── Status events ──────────────────────────────────────────────────────────────
 knxHandler.on('connected', () =>
   eventEmitter.emit('status', { service: 'KNX', connected: true })
