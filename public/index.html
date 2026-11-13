@@ -519,20 +519,21 @@
 
   /** Update the Last Value cell for a GA row without re-rendering the whole table. */
   function updateGALastValue(entry) {
+    const ga = configuredGAs.find(g => g.address === entry.address);
+    if (ga) ga.lastValue = entry.value;
     // Find the row whose first cell contains the matching address
     const rows = document.getElementById('ga-body').rows;
     for (const row of rows) {
       const codeEl = row.cells[0] && row.cells[0].querySelector('code');
       if (codeEl && codeEl.textContent === entry.address) {
         // Update the in-memory GA object so modal edits reflect current DPT
-        const ga = configuredGAs.find((g) => g.address === entry.address);
-        if (ga) ga.lastValue = entry.value;
         // Update the cell (column index 6 – after the Direction and Routes columns)
         const cell = row.cells[6];
         if (cell) cell.innerHTML = `<strong>${escHtml(formatValue(entry.value, entry.dpt))}</strong>`;
         break;
       }
     }
+    renderDevices();
   }
 
   // Delegate edit / delete clicks in the GA table
@@ -744,7 +745,7 @@
   socket.on('traffic', (entry) => {
     appendRow(entry);
     updateCounters(entry);
-    if (entry.configured !== false) updateGALastValue(entry);
+    if (entry.configured !== false && entry.direction === 'KNX→MQTT') updateGALastValue(entry);
   });
 
   socket.on('status', ({ service, connected }) => updateBadge(service, connected));
