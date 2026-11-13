@@ -65,7 +65,7 @@ class WebServer {
         return res.status(409).json({ error: 'Setpoint GA missing or not writable as DPT 9.001' });
       }
       const value = req.body && req.body.value;
-      if (typeof value !== 'number' || !Number.isFinite(value) || value < 5 || value > 35 || Math.round(value * 10) !== value * 10) {
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < 5 || value > 35 || Math.abs(value * 10 - Math.round(value * 10)) > 1e-7) {
         return res.status(400).json({ error: 'Setpoint must be 5–35 °C in 0.1 °C increments' });
       }
       if (this._status.KNX !== true) return res.status(503).json({ error: 'KNX disconnected' });
