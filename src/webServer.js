@@ -109,18 +109,20 @@ class WebServer {
         return rest;
       });
       try {
-        this.routingStore.save({ ...originalGraph, routes: cleanedRoutes }, { allowLegacyDetach: true });
+        // Remove from the in-memory legacy config first so routing validation
+        // sees the same destination ownership as after cleanup.
         for (const ga of this.groupAddresses) {
           ga.routes = (ga.routes || []).filter(r => !keys.has(JSON.stringify([ga.address, r.mqttTopic])));
           if (!ga.routes.length) delete ga.routes;
         }
+        this.routingStore.save({ ...originalGraph, routes: cleanedRoutes });
         if (!this._saveGroupAddresses()) throw Error('Failed to save group addresses');
         this.eventEmitter.emit('routing-changed', this.routingStore.list());
         this.io.emit('groupaddresses', this._enrichGAs());
         res.json({ deleted: selected.length, graph: this.routingStore.list() });
       } catch (err) {
         this.groupAddresses.splice(0, this.groupAddresses.length, ...originalGAs);
-        try { this.routingStore.save(originalGraph); } catch (_) { /* original config still on disk if first save failed */ }
+        try { this.routingStore.save(originalGraph); } catch (_) { /* restore attempt; report failure below */ }
         res.status(500).json({ error: err.message });
       }
     });
