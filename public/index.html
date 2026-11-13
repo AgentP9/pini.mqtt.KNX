@@ -469,7 +469,59 @@
   let sortDir = 1; // 1 = asc, -1 = desc
 
   function assignedDevices(address) {
-    return devices.flatMap(d => Object.entries(d.addresses || {}).filter(([, ga]) => ga === address).map(([key]) => ({ name: d.name, role: (deviceTemplates.find(t => t.id === d.templateId)?.objects || []).find(o => o.key === key)?.label || key })));
+    return devices.flatMap(d => Object.entries(d.addresses || {}).filter(([, ga]) => ga === address).map(([key]) => ({ id: d.id, name: d.name, role: (deviceTemplates.find(t => t.id === d.templateId)?.objects || []).find(o => o.key === key)?.label || key })));
+  }
+
+  // Conservative, read-only device suggestions. Never create or modify devices automatically.
+  function gaBaseName(name) {
+    return String(name || '').replace(/(?:[\s_-]+(?:play\s*\/\s*stop|an\s*\/\s*aus|schaltbefehl|schalten|schaltstatus|status|rückmeldung|rueckmeldung|feedback|command|ein\s*\/\s*aus|on\s*\/\s*off))\s*$/i, '').trim();
+  }
+  function gaPosition(address) {
+    const parts = String(address).split('/').map(Number);
+    return parts.length === 3 && parts.every(Number.isInteger) ? parts : null;
+  }
+  function gaNeighbor(a, b) {
+    const x = gaPosition(a), y = gaPosition(b);
+    return !!(x && y && x[0] === y[0] && x[1] === y[1] && Math.abs(x[2] - y[2]) === 1);
+  }
+  function gaDirectionMatches(ga, obj) {
+    const dir = ga.direction || 'both';
+    return (!ga.dpt || ga.dpt === obj.dpt) &&
+      (obj.direction !== 'both' || dir === 'both') &&
+      (obj.direction !== 'knx2mqtt' || dir !== 'mqtt2knx');
+  }
+  function suggestDeviceForGA(ga) {
+    if (assignedDevices(ga.address).length || !deviceTemplates.length) return null;
+    const occupied = new Set(devices.flatMap(d => Object.values(d.addresses || {})));
+    const base = gaBaseName(ga.name);
+    if (!base || base === ga.name && !/\s/.test(base)) return null;
+    const candidates = [];
+    for (const tpl of deviceTemplates) {
+      const required = tpl.objects.filter(o => !o.optional);
+      if (required.length < 2) continue;
+      for (const object of required) {
+        if (!gaDirectionMatches(ga, object)) continue;
+        const matches = { [object.key]: ga.address };
+        let score = 0;
+        let valid = true;
+        for (const other of required.filter(o => o.key !== object.key)) {
+          const possibilities = configuredGAs.filter(g => g.address !== ga.address && !occupied.has(g.address) && gaDirectionMatches(g, other))
+            .map(g => {
+              const otherBase = gaBaseName(g.name);
+              const sameName = otherBase && otherBase.toLowerCase() === base.toLowerCase();
+              const adjacent = gaNeighbor(ga.address, g.address);
+              return { ga: g, sameName, adjacent, points: (sameName ? 5 : 0) + (adjacent ? 2 : 0) };
+            }).filter(m => m.sameName && m.points >= 5).sort((a, b) => b.points - a.points);
+          if (!possibilities.length) { valid = false; break; }
+          matches[other.key] = possibilities[0].ga.address;
+          score += possibilities[0].points;
+        }
+        if (valid && new Set(Object.values(matches)).size === required.length) candidates.push({ templateId: tpl.id, templateName: tpl.name, name: base, addresses: matches, score });
+      }
+    }
+    candidates.sort((a, b) => b.score - a.score);
+    // Avoid arbitrary suggestions when multiple templates are equally plausible.
+    return candidates.length && (candidates.length === 1 || candidates[0].score > candidates[1].score) ? candidates[0] : null;
   }
 
   function sortedGAs() {
@@ -499,7 +551,26 @@
       gaBody.innerHTML = '<tr><td colspan="9" class="text-center empty-msg p-3">No group addresses configured.</td></tr>';
       return;
     }
-    gaBody.innerHTML = sorted.map((ga) => {
+    // Use real rowspan for contiguous visible rows. Recreate the per-row zebra
+    // background inside each spanning cell after layout.
+    const deviceGroups = sorted.map(ga => {
+      const assigned = assignedDevices(ga.address);
+      // Configured mappings must stay visible on every row: each GA has a distinct object role.
+      if (assigned.length) return null;
+      const suggestion = suggestDeviceForGA(ga);
+      return suggestion ? { key: 'suggested:' + suggestion.templateId + ':' + suggestion.name.toLowerCase() + ':' + Object.entries(suggestion.addresses).sort().map(([k, v]) => k + '=' + v).join('|'), kind: 'suggested' } : null;
+    });
+    const spans = sorted.map(() => 1);
+    for (let i = 0; i < sorted.length;) {
+      const group = deviceGroups[i];
+      if (!group) { i++; continue; }
+      let end = i + 1;
+      while (end < sorted.length && deviceGroups[end] && deviceGroups[end].key === group.key) end++;
+      spans[i] = end - i;
+      for (let j = i + 1; j < end; j++) spans[j] = 0;
+      i = end;
+    }
+    gaBody.innerHTML = sorted.map((ga, rowIndex) => {
       const routeCount = Array.isArray(ga.routes) ? ga.routes.filter((r) => r.mqttTopic).length : 0;
       const routesBadge = routeCount > 0
         ? `<span class="badge bg-info text-dark" title="${escHtml(ga.routes.filter((r) => r.mqttTopic).map((r) => r.mqttTopic).join(', '))}">${routeCount} route${routeCount > 1 ? 's' : ''}</span>`
@@ -508,7 +579,8 @@
         ? `<span class="badge bg-warning text-dark repeat-icon ms-1" title="Repeat every ${escHtml(String(ga.repeatInterval))}s">↻${escHtml(String(ga.repeatInterval))}s</span>`
         : '';
       const assignments = assignedDevices(ga.address);
-      const deviceCell = assignments.length ? assignments.map(d => `<div><span class="fw-semibold">${escHtml(d.name)}</span><span class="small text-muted ms-1">(${escHtml(d.role)})</span></div>`).join('') : '<span class="text-muted">–</span>';
+      const suggestion = assignments.length ? null : suggestDeviceForGA(ga);
+      const deviceCell = assignments.length ? assignments.map(d => `<div><span class="fw-semibold">${escHtml(d.name)}</span><span class="small text-muted ms-1">(${escHtml(d.role)})</span></div>`).join('') : suggestion ? `<button type="button" class="btn btn-sm btn-primary btn-suggest-device" data-address="${escHtml(ga.address)}" title="Review suggested device mapping"><i class="bi bi-lightbulb me-1"></i>${escHtml(suggestion.templateName)}</button>` : '<span class="text-muted">–</span>';
       const dir = ga.direction || 'both';
       const dirIcon = dir === 'knx2mqtt' ? '<i class="bi bi-arrow-right" title="KNX → MQTT only"></i>'
                     : dir === 'mqtt2knx' ? '<i class="bi bi-arrow-left"  title="MQTT → KNX only"></i>'
@@ -521,8 +593,8 @@
         <td><small class="text-muted">${escHtml(ga.comment || '')}</small></td>
         <td class="text-center">${dirIcon}</td>
         <td>${routesBadge}${repeatBadge}</td>
-        <td>${deviceCell}</td>
-        <td><strong>${escHtml(ga.lastValue !== undefined && ga.lastValue !== null ? formatValue(ga.lastValue, ga.dpt) : '–')}</strong></td>
+        ${spans[rowIndex] ? `<td rowspan="${spans[rowIndex]}" class="align-middle text-center ga-device-cell">${deviceCell}</td>` : ''}
+        <td class="ga-last-value"><strong>${escHtml(ga.lastValue !== undefined && ga.lastValue !== null ? formatValue(ga.lastValue, ga.dpt) : '–')}</strong></td>
         <td class="text-end text-nowrap">
           <button class="btn btn-sm btn-outline-secondary btn-edit-ga me-1" data-address="${escHtml(ga.address)}" aria-label="Edit"><i class="bi bi-pencil-fill"></i></button>
           <button class="btn btn-sm btn-outline-danger btn-delete-ga"       data-address="${escHtml(ga.address)}" aria-label="Delete"><i class="bi bi-trash-fill"></i></button>
@@ -530,6 +602,29 @@
       </tr>
     `;
     }).join('');
+    // Bootstrap stripes are painted on individual cells; a rowspan would otherwise
+    // inherit only the first row's stripe. Build matching stripe bands using actual
+    // rendered row heights, including when filtering or sorting changes the order.
+    for (const cell of gaBody.querySelectorAll('td.ga-device-cell[rowspan]')) {
+      const count = Number(cell.rowSpan);
+      if (count < 2) continue;
+      const rows = Array.from(gaBody.rows);
+      const first = rows.indexOf(cell.parentElement);
+      if (first < 0) continue;
+      let offset = 0;
+      const stops = [];
+      for (let i = first; i < Math.min(first + count, rows.length); i++) {
+        const height = rows[i].getBoundingClientRect().height;
+        const stripe = i % 2 === 0 ? 'var(--bs-table-striped-bg)' : 'transparent';
+        stops.push(stripe + ' ' + offset + 'px', stripe + ' ' + (offset + height) + 'px');
+        offset += height;
+      }
+      // Bootstrap table stripes are drawn with an inset box-shadow, which otherwise
+      // paints over our gradient. Override it with !important for rowspan cells only.
+      cell.style.setProperty('box-shadow', 'none', 'important');
+      cell.style.setProperty('background-color', 'var(--bs-table-bg)', 'important');
+      cell.style.backgroundImage = 'linear-gradient(to bottom, ' + stops.join(', ') + ')';
+    }
   }
 
   // ── GA table column sorting ───────────────────────────────────────────────────
@@ -563,14 +658,26 @@
       const codeEl = row.cells[0] && row.cells[0].querySelector('code');
       if (codeEl && codeEl.textContent === entry.address) {
         // Update the in-memory GA object so modal edits reflect current DPT
-        // Update the Last Value cell (index 7, after Device).
-        const cell = row.cells[7];
+        // Rowspans change cell indexes; select by class instead.
+        const cell = row.querySelector('.ga-last-value');
         if (cell) cell.innerHTML = `<strong>${escHtml(formatValue(entry.value, entry.dpt))}</strong>`;
         break;
       }
     }
     renderDevices();
   }
+
+  document.getElementById('ga-body').addEventListener('click', e => {
+    const button = e.target.closest('.btn-suggest-device');
+    if (!button) return;
+    const ga = configuredGAs.find(g => g.address === button.dataset.address);
+    const suggestion = ga && suggestDeviceForGA(ga);
+    if (!suggestion) return;
+    openDeviceEditor();
+    document.getElementById('device-name').value = suggestion.name;
+    deviceTemplateSelect.value = suggestion.templateId;
+    renderDeviceFields(suggestion.addresses);
+  });
 
   // Delegate edit / delete clicks in the GA table
   document.getElementById('ga-body').addEventListener('click', (e) => {
@@ -873,7 +980,7 @@
         const value = ga && ga.lastValue != null ? formatValue(ga.lastValue, ga.dpt) : '–';
         return `<div class="device-detail"><span>${escHtml(o.label)} <code class="ms-1">${escHtml(address)}</code></span><span class="text-end">${escHtml(value)}</span></div>`;
       }).join('');
-      const status = missing.length ? '<span class="badge text-bg-warning">Mapping incomplete</span>' : '<span class="badge text-bg-secondary">Configured</span>';
+      const status = missing.length ? '<span class="badge text-bg-warning">Mapping incomplete</span>' : '';
       const setpointGA = d.addresses && gaByAddress.get(d.addresses.setpoint);
       const writable = isHeating && setpointGA && setpointGA.dpt === '9.001' && (!setpointGA.direction || ['both', 'mqtt2knx'].includes(setpointGA.direction));
       const setpointRaw = d.addresses && pendingGAValues.has(d.addresses.setpoint) ? pendingGAValues.get(d.addresses.setpoint) : setpointGA && setpointGA.lastValue;
