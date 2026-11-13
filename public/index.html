@@ -865,8 +865,6 @@
       const writable = isHeating && setpointGA && setpointGA.dpt === '9.001' && (!setpointGA.direction || ['both', 'mqtt2knx'].includes(setpointGA.direction));
       const setpointRaw = d.addresses && pendingGAValues.has(d.addresses.setpoint) ? pendingGAValues.get(d.addresses.setpoint) : setpointGA && setpointGA.lastValue;
       const defaultSetpoint = Number.isFinite(Number(setpointRaw)) && setpointRaw !== undefined && setpointRaw !== null && setpointRaw !== '' ? Number(setpointRaw).toFixed(1) : '21.0';
-      const writeInput = writeInputs.has(d.id) ? writeInputs.get(d.id) : defaultSetpoint;
-      const previousMessage = writeMessages.get(d.id);
       const editButton = writable ? `<button type="button" class="btn btn-sm btn-outline-secondary device-setpoint-edit" data-id="${escHtml(d.id)}" aria-label="Edit setpoint for ${escHtml(d.name)}" title="Write new setpoint to KNX"><i class="bi bi-pencil"></i></button>` : '';
       const metrics = isHeating ? `<div class="device-metrics">${metric(d, 'temperature', 'Current temperature')}${metric(d, 'setpoint', 'Setpoint', editButton)}</div>` : '';
       return `<div class="col-12 col-xl-6"><article class="card device-card h-100">
