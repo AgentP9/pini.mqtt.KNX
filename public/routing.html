@@ -16,7 +16,7 @@ body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:42
 <main class="container-fluid py-3" style="max-width:1500px">
 <header class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3"><div><a href="/" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Dashboard</a><h1 class="h3 mt-2">Routing Designer</h1><p class="muted mb-0">Device-Signale mit MQTT-Topics verbinden. Keine Logikbausteine nötig.</p></div><div class="d-flex gap-2"><button class="btn btn-outline-info" id="migration-preview"><i class="bi bi-arrow-left-right"></i> Bestehende Routen migrieren</button><button class="btn btn-outline-secondary" id="reload">Verwerfen</button><button class="btn btn-primary" id="save">Änderungen aktivieren</button></div></header>
 <div id="notice" role="status" class="small mb-3"></div><div id="focus-bar" class="alert alert-info py-2" hidden><span id="focus-label"></span> <button class="btn btn-sm btn-outline-primary ms-2" id="clear-focus">Alle Devices anzeigen</button></div>
-<section id="migration-panel" class="card mb-3" hidden><div class="card-header d-flex justify-content-between"><strong>Migration bestehender GA-Routen</strong><button class="btn-close" id="migration-close" aria-label="Schließen"></button></div><div class="card-body"><p class="small text-muted">Eindeutig zuordenbare Routen werden angeboten. Bestehende Wertumwandlungen werden übernommen. Die bisherigen Einstellungen bleiben als Rückfalloption erhalten.</p><div id="migration-list"></div><div id="migration-skipped" class="small text-muted mt-2"></div><button class="btn btn-primary mt-3" id="migration-confirm">Ausgewählte Routen migrieren</button></div></section>
+<section id="migration-panel" class="card mb-3" hidden><div class="card-header d-flex justify-content-between"><strong>Migration bestehender GA-Routen</strong><button class="btn-close" id="migration-close" aria-label="Schließen"></button></div><div class="card-body"><p class="small text-muted">Eindeutig zuordenbare Routen werden angeboten. Bestehende Wertumwandlungen werden übernommen. Die bisherigen Einstellungen bleiben als Rückfalloption erhalten.</p><div id="migration-list"></div><div id="migration-skipped" class="small text-muted mt-2"></div><hr><div class="d-flex justify-content-between align-items-center"><strong class="small">Alte Routings bereinigen</strong><button type="button" class="btn btn-sm btn-outline-secondary" id="load-legacy">Alte Routings anzeigen</button></div><div id="legacy-list" class="mt-2"></div><button type="button" class="btn btn-sm btn-outline-danger mt-2" id="delete-legacy" disabled>Ausgewählte alte Routings löschen</button><button class="btn btn-primary mt-3" id="migration-confirm">Ausgewählte Routen migrieren</button></div></section>
 <div class="row g-3"><div class="col-12 col-xl-9">
 <div class="d-flex justify-content-between align-items-center mb-2"><h2 class="h6 m-0">Signalübersicht</h2><span class="small muted">Zuerst Quelle, dann Ziel anklicken</span></div>
 <div class="workspace" id="workspace"><svg id="links" class="links" aria-hidden="true"></svg><div id="aligned-routes" class="p-3"></div><div class="lanes"><section id="devices"><h2 class="h6 mb-3"><i class="bi bi-house"></i> Devices</h2></section><section id="mqtt"><h2 class="h6 mb-3"><i class="bi bi-broadcast"></i> MQTT-Endpunkte</h2></section></div></div>
@@ -207,6 +207,26 @@ $('migration-preview').onclick=async()=>{
   $('migration-list').innerHTML=migration.candidates.length?migration.candidates.map(c=>'<label class="d-block border-bottom py-2"><input class="form-check-input me-2 migration-check" type="checkbox" value="'+esc(c.key)+'" checked> '+esc(c.deviceName)+' · '+esc(c.signal)+' ↔ '+esc(c.topic)+(c.suggestedDevice?' <span class="badge text-bg-info">Sonos: '+esc(c.suggestedDevice.name)+'</span>':'')+(c.valueMap?' <span class="badge text-bg-secondary">Value Map</span>':'')+' <span class="text-muted">('+esc(c.direction)+')</span></label>').join(''):'<p>Keine automatisch migrierbaren Routen gefunden.</p>';
   $('migration-skipped').textContent=migration.skipped.length?migration.skipped.length+' nicht automatisch migrierbar: '+migration.skipped.map(x=>x.address+' → '+x.topic+' ('+x.reason+')').join('; '):'';
   $('migration-confirm').disabled=!migration.candidates.length;
+ }catch(e){notice(e.message,true)}
+};
+$('load-legacy').onclick=async()=>{
+ try{
+  const r=await fetch('/api/groupaddresses');if(!r.ok)throw Error('Gruppenadressen nicht erreichbar');
+  const gas=await r.json();
+  const rows=gas.flatMap(g=>(g.routes||[]).filter(x=>x.mqttTopic).map(x=>({address:g.address,topic:x.mqttTopic})));
+  $('legacy-list').innerHTML=rows.length?rows.map(x=>'<label class="d-block small border-bottom py-2"><input type="checkbox" class="form-check-input me-2 legacy-check" data-address="'+esc(x.address)+'" data-topic="'+esc(x.topic)+'"> '+esc(x.address)+' → '+esc(x.topic)+'</label>').join(''):'<p class="small text-muted">Keine alten Routings vorhanden.</p>';
+  $('delete-legacy').disabled=!rows.length;
+ }catch(e){notice(e.message,true)}
+};
+$('delete-legacy').onclick=async()=>{
+ const routes=[...document.querySelectorAll('.legacy-check:checked')].map(el=>({address:el.dataset.address,topic:el.dataset.topic}));
+ if(!routes.length){notice('Bitte mindestens ein altes Routing auswählen.',true);return}
+ if(!confirm(routes.length+' alte Routings dauerhaft löschen? Bereits migrierte Verbindungen bleiben im Designer erhalten. Nicht migrierte Routings verlieren ihre Funktion.'))return;
+ try{
+  const r=await fetch('/api/routing/legacy-cleanup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({routes})});
+  const data=await r.json();if(!r.ok)throw Error(data.error||'Löschen fehlgeschlagen');
+  await load();await $('load-legacy').onclick();
+  notice(data.deleted+' alte Routings gelöscht. Verbindungen im Designer bleiben erhalten.');
  }catch(e){notice(e.message,true)}
 };
 $('migration-close').onclick=()=>{$('migration-panel').hidden=true};
