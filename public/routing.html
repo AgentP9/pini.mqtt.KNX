@@ -5,14 +5,14 @@
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet"><script src="/socket.io/socket.io.js"></script>
 <style>
 body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:420px;background:var(--bs-body-bg);border:1px solid var(--bs-border-color);border-radius:1rem;overflow:auto}.lanes{display:grid;grid-template-columns:minmax(230px,1fr) minmax(230px,1fr);gap:12%;padding:1.5rem;position:relative;z-index:2}.node{background:var(--bs-body-bg);border:1px solid var(--bs-border-color);border-radius:.8rem;padding:.75rem;margin-bottom:.75rem;box-shadow:0 2px 8px #0001}.node h3{font-size:1rem;margin:0 0 .5rem}.signal{display:flex;align-items:center;justify-content:space-between;gap:.5rem;border-top:1px solid var(--bs-border-color);padding:.4rem 0;font-size:.85rem}.signal button{white-space:nowrap}.signal button.selected{background:var(--bs-primary);color:white}.links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}.muted{color:var(--bs-secondary-color)}@media(max-width:650px){.lanes{gap:1rem;grid-template-columns:minmax(170px,1fr) minmax(170px,1fr);padding:.7rem}.node{padding:.5rem}.signal{flex-wrap:wrap}}
-.aligned-route{display:grid;grid-template-columns:minmax(180px,1fr) minmax(150px,.9fr) minmax(180px,1fr);gap:1rem;align-items:center;border-bottom:1px solid var(--bs-border-color);padding:1rem 0}.aligned-route .node{margin:0}.transform-chip{display:block;text-align:center;font-size:.8rem;white-space:normal;overflow-wrap:anywhere}.aligned-route .arrow{text-align:center;color:var(--bs-primary)}@media(max-width:700px){.aligned-route{gap:.4rem;grid-template-columns:minmax(90px,1fr) minmax(90px,1fr) minmax(90px,1fr)}.aligned-route .node{padding:.4rem}}</style></head><body>
+.aligned-route{display:grid;grid-template-columns:minmax(180px,1fr) minmax(150px,.9fr) minmax(180px,1fr);gap:1rem;align-items:center;border-bottom:1px solid var(--bs-border-color);padding:1rem 0}.aligned-route .node{margin:0}.transform-chip{display:block;text-align:center;font-size:.8rem;white-space:normal;overflow-wrap:anywhere}.aligned-route .arrow{text-align:center;color:var(--bs-primary)}@media(max-width:700px){.aligned-route{gap:.4rem;grid-template-columns:minmax(90px,1fr) minmax(90px,1fr) minmax(90px,1fr)}.aligned-route .node{padding:.4rem}}.workspace{overflow:auto}.lanes{display:grid;grid-template-columns:minmax(230px,1fr) minmax(230px,1fr);gap:16%;padding:1.5rem;position:relative;z-index:2;align-items:start}.node{position:relative}.node h3{min-height:1.5rem}.signal{min-height:43px}.links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3;overflow:visible}.connection-label{font-size:12px;fill:var(--bs-body-color);paint-order:stroke;stroke:var(--bs-body-bg);stroke-width:5px;stroke-linejoin:round}.connection-path{fill:none;stroke:var(--bs-primary);stroke-width:2.5;opacity:.8}.connection-path.inactive{stroke:var(--bs-secondary-color);stroke-dasharray:6 5;opacity:.55}.route-transform{position:absolute;z-index:4;transform:translate(-50%,-50%);font-size:.73rem;max-width:190px;white-space:normal;overflow-wrap:anywhere;box-shadow:0 1px 4px #0002}.route-transform.inactive{opacity:.65}</style></head><body>
 <main class="container-fluid py-3" style="max-width:1500px">
 <header class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3"><div><a href="/" class="text-decoration-none"><i class="bi bi-arrow-left"></i> Dashboard</a><h1 class="h3 mt-2">Routing Designer</h1><p class="muted mb-0">Device-Signale mit MQTT-Topics verbinden. Keine Logikbausteine nötig.</p></div><div class="d-flex gap-2"><button class="btn btn-outline-info" id="migration-preview"><i class="bi bi-arrow-left-right"></i> Bestehende Routen migrieren</button><button class="btn btn-outline-secondary" id="reload">Verwerfen</button><button class="btn btn-primary" id="save">Änderungen aktivieren</button></div></header>
 <div id="notice" role="status" class="small mb-3"></div><div id="focus-bar" class="alert alert-info py-2" hidden><span id="focus-label"></span> <button class="btn btn-sm btn-outline-primary ms-2" id="clear-focus">Alle Devices anzeigen</button></div>
 <section id="migration-panel" class="card mb-3" hidden><div class="card-header d-flex justify-content-between"><strong>Migration bestehender GA-Routen</strong><button class="btn-close" id="migration-close" aria-label="Schließen"></button></div><div class="card-body"><p class="small text-muted">Eindeutig zuordenbare Routen werden angeboten. Bestehende Wertumwandlungen werden übernommen. Die bisherigen Einstellungen bleiben als Rückfalloption erhalten.</p><div id="migration-list"></div><div id="migration-skipped" class="small text-muted mt-2"></div><button class="btn btn-primary mt-3" id="migration-confirm">Ausgewählte Routen migrieren</button></div></section>
 <div class="row g-3"><div class="col-12 col-xl-9">
 <div class="d-flex justify-content-between align-items-center mb-2"><h2 class="h6 m-0">Signalübersicht</h2><span class="small muted">Zuerst Quelle, dann Ziel anklicken</span></div>
-<div class="workspace" id="workspace"><div id="aligned-routes" class="p-3"></div><div class="lanes"><section id="devices"><h2 class="h6 mb-3"><i class="bi bi-house"></i> Devices</h2></section><section id="mqtt"><h2 class="h6 mb-3"><i class="bi bi-broadcast"></i> MQTT-Endpunkte</h2></section></div></div>
+<div class="workspace" id="workspace"><div class="lanes"><section id="devices"><h2 class="h6 mb-3"><i class="bi bi-house"></i> Devices</h2></section><section id="mqtt"><h2 class="h6 mb-3"><i class="bi bi-broadcast"></i> MQTT-Endpunkte</h2></section></div></div>
 </div><aside class="col-12 col-xl-3">
 <div class="card mb-3"><div class="card-header fw-semibold">MQTT-Device anlegen</div><form class="card-body" id="mqtt-device-form">
 <label class="form-label" for="mqtt-device-name">Device-Name</label><input class="form-control mb-2" id="mqtt-device-name" required maxlength="120" placeholder="Sonos Esszimmer">
@@ -58,28 +58,72 @@ function transformLabel(r){
  return Object.entries(r.transform.values||{}).map(([k,v])=>k+' → '+v).join(' · ')||'Wertetabelle (leer)';
 }
 function render(){
- const list=signals(),eps=endpointSignals(),all=[...list,...eps];
+ const list=signals(),eps=endpointSignals();
  const focused=graph.routes.filter(isFocused);
  $('focus-bar').hidden=!focusAddress&&!focusRoute;
  $('focus-label').textContent=focusAddress?'Routing für Gruppenadresse '+focusAddress:'Ausgewählte Verbindung '+(focusRoute||'');
- $('aligned-routes').innerHTML=focused.length?'<h2 class="h6 mb-2">Verbindungen auf Augenhöhe</h2>'+focused.map(r=>{
-   const a=all.find(x=>signalKey(x.ref)===signalKey(r.from));
-   const b=all.find(x=>signalKey(x.ref)===signalKey(r.to));
-   const left=r.from.type==='device'?a:b,right=r.from.type==='device'?b:a;
-   const label=x=>'<div class="node"><strong>'+esc(x?.name?.split(' · ')[0]||'Fehlender Endpunkt')+'</strong><div class="small">'+esc(x?.name?.split(' · ').slice(1).join(' · ')||'')+'</div></div>';
-   return '<div class="aligned-route" data-route="'+esc(r.id)+'">'+label(left)+'<div class="text-center"><div class="arrow"><i class="bi bi-arrow-'+(r.from.type==='device'?'right':'left')+'"></i></div><button class="btn btn-sm btn-outline-primary transform-chip w-100 edit-transform" data-id="'+esc(r.id)+'" title="Wertumwandlung bearbeiten">'+esc(transformLabel(r))+' <i class="bi bi-pencil"></i></button></div>'+label(right)+'</div>';
- }).join(''):'';
  const visibleDevices=focusAddress||focusRoute?devices.filter(d=>focused.some(r=>[r.from,r.to].some(ref=>ref.type==='device'&&ref.id===d.id))):devices;
  const visibleMqttIds=new Set(focused.flatMap(r=>[r.from,r.to].filter(ref=>ref.type!=='device').map(ref=>ref.id)));
- $('devices').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-house"></i> KNX-Devices</h2>'+visibleDevices.map(d=>{
+ const deviceCards=visibleDevices.map(d=>{
   const own=list.filter(x=>x.ref.id===d.id);
-  return '<div class="node"><h3>'+esc(d.name)+'</h3>'+own.map(signalHtml).join('')+'</div>';
- }).join('');
- $('mqtt').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-broadcast"></i> MQTT-Devices und Endpunkte</h2>'+
- (graph.mqttDevices||[]).filter(d=>!focusAddress&&!focusRoute||visibleMqttIds.has(d.id)).map(d=>'<div class="node"><h3><i class="bi bi-speaker"></i> '+esc(d.name)+'</h3>'+eps.filter(x=>x.ref.type==='mqttDevice'&&x.ref.id===d.id).map(signalHtml).join('')+'<button class="btn btn-sm btn-link text-danger delete-mqtt-device" data-id="'+esc(d.id)+'">Entfernen</button></div>').join('')+
- eps.filter(x=>x.ref.type==='mqtt'&&(!focusAddress&&!focusRoute||visibleMqttIds.has(x.ref.id))).map(x=>'<div class="node"><h3>'+esc(graph.endpoints.find(e=>e.id===x.ref.id).name)+'</h3>'+signalHtml(x)+'<button class="btn btn-sm btn-link text-danger delete-endpoint" data-id="'+esc(x.ref.id)+'">Entfernen</button></div>').join('');
+  return {id:d.id,html:'<div class="node" data-node="device:'+esc(d.id)+'"><h3>'+esc(d.name)+'</h3>'+own.map(signalHtml).join('')+'</div>'};
+ });
+ const mqttCards=[
+ ...(graph.mqttDevices||[]).filter(d=>!focusAddress&&!focusRoute||visibleMqttIds.has(d.id)).map(d=>({id:d.id,html:'<div class="node" data-node="mqttDevice:'+esc(d.id)+'"><h3><i class="bi bi-speaker"></i> '+esc(d.name)+'</h3>'+eps.filter(x=>x.ref.type==='mqttDevice'&&x.ref.id===d.id).map(signalHtml).join('')+'<button class="btn btn-sm btn-link text-danger delete-mqtt-device" data-id="'+esc(d.id)+'">Entfernen</button></div>'})),
+ ...eps.filter(x=>x.ref.type==='mqtt'&&(!focusAddress&&!focusRoute||visibleMqttIds.has(x.ref.id))).map(x=>({id:x.ref.id,html:'<div class="node" data-node="mqtt:'+esc(x.ref.id)+'"><h3>'+esc(graph.endpoints.find(e=>e.id===x.ref.id).name)+'</h3>'+signalHtml(x)+'<button class="btn btn-sm btn-link text-danger delete-endpoint" data-id="'+esc(x.ref.id)+'">Entfernen</button></div>'}))
+ ];
+ // Order the right-hand cards by their connected KNX device, so related
+ // devices start on the same horizontal level instead of independent lists.
+ const order=new Map(deviceCards.map((d,i)=>[d.id,i]));
+ mqttCards.sort((a,b)=>{
+  const rank=c=>Math.min(Infinity,...focused.filter(r=>[r.from,r.to].some(x=>x.id===c.id&&x.type!=='device')).flatMap(r=>[r.from,r.to].filter(x=>x.type==='device').map(x=>order.get(x.id)??Infinity)));
+  return rank(a)-rank(b);
+ });
+ $('devices').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-house"></i> KNX-Devices</h2>'+deviceCards.map(c=>c.html).join('');
+ $('mqtt').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-broadcast"></i> MQTT-Devices und Endpunkte</h2>'+mqttCards.map(c=>c.html).join('');
  $('signal-device').innerHTML=(graph.mqttDevices||[]).map(d=>'<option value="'+esc(d.id)+'">'+esc(d.name)+'</option>').join('');
  renderRoutes();
+ requestAnimationFrame(()=>{alignNodes(focused);drawLinks(focused)});
+}
+function alignNodes(routes){
+ // Add spacing only on the right lane, keeping the original card layout.
+ const root=$('workspace'),right=$('mqtt');
+ right.querySelectorAll('.node').forEach(n=>n.style.marginTop='');
+ const knx=signals();
+ for(const node of right.querySelectorAll('.node')){
+  const ref=node.dataset.node;
+  const connected=routes.filter(r=>[r.from,r.to].some(x=>x.type+':'+x.id===ref));
+  const targets=connected.flatMap(r=>[r.from,r.to].filter(x=>x.type==='device').map(x=>knx.find(y=>signalKey(y.ref)===signalKey(x))));
+  const top=Math.min(Infinity,...targets.filter(Boolean).map(x=>{const btn=[...document.querySelectorAll('#devices .signal-btn')].find(el=>el.dataset.key===signalKey(x.ref));return btn?btn.getBoundingClientRect().top:Infinity}));
+  if(!Number.isFinite(top))continue;
+  const own=node.querySelector('.signal-btn');
+  if(!own)continue;
+  const delta=top-own.getBoundingClientRect().top;
+  if(delta>0)node.style.marginTop=Math.min(delta,600)+'px';
+ }
+}
+function drawLinks(routes=graph.routes.filter(isFocused)){
+ const root=$('workspace'),svg=$('links');
+ root.querySelectorAll('.route-transform').forEach(x=>x.remove());
+ const rect=root.getBoundingClientRect(),width=root.scrollWidth,height=root.scrollHeight;
+ svg.setAttribute('viewBox','0 0 '+width+' '+height);svg.setAttribute('width',width);svg.setAttribute('height',height);
+ svg.innerHTML='';
+ const find=ref=>[...root.querySelectorAll('.signal-btn')].find(el=>el.dataset.key===signalKey(ref));
+ for(const r of routes){
+  const a=find(r.from),b=find(r.to);if(!a||!b)continue;
+  const p=a.getBoundingClientRect(),q=b.getBoundingClientRect();
+  const fromDevice=r.from.type==='device',left=fromDevice?p:q,right=fromDevice?q:p;
+  const x1=left.right-rect.left+root.scrollLeft,y1=left.top+left.height/2-rect.top+root.scrollTop;
+  const x2=right.left-rect.left+root.scrollLeft,y2=right.top+right.height/2-rect.top+root.scrollTop;
+  const mid=(x1+x2)/2,ns='http://www.w3.org/2000/svg';
+  const path=document.createElementNS(ns,'path');
+  path.setAttribute('d','M '+x1+' '+y1+' C '+mid+' '+y1+', '+mid+' '+y2+', '+x2+' '+y2);
+  path.setAttribute('class','connection-path'+(r.enabled?'':' inactive'));
+  svg.appendChild(path);
+  const chip=document.createElement('button');chip.type='button';chip.className='btn btn-sm btn-light border route-transform edit-transform'+(r.enabled?'':' inactive');
+  chip.dataset.id=r.id;chip.textContent=transformLabel(r);chip.title='Wertumwandlung bearbeiten';
+  chip.style.left=mid+'px';chip.style.top=((y1+y2)/2)+'px';root.appendChild(chip);
+ }
 }
 $('clear-focus').onclick=()=>{focusAddress=null;focusRoute=null;history.replaceState(null,'',location.pathname);render()};
 function renderRoutes(){
