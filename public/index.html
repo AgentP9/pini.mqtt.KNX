@@ -43,9 +43,13 @@
     .device-card details { border-top: 1px solid var(--bs-border-color); }
     .device-card summary { cursor: pointer; padding: .7rem 1rem; color: var(--bs-secondary-color); font-size: .85rem; }
     .device-card summary:hover { background: var(--bs-tertiary-bg); }
-    .device-write { border-top: 1px solid var(--bs-border-color); padding-top: .85rem; margin-top: .85rem; }
-    .device-write .form-control { max-width: 8rem; }
-    .device-write-status { font-size: .78rem; min-height: 1.2rem; }
+    .device-metric .metric-header { display: flex; align-items: center; justify-content: space-between; gap: .4rem; min-height: 1.8rem; }
+    .device-setpoint-edit { padding: .2rem .4rem; line-height: 1; }
+    .device-setpoint-form[hidden] { display: none !important; }
+    .device-setpoint-form { margin-top: .65rem; }
+    .device-setpoint-form .form-control { min-width: 0; }
+    .device-write-status { font-size: .75rem; min-height: 1rem; overflow-wrap: anywhere; }
+    .device-setpoint-actions { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; }
     .device-card .device-detail { display: flex; gap: .5rem; align-items: center; justify-content: space-between; padding: .45rem 1rem; border-top: 1px solid var(--bs-border-color-translucent); font-size: .82rem; }
     .device-card .device-detail code { font-size: .8rem; }
     .view-tabs .nav-link { cursor: pointer; }
@@ -814,9 +818,10 @@
     // Preserve expanded technical details across live value refreshes.
     const expanded = new Set([...target.querySelectorAll('details[open][data-device-id]')].map(el => el.dataset.deviceId));
     const writeInputs = new Map([...target.querySelectorAll('.device-setpoint-input')].map(el => [el.dataset.id, el.value]));
+    const openSetpointEditors = new Set([...target.querySelectorAll('.device-setpoint-form:not([hidden])')].map(el => el.dataset.id));
     const writeMessages = new Map([...target.querySelectorAll('.device-write-status')].map(el => [el.dataset.id, { text: el.textContent, className: el.className }]));
     const gaByAddress = new Map(configuredGAs.map(ga => [ga.address, ga]));
-    const metric = (d, key, label) => {
+    const metric = (d, key, label, actions = '') => {
       const address = d.addresses && d.addresses[key];
       const ga = address ? gaByAddress.get(address) : null;
       const pending = address && pendingGAValues.has(address);
@@ -824,7 +829,7 @@
       const numeric = raw !== undefined && raw !== null && raw !== '' ? Number(raw) : NaN;
       const value = Number.isFinite(numeric) ? numeric.toLocaleString(undefined, { maximumFractionDigits: 1 }) + ' °C' : '–';
       const hint = !address ? 'Not assigned' : !ga ? 'Address missing' : pending ? address + ' · sent, not confirmed' : !Number.isFinite(numeric) ? 'No live value' : address;
-      return `<div class="device-metric"><div class="metric-label">${escHtml(label)}</div><div class="metric-value">${escHtml(value)}</div><div class="small text-muted mt-2">${escHtml(hint)}</div></div>`;
+      return `<div class="device-metric"><div class="metric-header"><div class="metric-label mb-0">${escHtml(label)}</div>${actions}</div><div class="metric-value">${escHtml(value)}</div><div class="small text-muted mt-2">${escHtml(hint)}</div></div>`;
     };
     target.innerHTML = visible.map(d => {
       const tpl = deviceTemplate(d.templateId);
@@ -843,15 +848,17 @@
       const defaultSetpoint = Number.isFinite(Number(setpointRaw)) && setpointRaw !== undefined && setpointRaw !== null && setpointRaw !== '' ? Number(setpointRaw).toFixed(1) : '21.0';
       const writeInput = writeInputs.has(d.id) ? writeInputs.get(d.id) : defaultSetpoint;
       const previousMessage = writeMessages.get(d.id);
-      const writeControl = isHeating ? `<form class="device-write device-setpoint-form" data-id="${escHtml(d.id)}">
-        <label class="form-label small fw-semibold" for="setpoint-${escHtml(d.id)}">Test KNX setpoint write</label>
-        <div class="d-flex flex-wrap gap-2 align-items-center">
-          <div class="input-group input-group-sm" style="width: 9rem"><input type="number" id="setpoint-${escHtml(d.id)}" class="form-control device-setpoint-input" data-id="${escHtml(d.id)}" value="${escHtml(writeInput)}" min="5" max="35" step="0.1" required ${writable ? '' : 'disabled'}><span class="input-group-text">°C</span></div>
-          <button type="submit" class="btn btn-sm btn-outline-primary" ${writable ? '' : 'disabled'}><i class="bi bi-send me-1"></i>Send to KNX</button>
+      const editButton = writable ? `<button type="button" class="btn btn-sm btn-outline-secondary device-setpoint-edit" data-id="${escHtml(d.id)}" aria-label="Edit setpoint for ${escHtml(d.name)}" aria-expanded="${openSetpointEditors.has(d.id)}" title="Write new setpoint to KNX"><i class="bi bi-pencil"></i></button>` : '';
+      const writeControl = isHeating && writable ? `<form class="device-setpoint-form" data-id="${escHtml(d.id)}" ${openSetpointEditors.has(d.id) ? '' : 'hidden'}>
+        <label class="form-label small fw-semibold" for="setpoint-${escHtml(d.id)}">New setpoint</label>
+        <div class="device-setpoint-actions">
+          <div class="input-group input-group-sm" style="width: 8.5rem"><input type="number" id="setpoint-${escHtml(d.id)}" class="form-control device-setpoint-input" data-id="${escHtml(d.id)}" value="${escHtml(writeInput)}" min="5" max="35" step="0.1" required><span class="input-group-text">°C</span></div>
+          <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-send me-1"></i>Send</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary device-setpoint-cancel" data-id="${escHtml(d.id)}">Cancel</button>
         </div>
-        <div class="${previousMessage ? escHtml(previousMessage.className) : 'device-write-status text-muted mt-2'}" data-id="${escHtml(d.id)}" role="status">${previousMessage ? escHtml(previousMessage.text) : (writable ? 'Sends a KNX write; device confirmation is not guaranteed.' : 'Setpoint address is not configured for writing.')}</div>
       </form>` : '';
-      const metrics = isHeating ? `<div class="device-metrics">${metric(d, 'temperature', 'Current temperature')}${metric(d, 'setpoint', 'Setpoint')}</div>` : '';
+      const writeStatus = isHeating && writable ? `<div class="${previousMessage ? escHtml(previousMessage.className) : 'device-write-status text-muted mt-2'}" data-id="${escHtml(d.id)}" role="status">${previousMessage ? escHtml(previousMessage.text) : ''}</div>` : '';
+      const metrics = isHeating ? `<div class="device-metrics">${metric(d, 'temperature', 'Current temperature')}<div class="device-metric">${metric(d, 'setpoint', 'Setpoint', editButton).replace(/^<div class="device-metric">|<\\/div>$/g, '')}${writeControl}${writeStatus}</div></div>` : '';
       return `<div class="col-12 col-xl-6"><article class="card device-card h-100">
         <div class="card-body">
           <div class="d-flex align-items-start gap-3 mb-3">
@@ -863,7 +870,6 @@
             </div>
           </div>
           ${metrics}
-          ${writeControl}
           <div class="mt-3">${status}</div>
         </div>
         <details data-device-id="${escHtml(d.id)}" ${expanded.has(d.id) ? 'open' : ''}><summary>Technical details · ${Object.keys(d.addresses || {}).length} group addresses</summary>${detailRows || '<div class="px-3 pb-3 text-muted small">No addresses assigned</div>'}</details>
@@ -894,7 +900,7 @@
     e.preventDefault();
     const input = form.querySelector('.device-setpoint-input');
     const button = form.querySelector('button[type="submit"]');
-    const status = form.querySelector('.device-write-status');
+    const status = form.parentElement.querySelector('.device-write-status');
     const value = Number(input.value);
     if (!input.value.trim() || !Number.isFinite(value) || value < 5 || value > 35 || Math.abs(value * 10 - Math.round(value * 10)) > 1e-7) {
       status.textContent = 'Enter a temperature between 5 and 35 °C in 0.1 °C steps.';
@@ -912,6 +918,9 @@
       if (!response.ok) throw new Error(result.error || 'Write failed');
       status.textContent = 'Write submitted to KNX. Check bus monitor or device feedback for confirmation.';
       status.className = 'device-write-status text-success mt-2';
+      form.hidden = true;
+      const editButton = form.parentElement.querySelector('.device-setpoint-edit');
+      if (editButton) editButton.setAttribute('aria-expanded', 'false');
     } catch (err) {
       status.textContent = 'Write failed: ' + err.message;
       status.className = 'device-write-status text-danger mt-2';
@@ -920,6 +929,18 @@
   document.getElementById('btn-add-device').addEventListener('click', () => openDeviceEditor());
   deviceTemplateSelect.addEventListener('change', () => renderDeviceFields());
   document.getElementById('device-list').addEventListener('click', e => {
+    const setpointEdit = e.target.closest('.device-setpoint-edit');
+    const setpointCancel = e.target.closest('.device-setpoint-cancel');
+    if (setpointEdit || setpointCancel) {
+      const button = setpointEdit || setpointCancel;
+      const tile = button.closest('.device-metric');
+      const form = tile.querySelector('.device-setpoint-form');
+      form.hidden = setpointCancel ? true : !form.hidden;
+      const pencil = tile.querySelector('.device-setpoint-edit');
+      if (pencil) pencil.setAttribute('aria-expanded', String(!form.hidden));
+      if (!form.hidden) form.querySelector('input').focus();
+      return;
+    }
     const edit = e.target.closest('.btn-edit-device'), del = e.target.closest('.btn-delete-device');
     if (edit) openDeviceEditor(devices.find(d => d.id === edit.dataset.id));
     if (del && confirm('Delete device grouping? Group addresses will remain untouched.')) {
