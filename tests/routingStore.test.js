@@ -49,3 +49,32 @@ test('rejects incompatible payload types and legacy route collisions', () => {
     assert.throws(() => f.store.save({ endpoints: [f.endpoint], routes: [{ id: 'r1', from, to, enabled: true }] }), /legacy/);
   } finally { f.cleanup(); }
 });
+
+test('migration previews both directions, preserves legacy config and avoids duplicate migration', () => {
+  const f = fixture();
+  try {
+    f.gas[0].routes = [{ mqttTopic: 'home/dining/set' }];
+    f.gas[1].routes = [{ mqttTopic: 'home/dining/status' }];
+    const original = JSON.stringify(f.gas);
+    const preview = f.store.migrationPreview();
+    assert.equal(preview.candidates.length, 3);
+    assert.equal(preview.skipped.length, 0);
+    f.store.migrate(preview.candidates.map(c => c.key));
+    assert.equal(f.store.routes.length, 3);
+    assert.equal(JSON.stringify(f.gas), original);
+    assert.equal(f.store.migrationPreview().candidates.length, 0);
+    assert.equal(f.store.migrated('9/1/0', 'home/dining/set', 'mqtt2knx'), true);
+    assert.equal(f.store.migrated('9/1/1', 'home/dining/status', 'knx2mqtt'), true);
+    assert.throws(() => f.store.migrate(preview.candidates.map(c => c.key)), /outdated/);
+  } finally { f.cleanup(); }
+});
+test('migration skips mappings and repeat intervals instead of silently changing semantics', () => {
+  const f = fixture();
+  try {
+    f.gas[0].routes = [{ mqttTopic: 'home/dining/set', valueMap: { '1': 'ON' } }];
+    f.gas[1].routes = [{ mqttTopic: 'home/dining/status', repeatInterval: 60 }];
+    const preview = f.store.migrationPreview();
+    assert.equal(preview.candidates.length, 0);
+    assert.equal(preview.skipped.length, 3);
+  } finally { f.cleanup(); }
+});
