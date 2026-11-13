@@ -197,7 +197,7 @@ class RoutingStore {
         if (r.from.type !== 'device') throw Error('Transformations currently require a KNX source');
         if (r.transform.kind === 'map') {
           if (!r.transform.values || typeof r.transform.values !== 'object' || Array.isArray(r.transform.values) ||
-            Object.keys(r.transform.values).length > 30 || !Object.values(r.transform.values).every(v => ['string','number','boolean'].includes(typeof v))) throw Error('Invalid value map');
+            Object.keys(r.transform.values).length > 30 || !Object.values(r.transform.values).every(v => ['string','number','boolean'].includes(typeof v)) || (Object.hasOwn(r.transform,'defaultValue') && !['string','number','boolean'].includes(typeof r.transform.defaultValue))) throw Error('Invalid value map');
         } else if (r.transform.kind === 'constant') {
           if (!['string','number','boolean'].includes(typeof r.transform.value)) throw Error('Invalid constant');
         } else throw Error('Unsupported transformation');
