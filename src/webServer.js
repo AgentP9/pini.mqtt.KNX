@@ -78,6 +78,27 @@ class WebServer {
       } });
     });
 
+    // Switch command is distinct from feedback; never treat a send as an actuator status.
+    this.app.post('/api/devices/:id/switch', (req, res) => {
+      const device = this.deviceStore.devices.find(d => d.id === req.params.id);
+      if (!device) return res.status(404).json({ error: 'Device not found' });
+      if (device.templateId !== 'switch') return res.status(400).json({ error: 'Not a switch device' });
+      const address = device.addresses && device.addresses.command;
+      const ga = this.groupAddresses.find(g => g.address === address);
+      if (!ga || ga.dpt !== '1.001' || !['both', 'mqtt2knx'].includes(ga.direction || 'both')) {
+        return res.status(409).json({ error: 'Switch command GA missing or not writable as DPT 1.001' });
+      }
+      if (typeof req.body?.value !== 'boolean') return res.status(400).json({ error: 'Switch value must be boolean' });
+      if (this._status.KNX !== true) return res.status(503).json({ error: 'KNX disconnected' });
+      if (this.eventEmitter.listenerCount('device-switch-write') !== 1) return res.status(503).json({ error: 'KNX write handler unavailable' });
+      let answered = false;
+      this.eventEmitter.emit('device-switch-write', { address, value: req.body.value, respond: result => {
+        if (answered) return;
+        answered = true;
+        res.status(result.status || (result.ok ? 202 : 502)).json(result);
+      } });
+    });
+
     // ── REST: group addresses ──────────────────────────────────────────────────
 
     // GET all configured group addresses
