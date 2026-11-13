@@ -57,7 +57,7 @@ class RoutingStore {
       if (r.from.type === 'mqtt') {
         if (this.groupAddresses.some(g => (g.routes || []).some(legacy => legacy.mqttTopic === src.topic))) throw Error('MQTT topic is already handled by a legacy route');
       } else {
-        if ((src.ga.routes || []).some(legacy => legacy.mqttTopic === dst.topic)) throw Error('Route already exists in legacy configuration');
+        if (this.groupAddresses.some(g => (g.routes || []).some(legacy => legacy.mqttTopic === dst.topic))) throw Error('MQTT topic already used by a legacy route');
       }
     }
   }
