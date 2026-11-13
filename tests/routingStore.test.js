@@ -111,3 +111,21 @@ test('validates standalone MQTT device signals and transformed routes',()=>{
    id:'r2',from:{type:'mqttDevice',id:'sonos1',signal:'control'},to:{type:'device',id:'d1',signal:'command'},enabled:true}]}),/not readable/);
  } finally {f.cleanup();}
 });
+
+test('rejects duplicate topics across MQTT devices and standalone endpoints', () => {
+ const f=fixture();
+ try {
+  const signal={key:'control',label:'Control',topic:f.endpoint.topic,payloadType:'boolean',direction:'input'};
+  const md={id:'sonos1',name:'Sonos Dining',templateId:'sonos',signals:[signal]};
+  assert.throws(()=>f.store.save({endpoints:[f.endpoint],mqttDevices:[md],routes:[]}),/Invalid MQTT device signal/);
+  assert.throws(()=>f.store.save({endpoints:[],mqttDevices:[md,{...md,id:'sonos2',name:'Sonos Two'}],routes:[]}),/Invalid MQTT device signal/);
+ } finally { f.cleanup(); }
+});
+test('rejects forged legacy migration marker', () => {
+ const f=fixture();
+ try {
+  f.gas[0].routes=[{mqttTopic:'sonos/devices/Esszimmer/control'}];
+  const md={id:'sonos1',name:'Sonos Esszimmer',templateId:'sonos',signals:[{key:'control',label:'Control',topic:'sonos/devices/Esszimmer/control',payloadType:'text',direction:'input'}]};
+  assert.throws(()=>f.store.save({endpoints:[],mqttDevices:[md],routes:[{id:'r1',from:{type:'device',id:'d1',signal:'command'},to:{type:'mqttDevice',id:'sonos1',signal:'control'},enabled:true,transform:{kind:'map',values:{ON:'PLAY'}},legacyKey:'not-real'}]}),/Invalid legacy migration reference/);
+ } finally { f.cleanup(); }
+});
