@@ -511,8 +511,15 @@
       }
     }
     candidates.sort((a, b) => b.score - a.score);
-    // Avoid arbitrary suggestions when multiple templates are equally plausible.
-    return candidates.length && (candidates.length === 1 || candidates[0].score > candidates[1].score) ? candidates[0] : null;
+    // Sonos extends Switch with optional volume signals. Both templates can
+    // match the same command/status pair; prefer Sonos only for Sonos-like names
+    // or when the corresponding volume addresses exist.
+    const isSonos=/sonos/i.test(base)||configuredGAs.some(g=>/volume|lautstärke/i.test(g.name||'')&&gaBaseName(g.name).toLowerCase()===base.toLowerCase());
+    for(const candidate of candidates){
+      if(candidate.templateId===(isSonos?'sonos':'switch'))candidate.score+=1;
+    }
+    candidates.sort((a,b)=>b.score-a.score);
+    return candidates.length && (candidates.length===1||candidates[0].score>candidates[1].score)?candidates[0]:null;
   }
 
   function sortedGAs() {
