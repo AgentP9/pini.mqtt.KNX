@@ -40,8 +40,7 @@ class RoutingStore {
           if (planned.has(key)) continue;
           const info = { address: ga.address, topic, direction, key };
           let reason = '';
-          if (legacy.valueMap && Object.keys(legacy.valueMap).length) reason = 'Value mapping not yet supported';
-          else if (Number(legacy.repeatInterval) > 0) reason = 'Repeat interval not yet supported';
+          if (Number(legacy.repeatInterval) > 0) reason = 'Repeat interval not yet supported';
           else if (topic.startsWith('knx/')) reason = 'Reserved topic';
           const matches = [];
           for (const device of this.deviceStore.devices) {
@@ -54,7 +53,7 @@ class RoutingStore {
             }
           }
           if (!reason && matches.length !== 1) reason = matches.length ? 'Ambiguous device mapping' : 'No matching device signal';
-          if (!reason && used.has(topic) && !this.endpoints.some(e => e.topic === topic)) reason = 'Topic collision';
+          if (!reason && used.has(topic) && !this.endpoints.some(e => e.topic === topic) && !candidates.some(c => c.topic === topic)) reason = 'Topic collision';
           const type = ga.dpt?.startsWith('1.') ? 'boolean' : 'number';
           if (!reason && (!ga.dpt || (ga.dpt.startsWith('1.') === false && ga.dpt.startsWith('9.') === false))) reason = 'Unsupported DPT';
           if (!reason && direction === 'knx2mqtt' && dests.has('topic:' + topic)) reason = 'MQTT destination already used';
@@ -62,7 +61,8 @@ class RoutingStore {
           if (reason) skipped.push({ ...info, reason });
           else {
             const { device, obj } = matches[0];
-            candidates.push({ ...info, deviceId: device.id, deviceName: device.name, signal: obj.key, type });
+            candidates.push({ ...info, deviceId: device.id, deviceName: device.name, signal: obj.key, type, valueMap: legacy.valueMap || null,
+              suggestedDevice: /^sonos\/devices\/([^/]+)\//.test(topic) ? { templateId: 'sonos', name: topic.split('/')[2], baseTopic: topic.split('/').slice(0, 3).join('/') } : null });
             if (direction === 'knx2mqtt') dests.add('topic:' + topic);
             else dests.add('ga:' + ga.address);
             used.add(topic);
@@ -89,8 +89,10 @@ class RoutingStore {
       if (ep.payloadType !== c.type) throw Error('Existing MQTT endpoint has incompatible type');
       const deviceRef = { type: 'device', id: c.deviceId, signal: c.signal };
       const mqttRef = { type: 'mqtt', id: ep.id };
+      const transform = c.direction === 'knx2mqtt' && c.valueMap && Object.keys(c.valueMap).length ?
+        { kind: 'map', values: c.valueMap } : undefined;
       routes.push({ id: crypto.randomUUID(), from: c.direction === 'knx2mqtt' ? deviceRef : mqttRef,
-        to: c.direction === 'knx2mqtt' ? mqttRef : deviceRef, enabled: true, legacyKey: c.key });
+        to: c.direction === 'knx2mqtt' ? mqttRef : deviceRef, enabled: true, legacyKey: c.key, ...(transform ? { transform } : {}) });
     }
     return this.save({ endpoints, mqttDevices, routes });
   }
