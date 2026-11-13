@@ -15,6 +15,83 @@ class RoutingStore {
     this.validateAll(this.endpoints, this.routes);
   }
   list() { return { endpoints: this.endpoints, routes: this.routes }; }
+  legacyKey(address, topic, direction) { return JSON.stringify([address, topic, direction]); }
+  migrated(address, topic, direction) {
+    const key = this.legacyKey(address, topic, direction);
+    return this.routes.some(r => r.enabled && r.legacyKey === key);
+  }
+  migrationPreview() {
+    const candidates = [], skipped = [];
+    const planned = new Set(this.routes.map(r => r.legacyKey).filter(Boolean));
+    const used = new Set(this.endpoints.map(e => e.topic));
+    const dests = new Set(this.routes.map(r => {
+      try { const d = this.resolve(r.to, this.endpoints); return r.to.type === 'mqtt' ? 'topic:' + d.topic : 'ga:' + d.address; }
+      catch (_) { return ''; }
+    }));
+    for (const ga of this.groupAddresses) {
+      for (const legacy of ga.routes || []) {
+        const topic = legacy.mqttTopic;
+        if (!topic) continue;
+        const directions = ['both', 'knx2mqtt'].includes(ga.direction || 'both') ? ['knx2mqtt'] : [];
+        if (['both', 'mqtt2knx'].includes(ga.direction || 'both')) directions.push('mqtt2knx');
+        for (const direction of directions) {
+          const key = this.legacyKey(ga.address, topic, direction);
+          if (planned.has(key)) continue;
+          const info = { address: ga.address, topic, direction, key };
+          let reason = '';
+          if (legacy.valueMap && Object.keys(legacy.valueMap).length) reason = 'Value mapping not yet supported';
+          else if (Number(legacy.repeatInterval) > 0) reason = 'Repeat interval not yet supported';
+          else if (topic.startsWith('knx/')) reason = 'Reserved topic';
+          const matches = [];
+          for (const device of this.deviceStore.devices) {
+            const tpl = this.deviceStore.templates().find(t => t.id === device.templateId);
+            for (const obj of tpl?.objects || []) {
+              if (device.addresses?.[obj.key] !== ga.address) continue;
+              if (direction === 'mqtt2knx' && !['both','mqtt2knx'].includes(obj.direction || 'both')) continue;
+              if (direction === 'knx2mqtt' && !['both','knx2mqtt'].includes(obj.direction || 'both')) continue;
+              matches.push({ device, obj });
+            }
+          }
+          if (!reason && matches.length !== 1) reason = matches.length ? 'Ambiguous device mapping' : 'No matching device signal';
+          if (!reason && used.has(topic) && !this.endpoints.some(e => e.topic === topic)) reason = 'Topic collision';
+          const type = ga.dpt?.startsWith('1.') ? 'boolean' : 'number';
+          if (!reason && (!ga.dpt || (ga.dpt.startsWith('1.') === false && ga.dpt.startsWith('9.') === false))) reason = 'Unsupported DPT';
+          if (!reason && direction === 'knx2mqtt' && dests.has('topic:' + topic)) reason = 'MQTT destination already used';
+          if (!reason && direction === 'mqtt2knx' && dests.has('ga:' + ga.address)) reason = 'KNX destination already used';
+          if (reason) skipped.push({ ...info, reason });
+          else {
+            const { device, obj } = matches[0];
+            candidates.push({ ...info, deviceId: device.id, deviceName: device.name, signal: obj.key, type });
+            if (direction === 'knx2mqtt') dests.add('topic:' + topic);
+            else dests.add('ga:' + ga.address);
+            used.add(topic);
+          }
+        }
+      }
+    }
+    return { candidates, skipped };
+  }
+  migrate(keys) {
+    if (!Array.isArray(keys) || !keys.every(k => typeof k === 'string')) throw Error('Invalid migration selection');
+    const preview = this.migrationPreview();
+    const requested = new Set(keys);
+    if (requested.size !== keys.length || preview.candidates.filter(c => requested.has(c.key)).length !== keys.length) throw Error('Migration preview is outdated; refresh first');
+    const endpoints = this.endpoints.map(e => ({ ...e }));
+    const routes = this.routes.map(r => ({ ...r }));
+    for (const c of preview.candidates.filter(c => requested.has(c.key))) {
+      let ep = endpoints.find(e => e.topic === c.topic);
+      if (!ep) {
+        ep = { id: crypto.randomUUID(), name: c.deviceName + ' · ' + c.signal, topic: c.topic, payloadType: c.type };
+        endpoints.push(ep);
+      }
+      if (ep.payloadType !== c.type) throw Error('Existing MQTT endpoint has incompatible type');
+      const deviceRef = { type: 'device', id: c.deviceId, signal: c.signal };
+      const mqttRef = { type: 'mqtt', id: ep.id };
+      routes.push({ id: crypto.randomUUID(), from: c.direction === 'knx2mqtt' ? deviceRef : mqttRef,
+        to: c.direction === 'knx2mqtt' ? mqttRef : deviceRef, enabled: true, legacyKey: c.key });
+    }
+    return this.save({ endpoints, routes });
+  }
   resolve(ref, endpoints) {
     if (!ref || !['device', 'mqtt'].includes(ref.type)) throw Error('Invalid endpoint type');
     if (ref.type === 'mqtt') {
@@ -55,9 +132,9 @@ class RoutingStore {
       if (destinations.has(key)) throw Error('Multiple routes write to the same destination');
       destinations.add(key);
       if (r.from.type === 'mqtt') {
-        if (this.groupAddresses.some(g => (g.routes || []).some(legacy => legacy.mqttTopic === src.topic))) throw Error('MQTT topic is already handled by a legacy route');
+        if (this.groupAddresses.some(g => (g.routes || []).some(legacy => legacy.mqttTopic === src.topic)) && !r.legacyKey) throw Error('MQTT topic is already handled by a legacy route');
       } else {
-        if (this.groupAddresses.some(g => (g.routes || []).some(legacy => legacy.mqttTopic === dst.topic))) throw Error('MQTT topic already used by a legacy route');
+        if (this.groupAddresses.some(g => (g.routes || []).some(legacy => legacy.mqttTopic === dst.topic)) && !r.legacyKey) throw Error('MQTT topic already used by a legacy route');
       }
     }
   }
