@@ -36,7 +36,7 @@ body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:42
 </aside></div></main><dialog id="route-dialog" aria-labelledby="route-dialog-title"><form id="route-dialog-form" class="p-3"><h3 class="h5 mb-3" id="route-dialog-title">Verbindung bearbeiten</h3><div id="route-dialog-path" class="small text-secondary mb-3"></div><label class="form-label" for="route-dialog-direction">Datenfluss</label><select class="form-select mb-3" id="route-dialog-direction"><option value="knx2mqtt">KNX → MQTT</option><option value="mqtt2knx">MQTT → KNX</option></select><div class="small text-secondary mb-3" id="route-dialog-direction-hint"></div><label class="form-label" for="route-dialog-map">Wertumwandlung (JSON)</label><textarea class="form-control mb-3" id="route-dialog-map" rows="5" spellcheck="false"></textarea><div class="form-check mb-4"><input class="form-check-input" type="checkbox" id="route-dialog-enabled"><label class="form-check-label" for="route-dialog-enabled">Verbindung aktiv</label></div><div class="d-flex gap-2 justify-content-between"><button type="button" class="btn btn-outline-danger" id="route-dialog-delete">Verbindung löschen</button><div class="d-flex gap-2"><button type="button" class="btn btn-outline-secondary" id="route-dialog-cancel">Abbrechen</button><button type="submit" class="btn btn-primary">Übernehmen</button></div></div><p class="small text-secondary mt-3 mb-0">Änderungen anschließend aktivieren.</p></form></dialog>
 <script>
 let graph={endpoints:[],mqttDevices:[],routes:[]},devices=[],templates=[],selected=null,dirty=false,migration=null;
-let focusAddress=new URLSearchParams(location.search).get("ga"),focusRoute=new URLSearchParams(location.search).get("route");
+let focusAddress=new URLSearchParams(location.search).get("ga"),focusRoute=new URLSearchParams(location.search).get("route"),focusDevice=new URLSearchParams(location.search).get("device");
 const lastTraffic=new Map();
 const socket=io();socket.on('routing-traffic',entry=>{lastTraffic.set(entry.id,entry);});
 const $=id=>document.getElementById(id);
@@ -59,6 +59,7 @@ function mqttTemplateUpgrade(device){
 function notice(message,error=false){$('notice').textContent=message;$('notice').className='small mb-3 '+(error?'text-danger':'text-success')}
 function isFocused(r){
  if(focusRoute)return r.id===focusRoute;
+ if(focusDevice)return [r.from,r.to].some(ref=>ref.type==='device'&&ref.id===focusDevice);
  if(!focusAddress)return true;
  const list=signals();
  // A GA deep-link selects its device, not only that one signal.
@@ -75,16 +76,16 @@ function transformLabel(r){
 function render(){
  const list=signals(),eps=endpointSignals();
  const focused=graph.routes.filter(isFocused);
- $('focus-bar').hidden=!focusAddress&&!focusRoute;
- $('focus-label').textContent=focusAddress?'Routing für Gruppenadresse '+focusAddress:'Ausgewählte Verbindung '+(focusRoute||'');
- const visibleDevices=focusAddress||focusRoute?devices.filter(d=>focused.some(r=>[r.from,r.to].some(ref=>ref.type==='device'&&ref.id===d.id))):devices;
+ $('focus-bar').hidden=!focusAddress&&!focusRoute&&!focusDevice;
+ $('focus-label').textContent=focusAddress?'Routing für Gruppenadresse '+focusAddress:focusDevice?'Routing für Device '+(devices.find(d=>d.id===focusDevice)?.name||focusDevice):'Ausgewählte Verbindung '+(focusRoute||'');
+ const visibleDevices=focusDevice?devices.filter(d=>d.id===focusDevice):focusAddress||focusRoute?devices.filter(d=>focused.some(r=>[r.from,r.to].some(ref=>ref.type==='device'&&ref.id===d.id))):devices;
  const visibleMqttIds=new Set(focused.flatMap(r=>[r.from,r.to].filter(ref=>ref.type!=='device').map(ref=>ref.id)));
  const deviceCards=visibleDevices.map(d=>{
   const own=list.filter(x=>x.ref.id===d.id);
   return {id:d.id,html:'<div class="node" data-node="device:'+esc(d.id)+'"><h3>'+esc(d.name)+'</h3>'+own.map(signalHtml).join('')+'</div>'};
  });
  const mqttCards=[
- ...(graph.mqttDevices||[]).filter(d=>!focusAddress&&!focusRoute||visibleMqttIds.has(d.id)).map(d=>({id:d.id,html:'<div class="node" data-node="mqttDevice:'+esc(d.id)+'"><h3><i class="bi bi-speaker"></i> '+esc(d.name)+'</h3>'+eps.filter(x=>x.ref.type==='mqttDevice'&&x.ref.id===d.id).map(signalHtml).join('')+(mqttTemplateUpgrade(d)?.additions.length?'<button class="btn btn-sm btn-outline-primary upgrade-mqtt-device me-2" data-id="'+esc(d.id)+'"><i class="bi bi-arrow-up-circle"></i> Template aktualisieren ('+mqttTemplateUpgrade(d).additions.length+')</button>':'')+'<button class="btn btn-sm btn-link text-danger delete-mqtt-device" data-id="'+esc(d.id)+'">Entfernen</button></div>'})),
+ ...(graph.mqttDevices||[]).filter(d=>!focusAddress&&!focusRoute&&!focusDevice||visibleMqttIds.has(d.id)).map(d=>({id:d.id,html:'<div class="node" data-node="mqttDevice:'+esc(d.id)+'"><h3><i class="bi bi-speaker"></i> '+esc(d.name)+'</h3>'+eps.filter(x=>x.ref.type==='mqttDevice'&&x.ref.id===d.id).map(signalHtml).join('')+(mqttTemplateUpgrade(d)?.additions.length?'<button class="btn btn-sm btn-outline-primary upgrade-mqtt-device me-2" data-id="'+esc(d.id)+'"><i class="bi bi-arrow-up-circle"></i> Template aktualisieren ('+mqttTemplateUpgrade(d).additions.length+')</button>':'')+'<button class="btn btn-sm btn-link text-danger delete-mqtt-device" data-id="'+esc(d.id)+'">Entfernen</button></div>'})),
  ...eps.filter(x=>x.ref.type==='mqtt'&&(!focusAddress&&!focusRoute||visibleMqttIds.has(x.ref.id))).map(x=>({id:x.ref.id,html:'<div class="node" data-node="mqtt:'+esc(x.ref.id)+'"><h3>'+esc(graph.endpoints.find(e=>e.id===x.ref.id).name)+'</h3>'+signalHtml(x)+'<button class="btn btn-sm btn-link text-danger delete-endpoint" data-id="'+esc(x.ref.id)+'">Entfernen</button></div>'}))
  ];
  // Order the right-hand cards by their connected KNX device, so related
@@ -151,7 +152,7 @@ function drawLinks(routes=graph.routes.filter(isFocused)){
   
  }
 }
-$('clear-focus').onclick=()=>{focusAddress=null;focusRoute=null;history.replaceState(null,'',location.pathname);render()};
+$('clear-focus').onclick=()=>{focusAddress=null;focusRoute=null;focusDevice=null;history.replaceState(null,'',location.pathname);render()};
 function renderRoutes(){ /* Connections are managed directly on the canvas. */ }
 function signalHtml(s){const key=signalKey(s.ref);const button='<button class="btn btn-sm btn-outline-primary signal-btn '+(selected&&signalKey(selected.ref)===key?'selected':'')+'" data-key="'+esc(key)+'" title="Als Quelle oder Ziel wählen"><i class="bi bi-circle"></i></button>';const label='<span>'+esc(s.name.split(' · ').slice(1).join(' · '))+' <span class="muted">'+(s.ref.type==='device'?' · '+esc(s.address)+' · DPT '+esc(s.dpt):' ('+esc(s.type)+')')+'</span></span>';return '<div class="signal">'+(s.ref.type==='device'?label+button:button+label)+'</div>'}
 function choose(ref){const all=[...signals(),...endpointSignals()];const next=all.find(s=>signalKey(s.ref)===signalKey(ref));if(!next)return;if(!selected){selected=next;notice('Quelle gewählt: '+next.name+'. Jetzt Ziel auswählen.');render();return}const from=selected;selected=null;if((from.ref.type==='device')===(next.ref.type==='device')){notice('Eine Verbindung benötigt ein Device und einen MQTT-Endpunkt.',true);render();return}if(from.type!==next.type){notice('Datentypen unterscheiden sich. Nach dem Verbinden eine Wertumwandlung konfigurieren.',true)}if(from.ref.type==='device'&&!['both','knx2mqtt'].includes(from.dir)){notice('Dieses Device-Signal kann nicht gelesen werden.',true);render();return}if(next.ref.type==='device'&&next.ref.signal!=='status'&&!['both','mqtt2knx'].includes(next.dir)){notice('Dieses Device-Signal ist nicht schreibbar.',true);render();return}if(next.ref.type==='mqttDevice'&&!['input','both'].includes(next.direction)){notice('Dieses MQTT-Signal ist kein Eingang.',true);render();return}if(from.ref.type==='mqttDevice'&&!['output','both'].includes(from.direction)){notice('Dieses MQTT-Signal ist kein Ausgang.',true);render();return}if(graph.routes.some(r=>signalKey(r.to)===signalKey(next.ref))){notice('Dieses Ziel besitzt bereits eine Verbindung.',true);render();return}graph.routes.push({id:uid(),from:from.ref,to:next.ref,enabled:true,...(from.type!==next.type?{transform:{kind:'map',values:{}}}:{})});dirty=true;notice('Verbindung hinzugefügt. Mit „Änderungen aktivieren“ speichern.');render()}
