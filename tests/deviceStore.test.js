@@ -63,11 +63,11 @@ test('invalid direction is rejected and updates preserve device ID', () => {
   } finally { f.cleanup(); }
 });
 
-test('switch template maps separate DPT 1.001 command and status without changing group addresses', () => {
+test('switch template maps DPT 1.001 command and DPT 1.011 status without changing group addresses', () => {
   const f = fixture();
   try {
     f.gas.push({ address: '2/0/0', dpt: '1.001', direction: 'both' });
-    f.gas.push({ address: '2/0/1', dpt: '1.001', direction: 'knx2mqtt' });
+    f.gas.push({ address: '2/0/1', dpt: '1.011', direction: 'knx2mqtt' });
     const before = fs.readFileSync(f.gaPath, 'utf8');
     const store = new DeviceStore(f.gas, f.gaPath);
     assert.ok(store.templates().some(t => t.id === 'switch'));
