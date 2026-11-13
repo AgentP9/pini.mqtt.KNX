@@ -243,6 +243,8 @@ class WebServer {
       socket.on('disconnect', () => console.log('[WEB] Client disconnected'));
     });
 
+    eventEmitter.on('routing-traffic', entry => this.io.emit('routing-traffic', entry));
+
     // Forward traffic events to all web clients
     eventEmitter.on('traffic', (entry) => {
       this._log.push(entry);
