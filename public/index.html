@@ -33,6 +33,9 @@
     crossorigin="anonymous"
   />
   <style>
+    .view-tabs .nav-link { cursor: pointer; }
+    .view-panel[hidden] { display: none !important; }
+    .device-search { max-width: 22rem; }
     .badge-status { font-size: 0.85rem; padding: 0.4em 0.75em; }
     #traffic-body tr td:first-child {
       font-family: monospace; white-space: nowrap; font-size: 0.8rem;
@@ -131,6 +134,13 @@
     </div>
   </div>
 
+  <nav aria-label="Dashboard views" class="mb-3">
+    <ul class="nav nav-pills view-tabs gap-2" role="tablist">
+      <li class="nav-item" role="presentation"><button class="nav-link active" id="tab-devices" type="button" role="tab" aria-selected="true" aria-controls="view-devices"><i class="bi bi-grid me-1"></i> Devices</button></li>
+      <li class="nav-item" role="presentation"><button class="nav-link" id="tab-addresses" type="button" role="tab" aria-selected="false" aria-controls="view-addresses"><i class="bi bi-list-ul me-1"></i> Group Addresses <span class="badge bg-secondary" id="ga-count">0</span></button></li>
+    </ul>
+  </nav>
+  <section id="view-devices" class="view-panel" role="tabpanel" aria-labelledby="tab-devices">
   <!-- Device view: grouping only, never replaces individual KNX addresses -->
   <section class="card shadow-sm mb-4" aria-labelledby="devices-title">
     <div class="card-header d-flex justify-content-between align-items-center">
@@ -139,10 +149,25 @@
     </div>
     <div class="card-body">
       <p class="text-muted small mb-3">Devices group existing KNX group addresses. Individual addresses remain editable below.</p>
+      <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+        <input type="search" id="device-search" class="form-control device-search" placeholder="Search devices or addresses…" aria-label="Search devices">
+        <span class="small text-muted" id="device-count"></span>
+      </div>
       <div id="device-list" class="row g-3"><div class="col-12 text-muted">Loading devices…</div></div>
     </div>
   </section>
 
+  </section>
+  <section id="view-addresses" class="view-panel" role="tabpanel" aria-labelledby="tab-addresses" hidden>
+    <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+      <input type="search" id="ga-search" class="form-control device-search" placeholder="Search address, name, DPT…" aria-label="Search group addresses">
+      <select id="ga-filter" class="form-select" style="max-width: 14rem" aria-label="Filter group addresses">
+        <option value="all">All addresses</option>
+        <option value="assigned">Assigned to devices</option>
+        <option value="unassigned">Unassigned</option>
+      </select>
+      <span class="small text-muted" id="ga-filter-count"></span>
+    </div>
   <!-- Group Addresses card -->
   <div class="row mb-4">
     <div class="col-12">
@@ -191,6 +216,8 @@
   </div>
 
 </div><!-- /container -->
+
+  </section>
 
   <!-- Live traffic drawer -->
   <div class="offcanvas offcanvas-end" tabindex="-1" id="trafficDrawer" aria-labelledby="trafficDrawerTitle">
@@ -410,7 +437,16 @@
     configuredGAs = addresses;
     renderDevices();
     const gaBody = document.getElementById('ga-body');
-    const sorted = sortedGAs();
+    const search = document.getElementById('ga-search').value.trim().toLowerCase();
+    const filter = document.getElementById('ga-filter').value;
+    const assigned = new Set(devices.flatMap(d => Object.values(d.addresses || {})));
+    const sorted = sortedGAs().filter(ga => {
+      if (filter === 'assigned' && !assigned.has(ga.address)) return false;
+      if (filter === 'unassigned' && assigned.has(ga.address)) return false;
+      return [ga.address, ga.name, ga.dpt, ga.comment].some(v => String(v || '').toLowerCase().includes(search));
+    });
+    document.getElementById('ga-count').textContent = configuredGAs.length;
+    document.getElementById('ga-filter-count').textContent = sorted.length + ' of ' + configuredGAs.length;
     if (!sorted.length) {
       gaBody.innerHTML = '<tr><td colspan="8" class="text-center empty-msg p-3">No group addresses configured.</td></tr>';
       return;
@@ -733,8 +769,11 @@
   function deviceTemplate(id) { return deviceTemplates.find(t => t.id === id); }
   function renderDevices() {
     const target = document.getElementById('device-list');
-    if (!devices.length) { target.innerHTML = '<div class="col-12 text-muted">No devices yet. Existing group addresses are still active.</div>'; return; }
-    target.innerHTML = devices.map(d => {
+    const term = document.getElementById('device-search').value.trim().toLowerCase();
+    const visible = devices.filter(d => [d.name, d.templateId, ...Object.values(d.addresses || {})].some(v => String(v).toLowerCase().includes(term)));
+    document.getElementById('device-count').textContent = visible.length + ' of ' + devices.length + ' devices';
+    if (!visible.length) { target.innerHTML = '<div class="col-12 text-muted">No devices yet. Existing group addresses are still active.</div>'; return; }
+    target.innerHTML = visible.map(d => {
       const tpl = deviceTemplate(d.templateId);
       const rows = (tpl ? tpl.objects : []).filter(o => d.addresses[o.key]).map(o => {
         const address = d.addresses[o.key];
@@ -788,7 +827,24 @@
   });
   fetch('/api/device-templates').then(r => r.json()).then(t => { deviceTemplates = t; renderDevices(); }).catch(err => console.error('Templates unavailable', err));
   fetch('/api/devices').then(r => r.json()).then(d => { devices = d; renderDevices(); }).catch(err => console.error('Devices unavailable', err));
-  socket.on('devices', d => { devices = d; renderDevices(); });
+  socket.on('devices', d => { devices = d; renderDevices(); renderGATable(configuredGAs); });
+  document.getElementById('device-search').addEventListener('input', renderDevices);
+  document.getElementById('ga-search').addEventListener('input', () => renderGATable(configuredGAs));
+  document.getElementById('ga-filter').addEventListener('change', () => renderGATable(configuredGAs));
+  function switchView(view) {
+    const addresses = view === 'addresses';
+    document.getElementById('view-devices').hidden = addresses;
+    document.getElementById('view-addresses').hidden = !addresses;
+    for (const [id, selected] of [['tab-devices', !addresses], ['tab-addresses', addresses]]) {
+      const tab = document.getElementById(id);
+      tab.classList.toggle('active', selected);
+      tab.setAttribute('aria-selected', String(selected));
+    }
+    try { localStorage.setItem('dashboard-view', view); } catch (_) {}
+  }
+  document.getElementById('tab-devices').addEventListener('click', () => switchView('devices'));
+  document.getElementById('tab-addresses').addEventListener('click', () => switchView('addresses'));
+  switchView(localStorage.getItem('dashboard-view') === 'addresses' ? 'addresses' : 'devices');
 
   // ── PWA service worker ────────────────────────────────────────────────────────
   if ('serviceWorker' in navigator) {
