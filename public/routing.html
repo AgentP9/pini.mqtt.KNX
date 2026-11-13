@@ -47,7 +47,7 @@ const signals=()=>devices.flatMap(d=>{const t=templates.find(t=>t.id===d.templat
 const endpointSignals=()=>[...graph.endpoints.map(e=>({ref:{type:'mqtt',id:e.id},name:e.name+' · '+e.topic,type:e.payloadType})),...(graph.mqttDevices||[]).flatMap(d=>d.signals.map(x=>({ref:{type:'mqttDevice',id:d.id,signal:x.key},name:d.name+' · '+x.topic,type:x.payloadType,topic:x.topic,direction:x.direction})))];
 const mqttTemplates={
  sonos:[{key:'control',suffix:'/control',payloadType:'text',direction:'input'},{key:'volume',suffix:'/set/volume',payloadType:'number',direction:'input'},{key:'state',suffix:'/state',payloadType:'text',direction:'output'},{key:'volumeStatus',suffix:'/volume',payloadType:'number',direction:'output'}],
- 'shelly-plug-s':[{key:'switchCommand',suffix:'/command/switch:0',payloadType:'text',direction:'input'}],
+ 'shelly-plug-s':[{key:'switchCommand',suffix:'/command/switch:0',payloadType:'text',direction:'input'},{key:'switchStatus',suffix:'/status/switch:0',payloadType:'text',direction:'output'}],
  generic:[{key:'command',suffix:'/set',payloadType:'text',direction:'input'},{key:'status',suffix:'/state',payloadType:'text',direction:'output'}]
 };
 function mqttTemplateUpgrade(device){
