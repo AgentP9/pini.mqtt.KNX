@@ -580,7 +580,7 @@
         : '';
       const assignments = assignedDevices(ga.address);
       const suggestion = assignments.length ? null : suggestDeviceForGA(ga);
-      const deviceCell = assignments.length ? assignments.map(d => `<div><span class="fw-semibold">${escHtml(d.name)}</span><span class="small text-muted ms-1">(${escHtml(d.role)})</span></div>`).join('') : suggestion ? `<button type="button" class="btn btn-sm btn-outline-primary btn-suggest-device text-start" data-address="${escHtml(ga.address)}" title="Review suggested device mapping"><i class="bi bi-lightbulb me-1"></i>${escHtml(suggestion.templateName)}</button>` : '<span class="text-muted">–</span>';
+      const deviceCell = assignments.length ? assignments.map(d => `<div><span class="fw-semibold">${escHtml(d.name)}</span><span class="small text-muted ms-1">(${escHtml(d.role)})</span></div>`).join('') : suggestion ? `<button type="button" class="btn btn-sm btn-primary btn-suggest-device" data-address="${escHtml(ga.address)}" title="Review suggested device mapping"><i class="bi bi-lightbulb me-1"></i>${escHtml(suggestion.templateName)}</button>` : '<span class="text-muted">–</span>';
       const dir = ga.direction || 'both';
       const dirIcon = dir === 'knx2mqtt' ? '<i class="bi bi-arrow-right" title="KNX → MQTT only"></i>'
                     : dir === 'mqtt2knx' ? '<i class="bi bi-arrow-left"  title="MQTT → KNX only"></i>'
@@ -593,7 +593,7 @@
         <td><small class="text-muted">${escHtml(ga.comment || '')}</small></td>
         <td class="text-center">${dirIcon}</td>
         <td>${routesBadge}${repeatBadge}</td>
-        ${spans[rowIndex] ? `<td rowspan="${spans[rowIndex]}" class="align-middle ga-device-cell">${deviceCell}</td>` : ''}
+        ${spans[rowIndex] ? `<td rowspan="${spans[rowIndex]}" class="align-middle text-center ga-device-cell">${deviceCell}</td>` : ''}
         <td class="ga-last-value"><strong>${escHtml(ga.lastValue !== undefined && ga.lastValue !== null ? formatValue(ga.lastValue, ga.dpt) : '–')}</strong></td>
         <td class="text-end text-nowrap">
           <button class="btn btn-sm btn-outline-secondary btn-edit-ga me-1" data-address="${escHtml(ga.address)}" aria-label="Edit"><i class="bi bi-pencil-fill"></i></button>
@@ -615,7 +615,7 @@
       const stops = [];
       for (let i = first; i < Math.min(first + count, rows.length); i++) {
         const height = rows[i].getBoundingClientRect().height;
-        const stripe = i % 2 === 1 ? 'var(--bs-table-striped-bg)' : 'transparent';
+        const stripe = i % 2 === 0 ? 'var(--bs-table-striped-bg)' : 'transparent';
         stops.push(stripe + ' ' + offset + 'px', stripe + ' ' + (offset + height) + 'px');
         offset += height;
       }
