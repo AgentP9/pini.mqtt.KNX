@@ -121,6 +121,18 @@ class RoutingStore {
     for (const r of routes) {
       if (!r || typeof r.id !== 'string' || routeIds.has(r.id) || typeof r.enabled !== 'boolean') throw Error('Invalid route');
       routeIds.add(r.id);
+      if (r.legacyKey) {
+        const source = r.from.type === 'device' ? r.from : r.to;
+        const mqttRef = r.from.type === 'mqtt' ? r.from : r.to;
+        const device = this.deviceStore.devices.find(d => d.id === source.id);
+        const endpoint = endpoints.find(e => e.id === mqttRef.id);
+        const address = device?.addresses?.[source.signal];
+        const direction = r.from.type === 'device' ? 'knx2mqtt' : 'mqtt2knx';
+        if (!address || !endpoint || r.legacyKey !== this.legacyKey(address, endpoint.topic, direction) ||
+          !this.groupAddresses.some(g => g.address === address && (g.routes || []).some(legacy => legacy.mqttTopic === endpoint.topic))) {
+          throw Error('Invalid legacy migration reference');
+        }
+      }
       const src = this.resolve(r.from, endpoints), dst = this.resolve(r.to, endpoints);
       if (r.from.type === r.to.type) throw Error('Connect a device signal to an MQTT endpoint');
       if (src.type !== dst.type) throw Error('Signal types differ; a conversion is required');
