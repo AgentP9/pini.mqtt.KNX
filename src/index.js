@@ -155,12 +155,18 @@ const routingStore = webServer.routingStore;
 function subscribeVisualRoutes() {
   for (const route of routingStore.routes) {
     if (route.enabled && route.from.type === 'mqtt') {
-      const endpoint = routingStore.endpoints.find(e => e.id === route.from.id);
-      if (endpoint) mqttHandler.subscribe(endpoint.topic);
+      try { const endpoint = routingStore.resolve(route.from, routingStore.endpoints); if (endpoint.topic) mqttHandler.subscribe(endpoint.topic); } catch (err) { console.warn('[ROUTING]', err.message); }
     }
   }
 }
-function routePayload(value, type, toKnx) {
+function routePayload(value, type, toKnx, transform) {
+  if (transform?.kind === 'constant') return String(transform.value);
+  if (transform?.kind === 'map') {
+    const raw = String(value);
+    const normalized = ['1','true','on'].includes(raw.toLowerCase()) ? 'ON' : ['0','false','off'].includes(raw.toLowerCase()) ? 'OFF' : raw;
+    const mapped = transform.values[raw] ?? transform.values[normalized];
+    return mapped === undefined ? raw : String(mapped);
+  }
   if (type !== 'boolean') return String(value);
   const v = String(value).trim().toLowerCase();
   if (['1','true','on','ein'].includes(v)) return toKnx ? '1' : 'true';
@@ -174,7 +180,7 @@ knxHandler.on('groupValueWrite', ({ address, value }) => {
       const source = routingStore.resolve(route.from, routingStore.endpoints);
       if (source.address !== address) continue;
       const destination = routingStore.resolve(route.to, routingStore.endpoints);
-      const payload = routePayload(value, source.type, false);
+      const payload = routePayload(value, source.type, false, route.transform);
       if (payload === null) continue;
       mqttHandler.publish(destination.topic, payload);
       eventEmitter.emit('routing-traffic', { id: route.id, value: payload, direction: 'KNX→MQTT', timestamp: new Date().toISOString() });
@@ -188,7 +194,7 @@ mqttHandler.on('message', ({ topic, value }) => {
       const source = routingStore.resolve(route.from, routingStore.endpoints);
       if (source.topic !== topic) continue;
       const destination = routingStore.resolve(route.to, routingStore.endpoints);
-      const payload = routePayload(value, source.type, true);
+      const payload = routePayload(value, source.type, true, route.transform);
       if (payload === null || !knxHandler.connected) continue;
       if (!knxHandler.write(destination.address, payload)) continue;
       eventEmitter.emit('routing-traffic', { id: route.id, value: payload, direction: 'MQTT→KNX', timestamp: new Date().toISOString() });
