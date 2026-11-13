@@ -273,6 +273,20 @@ mqttHandler.on('message', ({ topic, value }) => {
   }
 });
 
+// Dashboard diagnostic write: direct KNX send, no MQTT loop and no optimistic confirmation.
+eventEmitter.on('device-setpoint-write', ({ address, value, respond }) => {
+  if (!knxHandler.connected) return respond({ ok: false, status: 503, error: 'KNX disconnected' });
+  const ok = knxHandler.write(address, String(value));
+  if (!ok) return respond({ ok: false, status: 502, error: 'KNX write failed' });
+  eventEmitter.emit('traffic', {
+    direction: 'WEB→KNX', address,
+    name: (config.groupAddresses.find(g => g.address === address) || {}).name || address,
+    topic: null, value: String(value), dpt: '9.001', configured: true,
+    outbound: true, timestamp: new Date().toISOString(),
+  });
+  respond({ ok: true, status: 202, message: 'Write sent to KNX library; bus/device confirmation pending' });
+});
+
 // ── Status events ──────────────────────────────────────────────────────────────
 knxHandler.on('connected', () =>
   eventEmitter.emit('status', { service: 'KNX', connected: true })
