@@ -232,3 +232,23 @@ Migration deliberately skips routes that have value maps, repeat intervals,
 unsupported DPTs, missing or ambiguous device mappings, or incompatible
 destinations. The reserved automatic `knx/<address>` path is not migrated.
 Always inspect the preview and back up the config volume before migration.
+
+### MQTT devices and Sonos migration (PR #26)
+
+The designer supports independent **MQTT devices**, in addition to KNX
+devices and standalone topics. Create a **Sonos Player** with a base topic such
+as `sonos/devices/Esszimmer`; it exposes `control` and `set/volume` signals.
+A generic MQTT device template is also available. These MQTT devices exist
+only in `routing.json`, not in the KNX device registry.
+
+Connections can have an optional JSON **value map**, e.g.
+`{"ON":"PLAY","OFF":"PAUSE"}`, or a **constant** using
+`{"constant":20}`. The first iteration edits these properties via a
+small JSON prompt; it does not provide Node-RED's arbitrary function nodes.
+Migration detects `sonos/devices/<room>/...` and groups matching topics into
+one Sonos MQTT device, preserving the supported forward value maps. It skips
+reverse mappings requiring manual review and routes with repeat intervals.
+Legacy `knx/<GA>` topics are deliberately not migrated.
+
+Before enabling migrated routes on real hardware, verify the mapping direction
+and payload format. Back up `routing.json` and `groupaddresses.json`.
