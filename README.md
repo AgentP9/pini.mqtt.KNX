@@ -215,3 +215,20 @@ Enable/disable or remove routes in the right sidebar and select
   nodes are included yet. Add these later as explicit, validated extensions.
 
 Run `node --test` for the routing-store validation tests.
+
+### Migrate existing custom GA routes
+
+In Routing Designer, select **Bestehende Routen migrieren** to preview
+existing `groupaddresses.json` custom MQTT routes. Each compatible
+direction is listed separately and can be selected for migration. Confirming
+creates typed device↔MQTT connections in `routing.json`. The original GA
+route configuration is retained unchanged; the old forwarding path is
+suppressed for each enabled migrated direction to prevent double sends.
+Disabling or removing the migrated route restores the legacy forwarding
+behavior for that direction. This also means deleting a migrated route does
+**not** disable its underlying legacy route.
+
+Migration deliberately skips routes that have value maps, repeat intervals,
+unsupported DPTs, missing or ambiguous device mappings, or incompatible
+destinations. The reserved automatic `knx/<address>` path is not migrated.
+Always inspect the preview and back up the config volume before migration.
