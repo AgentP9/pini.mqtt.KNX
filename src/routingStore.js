@@ -153,6 +153,7 @@ class RoutingStore {
     }
     if (!Array.isArray(mqttDevices) || mqttDevices.length > 100) throw Error('Invalid MQTT devices');
     const deviceIds = new Set();
+    const mqttTopics = new Set(topics);
     for (const device of mqttDevices) {
       if (!device || typeof device.id !== 'string' || deviceIds.has(device.id) || typeof device.name !== 'string' ||
           !device.name.trim() || device.name.length > 120 || !['generic', 'sonos'].includes(device.templateId) ||
@@ -163,9 +164,10 @@ class RoutingStore {
         if (!signal || typeof signal.key !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(signal.key) || keys.has(signal.key) ||
             typeof signal.label !== 'string' || !signal.label.trim() || signal.label.length > 120 ||
             typeof signal.topic !== 'string' || !signal.topic || signal.topic.length > 240 || /[+#\s\u0000-\u001f]/.test(signal.topic) ||
-            signal.topic.startsWith('knx/') || !['boolean','number','text'].includes(signal.payloadType) ||
+            signal.topic.startsWith('knx/') || mqttTopics.has(signal.topic) || !['boolean','number','text'].includes(signal.payloadType) ||
             !['input','output','both'].includes(signal.direction)) throw Error('Invalid MQTT device signal');
         keys.add(signal.key);
+        mqttTopics.add(signal.topic);
       }
     }
     const routeIds = new Set(), destinations = new Set();
@@ -174,7 +176,7 @@ class RoutingStore {
       routeIds.add(r.id);
       if (r.legacyKey) {
         const source = r.from.type === 'device' ? r.from : r.to;
-        const mqttRef = r.from.type === 'mqtt' ? r.from : r.to;
+        const mqttRef = r.from.type === 'device' ? r.to : r.from;
         const device = this.deviceStore.devices.find(d => d.id === source.id);
         const endpoint = this.resolve(mqttRef, endpoints, mqttDevices);
         const address = device?.addresses?.[source.signal];
