@@ -70,6 +70,20 @@ function subscribeVisualRoutes() {
   }
 }
 function routePayload(value, type, toKnx, transform) {
+  if (transform?.kind === 'json') {
+    let parsed;
+    try { parsed = typeof value === 'string' ? JSON.parse(value) : value; }
+    catch { return null; }
+    let extracted = parsed;
+    for (const segment of transform.path.split('.')) {
+      if (!extracted || typeof extracted !== 'object' || !Object.hasOwn(extracted, segment)) return null;
+      extracted = extracted[segment];
+    }
+    if (extracted === null || typeof extracted === 'object') return null;
+    const raw = String(extracted);
+    const mapped = transform.values?.[raw] ?? (Object.hasOwn(transform,'defaultValue') ? transform.defaultValue : extracted);
+    return routePayload(mapped, type, toKnx, null);
+  }
   if (transform?.kind === 'constant') return String(transform.value);
   if (transform?.kind === 'map') {
     const raw = String(value);
