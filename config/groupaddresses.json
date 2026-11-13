@@ -39,5 +39,173 @@
         }
       }
     ]
+  },
+  {
+    "address": "1/0/0",
+    "name": "Büro Temperatur Messwert",
+    "dpt": "9.001",
+    "direction": "knx2mqtt",
+    "comment": "Raumtemperatur gemäß ETS-Export; KNX → MQTT"
+  },
+  {
+    "address": "1/0/1",
+    "name": "Büro Aktueller Sollwert",
+    "dpt": "9.001",
+    "direction": "both",
+    "comment": "Heizungs-Sollwert gemäß ETS-Export; MQTT ↔ KNX"
+  },
+  {
+    "address": "1/0/3",
+    "name": "Flur Keller Temperatur Messwert",
+    "dpt": "9.001",
+    "direction": "knx2mqtt",
+    "comment": "Raumtemperatur gemäß ETS-Export; KNX → MQTT"
+  },
+  {
+    "address": "1/0/4",
+    "name": "Flur Keller Aktueller Sollwert",
+    "dpt": "9.001",
+    "direction": "both",
+    "comment": "Heizungs-Sollwert gemäß ETS-Export; MQTT ↔ KNX"
+  },
+  {
+    "address": "1/0/6",
+    "name": "Hobby Temperatur Messwert",
+    "dpt": "9.001",
+    "direction": "knx2mqtt",
+    "comment": "Raumtemperatur gemäß ETS-Export; KNX → MQTT"
+  },
+  {
+    "address": "1/0/7",
+    "name": "Hobby Aktueller Sollwert",
+    "dpt": "9.001",
+    "direction": "both",
+    "comment": "Heizungs-Sollwert gemäß ETS-Export; MQTT ↔ KNX"
+  },
+  {
+    "address": "1/1/0",
+    "name": "Essküche Temperatur Messwert",
+    "dpt": "9.001",
+    "direction": "knx2mqtt",
+    "comment": "Raumtemperatur gemäß ETS-Export; KNX → MQTT"
+  },
+  {
+    "address": "1/1/1",
+    "name": "Essküche Aktueller Sollwert",
+    "dpt": "9.001",
+    "direction": "both",
+    "comment": "Heizungs-Sollwert gemäß ETS-Export; MQTT ↔ KNX"
+  },
+  {
+    "address": "1/1/3",
+    "name": "Wohnzimmer Temperatur Messwert",
+    "dpt": "9.001",
+    "direction": "knx2mqtt",
+    "comment": "Raumtemperatur gemäß ETS-Export; KNX → MQTT"
+  },
+  {
+    "address": "1/1/4",
+    "name": "Wohnzimmer Aktueller Sollwert",
+    "dpt": "9.001",
+    "direction": "both",
+    "comment": "Heizungs-Sollwert gemäß ETS-Export; MQTT ↔ KNX"
+  },
+  {
+    "address": "1/1/6",
+    "name": "Gäste WC Temperatur Messwert",
+    "dpt": "9.001",
+    "direction": "knx2mqtt",
+    "comment": "Raumtemperatur gemäß ETS-Export; KNX → MQTT"
+  },
+  {
+    "address": "1/1/7",
+    "name": "Gäste WC Aktueller Sollwert",
+    "dpt": "9.001",
+    "direction": "both",
+    "comment": "Heizungs-Sollwert gemäß ETS-Export; MQTT ↔ KNX"
+  },
+  {
+    "address": "1/1/9",
+    "name": "Flur EG Temperatur Messwert",
+    "dpt": "9.001",
+    "direction": "knx2mqtt",
+    "comment": "Raumtemperatur gemäß ETS-Export; KNX → MQTT"
+  },
+  {
+    "address": "1/1/10",
+    "name": "Flur EG Aktueller Sollwert",
+    "dpt": "9.001",
+    "direction": "both",
+    "comment": "Heizungs-Sollwert gemäß ETS-Export; MQTT ↔ KNX"
+  },
+  {
+    "address": "1/2/0",
+    "name": "Bad Temperatur Messwert",
+    "dpt": "9.001",
+    "direction": "knx2mqtt",
+    "comment": "Raumtemperatur gemäß ETS-Export; KNX → MQTT"
+  },
+  {
+    "address": "1/2/1",
+    "name": "Bad Aktueller Sollwert",
+    "dpt": "9.001",
+    "direction": "both",
+    "comment": "Heizungs-Sollwert gemäß ETS-Export; MQTT ↔ KNX"
+  },
+  {
+    "address": "1/2/3",
+    "name": "Schlafzimmer Temperatur Messwert",
+    "dpt": "9.001",
+    "direction": "knx2mqtt",
+    "comment": "Raumtemperatur gemäß ETS-Export; KNX → MQTT"
+  },
+  {
+    "address": "1/2/4",
+    "name": "Schlafzimmer Aktueller Sollwert",
+    "dpt": "9.001",
+    "direction": "both",
+    "comment": "Heizungs-Sollwert gemäß ETS-Export; MQTT ↔ KNX"
+  },
+  {
+    "address": "1/2/6",
+    "name": "Kind 1 Temperatur Messwert",
+    "dpt": "9.001",
+    "direction": "knx2mqtt",
+    "comment": "Raumtemperatur gemäß ETS-Export; KNX → MQTT"
+  },
+  {
+    "address": "1/2/7",
+    "name": "Kind 1 Aktueller Sollwert",
+    "dpt": "9.001",
+    "direction": "both",
+    "comment": "Heizungs-Sollwert gemäß ETS-Export; MQTT ↔ KNX"
+  },
+  {
+    "address": "1/2/9",
+    "name": "Kind 2 Temperatur Messwert",
+    "dpt": "9.001",
+    "direction": "knx2mqtt",
+    "comment": "Raumtemperatur gemäß ETS-Export; KNX → MQTT"
+  },
+  {
+    "address": "1/2/10",
+    "name": "Kind 2 Aktueller Sollwert",
+    "dpt": "9.001",
+    "direction": "both",
+    "comment": "Heizungs-Sollwert gemäß ETS-Export; MQTT ↔ KNX"
+  },
+  {
+    "address": "1/2/12",
+    "name": "Flur OG Temperatur Messwert",
+    "dpt": "9.001",
+    "direction": "knx2mqtt",
+    "comment": "Raumtemperatur gemäß ETS-Export; KNX → MQTT"
+  },
+  {
+    "address": "1/2/13",
+    "name": "Flur OG Aktueller Sollwert",
+    "dpt": "9.001",
+    "direction": "both",
+    "comment": "Heizungs-Sollwert gemäß ETS-Export; MQTT ↔ KNX"
   }
 ]
