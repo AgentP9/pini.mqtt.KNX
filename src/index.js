@@ -154,7 +154,7 @@ function subscribeRouteTopics() {
 const routingStore = webServer.routingStore;
 function subscribeVisualRoutes() {
   for (const route of routingStore.routes) {
-    if (route.enabled && route.from.type === 'mqtt') {
+    if (route.enabled && ['mqtt', 'mqttDevice'].includes(route.from.type)) {
       try { const endpoint = routingStore.resolve(route.from, routingStore.endpoints); if (endpoint.topic) mqttHandler.subscribe(endpoint.topic); } catch (err) { console.warn('[ROUTING]', err.message); }
     }
   }
@@ -189,7 +189,7 @@ knxHandler.on('groupValueWrite', ({ address, value }) => {
 });
 mqttHandler.on('message', ({ topic, value }) => {
   for (const route of routingStore.routes) {
-    if (!route.enabled || route.from.type !== 'mqtt') continue;
+    if (!route.enabled || !['mqtt', 'mqttDevice'].includes(route.from.type)) continue;
     try {
       const source = routingStore.resolve(route.from, routingStore.endpoints);
       if (source.topic !== topic) continue;
