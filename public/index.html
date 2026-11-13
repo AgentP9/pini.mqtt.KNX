@@ -984,7 +984,7 @@ const route = { mqttTopic };
         </div>
         <div class="device-switch-message text-muted mt-2" data-id="${escHtml(d.id)}" role="status"></div>
       </div>` : '';
-      return `<div class="col-12 col-xl-6"><article class="card device-card h-100">
+      return `<div class="col-12 col-xl-6"><article class="card device-card h-100" data-routing-device="${escHtml(d.id)}" title="Routing Designer für dieses Device öffnen" tabindex="0" role="link">
         <div class="card-body">
           <div class="d-flex align-items-start gap-3 mb-3">
             <div class="device-icon" aria-hidden="true"><i class="bi ${isHeating ? 'bi-thermometer-half' : 'bi-grid'}"></i></div>
@@ -1001,6 +1001,19 @@ const route = { mqttTopic };
       </article></div>`;
     }).join('');
   }
+  // Open the Routing Designer for the clicked KNX device, but leave controls
+  // and the expandable technical details fully interactive.
+  function openDeviceRouting(event) {
+    const card=event.target.closest('[data-routing-device]');
+    if(!card || event.target.closest('button,input,select,textarea,a,summary,details,label'))return;
+    window.location.href='/routing.html?device='+encodeURIComponent(card.dataset.routingDevice);
+  }
+  document.getElementById('device-list').addEventListener('click',openDeviceRouting);
+  document.getElementById('device-list').addEventListener('keydown',event=>{
+    if((event.key==='Enter'||event.key===' ')&&event.target.matches('[data-routing-device]')){
+      event.preventDefault();window.location.href='/routing.html?device='+encodeURIComponent(event.target.dataset.routingDevice);
+    }
+  });
   function renderDeviceFields(mapping = {}) {
     const tpl = deviceTemplate(deviceTemplateSelect.value);
     deviceObjects.innerHTML = tpl ? tpl.objects.map(o => {
