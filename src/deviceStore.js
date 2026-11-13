@@ -10,7 +10,7 @@ const TEMPLATES = Object.freeze({
     id: 'switch', name: 'Switch',
     objects: [
       { key: 'command', label: 'Switch command', dpt: '1.001', direction: 'both' },
-      { key: 'status', label: 'Switch status', dpt: '1.001', direction: 'knx2mqtt' },
+      { key: 'status', label: 'Switch status', dpt: '1.011', direction: 'knx2mqtt' },
     ],
   },
   'room-heating': {
