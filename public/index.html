@@ -869,7 +869,7 @@
             <div class="flex-grow-1 min-w-0"><h3 class="h6 mb-1">${escHtml(d.name)}</h3><div class="small text-muted">${escHtml(tpl ? tpl.name : d.templateId)}</div></div>
             <div class="d-flex align-items-center gap-2">
               ${status}
-              <button class="btn btn-sm btn-outline-secondary btn-edit-device" data-id="${escHtml(d.id)}" aria-label="Edit ${escHtml(d.name)}"><i class="bi bi-pencil"></i></button>
+              <button class="btn btn-sm btn-outline-secondary btn-edit-device" data-id="${escHtml(d.id)}" aria-label="Configure ${escHtml(d.name)}" title="Device settings"><i class="bi bi-gear"></i></button>
             </div>
           </div>
           ${metrics}
