@@ -212,6 +212,7 @@
                 <col class="col-comment">
                 <col class="col-dir">
                 <col class="col-routes">
+                <col class="col-device">
                 <col class="col-lastval">
                 <col class="col-actions">
               </colgroup>
@@ -223,12 +224,13 @@
                   <th data-sort="comment">Comment</th>
                   <th title="Routing direction">Dir</th>
                   <th title="Custom MQTT route topics">Routes</th>
+                  <th data-sort="device" title="Assigned device">Device</th>
                   <th>Last Value</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody id="ga-body">
-                <tr><td colspan="8" class="text-center empty-msg p-3">Loading…</td></tr>
+                <tr><td colspan="9" class="text-center empty-msg p-3">Loading…</td></tr>
               </tbody>
             </table>
           </div>
@@ -466,11 +468,15 @@
   let sortCol = null;
   let sortDir = 1; // 1 = asc, -1 = desc
 
+  function assignedDevices(address) {
+    return devices.flatMap(d => Object.entries(d.addresses || {}).filter(([, ga]) => ga === address).map(([key]) => ({ name: d.name, role: (deviceTemplates.find(t => t.id === d.templateId)?.objects || []).find(o => o.key === key)?.label || key })));
+  }
+
   function sortedGAs() {
     if (!sortCol) return configuredGAs.slice();
     return configuredGAs.slice().sort((a, b) => {
-      const av = (a[sortCol] || '').toLowerCase();
-      const bv = (b[sortCol] || '').toLowerCase();
+      const av = String(sortCol === 'device' ? assignedDevices(a.address).map(d => d.name).join(', ') : a[sortCol] || '').toLowerCase();
+      const bv = String(sortCol === 'device' ? assignedDevices(b.address).map(d => d.name).join(', ') : b[sortCol] || '').toLowerCase();
       return av < bv ? -sortDir : av > bv ? sortDir : 0;
     });
   }
@@ -485,12 +491,12 @@
     const sorted = sortedGAs().filter(ga => {
       if (filter === 'assigned' && !assigned.has(ga.address)) return false;
       if (filter === 'unassigned' && assigned.has(ga.address)) return false;
-      return [ga.address, ga.name, ga.dpt, ga.comment].some(v => String(v || '').toLowerCase().includes(search));
+      return [ga.address, ga.name, ga.dpt, ga.comment, ...assignedDevices(ga.address).flatMap(d => [d.name, d.role])].some(v => String(v || '').toLowerCase().includes(search));
     });
     document.getElementById('ga-count').textContent = configuredGAs.length;
     document.getElementById('ga-filter-count').textContent = sorted.length + ' of ' + configuredGAs.length;
     if (!sorted.length) {
-      gaBody.innerHTML = '<tr><td colspan="8" class="text-center empty-msg p-3">No group addresses configured.</td></tr>';
+      gaBody.innerHTML = '<tr><td colspan="9" class="text-center empty-msg p-3">No group addresses configured.</td></tr>';
       return;
     }
     gaBody.innerHTML = sorted.map((ga) => {
@@ -501,6 +507,8 @@
       const repeatBadge = ga.repeatInterval > 0
         ? `<span class="badge bg-warning text-dark repeat-icon ms-1" title="Repeat every ${escHtml(String(ga.repeatInterval))}s">↻${escHtml(String(ga.repeatInterval))}s</span>`
         : '';
+      const assignments = assignedDevices(ga.address);
+      const deviceCell = assignments.length ? assignments.map(d => `<div><span class="fw-semibold">${escHtml(d.name)}</span><span class="small text-muted ms-1">(${escHtml(d.role)})</span></div>`).join('') : '<span class="text-muted">–</span>';
       const dir = ga.direction || 'both';
       const dirIcon = dir === 'knx2mqtt' ? '<i class="bi bi-arrow-right" title="KNX → MQTT only"></i>'
                     : dir === 'mqtt2knx' ? '<i class="bi bi-arrow-left"  title="MQTT → KNX only"></i>'
@@ -513,6 +521,7 @@
         <td><small class="text-muted">${escHtml(ga.comment || '')}</small></td>
         <td class="text-center">${dirIcon}</td>
         <td>${routesBadge}${repeatBadge}</td>
+        <td>${deviceCell}</td>
         <td><strong>${escHtml(ga.lastValue !== undefined && ga.lastValue !== null ? formatValue(ga.lastValue, ga.dpt) : '–')}</strong></td>
         <td class="text-end text-nowrap">
           <button class="btn btn-sm btn-outline-secondary btn-edit-ga me-1" data-address="${escHtml(ga.address)}" aria-label="Edit"><i class="bi bi-pencil-fill"></i></button>
@@ -554,8 +563,8 @@
       const codeEl = row.cells[0] && row.cells[0].querySelector('code');
       if (codeEl && codeEl.textContent === entry.address) {
         // Update the in-memory GA object so modal edits reflect current DPT
-        // Update the cell (column index 6 – after the Direction and Routes columns)
-        const cell = row.cells[6];
+        // Update the Last Value cell (index 7, after Device).
+        const cell = row.cells[7];
         if (cell) cell.innerHTML = `<strong>${escHtml(formatValue(entry.value, entry.dpt))}</strong>`;
         break;
       }
@@ -1031,7 +1040,7 @@
     } catch (err) { deviceError.textContent = err.message; deviceError.classList.remove('d-none'); }
   });
   fetch('/api/device-templates').then(r => r.json()).then(t => { deviceTemplates = t; renderDevices(); }).catch(err => console.error('Templates unavailable', err));
-  fetch('/api/devices').then(r => r.json()).then(d => { devices = d; renderDevices(); }).catch(err => console.error('Devices unavailable', err));
+  fetch('/api/devices').then(r => r.json()).then(d => { devices = d; renderDevices(); renderGATable(configuredGAs); }).catch(err => console.error('Devices unavailable', err));
   socket.on('devices', d => { devices = d; renderDevices(); renderGATable(configuredGAs); });
   document.getElementById('device-search').addEventListener('input', renderDevices);
   document.getElementById('ga-search').addEventListener('input', () => renderGATable(configuredGAs));
