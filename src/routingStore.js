@@ -169,7 +169,7 @@ class RoutingStore {
         mqttTopics.add(signal.topic);
       }
     }
-    const routeIds = new Set(), destinations = new Set();
+    const routeIds = new Set(), routePairs = new Set();
     for (const r of routes) {
       if (!r || typeof r.id !== 'string' || routeIds.has(r.id) || typeof r.enabled !== 'boolean') throw Error('Invalid route');
       routeIds.add(r.id);
@@ -201,9 +201,9 @@ class RoutingStore {
           if (!['string','number','boolean'].includes(typeof r.transform.value)) throw Error('Invalid constant');
         } else throw Error('Unsupported transformation');
       }
-      const key = r.to.type === 'device' ? 'ga:' + dst.address : 'topic:' + dst.topic;
-      if (destinations.has(key)) throw Error('Multiple routes write to the same destination');
-      destinations.add(key);
+      const pair = JSON.stringify([r.from, r.to]);
+      if (routePairs.has(pair)) throw Error('Duplicate connection between the same source and target');
+      routePairs.add(pair);
       if (r.from.type !== 'device') {
         if (this.groupAddresses.some(g => (g.routes || []).some(legacy => legacy.mqttTopic === src.topic)) && !r.legacyKey) throw Error('MQTT topic is already handled by a legacy route');
       } else {
