@@ -51,7 +51,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const uid=()=>{const bytes=new Uint8Array(16);crypto.getRandomValues(bytes);bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;return [...bytes].map((b,i)=>([4,6,8,10].includes(i)?'-':'')+b.toString(16).padStart(2,'0')).join('')};
 const signalKey=r=>r.type+':'+r.id+':'+(r.signal||'');
 const signals=()=>devices.flatMap(d=>{const t=templates.find(t=>t.id===d.templateId);return (t?.objects||[]).filter(o=>d.addresses?.[o.key]).map(o=>({ref:{type:'device',id:d.id,signal:o.key},name:d.name+' · '+o.label,type:o.dpt.startsWith('1.')?'boolean':'number',dir:o.direction||'both',address:d.addresses[o.key]}))});
-const endpointSignals=()=>[...graph.endpoints.map(e=>({ref:{type:'mqtt',id:e.id},name:e.name+' · '+e.topic,type:e.payloadType})),...(graph.mqttDevices||[]).flatMap(d=>d.signals.map(x=>({ref:{type:'mqttDevice',id:d.id,signal:x.key},name:d.name+' · '+x.label,type:x.payloadType,topic:x.topic,direction:x.direction})))];
+const endpointSignals=()=>[...graph.endpoints.map(e=>({ref:{type:'mqtt',id:e.id},name:e.name+' · '+e.topic,type:e.payloadType})),...(graph.mqttDevices||[]).flatMap(d=>d.signals.map(x=>({ref:{type:'mqttDevice',id:d.id,signal:x.key},name:d.name+' · '+x.topic,type:x.payloadType,topic:x.topic,direction:x.direction})))];
 function notice(message,error=false){$('notice').textContent=message;$('notice').className='small mb-3 '+(error?'text-danger':'text-success')}
 function isFocused(r){
  if(focusRoute)return r.id===focusRoute;
