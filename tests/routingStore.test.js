@@ -68,14 +68,14 @@ test('migration previews both directions, preserves legacy config and avoids dup
     assert.throws(() => f.store.migrate(preview.candidates.map(c => c.key)), /outdated/);
   } finally { f.cleanup(); }
 });
-test('migration skips mappings and repeat intervals instead of silently changing semantics', () => {
+test('migration imports forward maps and ignores deprecated repeat intervals', () => {
   const f = fixture();
   try {
     f.gas[0].routes = [{ mqttTopic: 'home/dining/set', valueMap: { '1': 'ON' } }];
     f.gas[1].routes = [{ mqttTopic: 'home/dining/status', repeatInterval: 60 }];
     const preview = f.store.migrationPreview();
-    assert.equal(preview.candidates.length, 1);
-    assert.equal(preview.skipped.length, 2);
+    assert.equal(preview.candidates.length, 2);
+    assert.equal(preview.skipped.length, 1);
   } finally { f.cleanup(); }
 });
 
