@@ -62,3 +62,21 @@ test('invalid direction is rejected and updates preserve device ID', () => {
     assert.equal(store.list()[0].name, 'New Office');
   } finally { f.cleanup(); }
 });
+
+test('switch template maps separate DPT 1.001 command and status without changing group addresses', () => {
+  const f = fixture();
+  try {
+    f.gas.push({ address: '2/0/0', dpt: '1.001', direction: 'both' });
+    f.gas.push({ address: '2/0/1', dpt: '1.001', direction: 'knx2mqtt' });
+    const before = fs.readFileSync(f.gaPath, 'utf8');
+    const store = new DeviceStore(f.gas, f.gaPath);
+    assert.ok(store.templates().some(t => t.id === 'switch'));
+    const d = store.save({ name: 'Ceiling light', templateId: 'switch', addresses: { command: '2/0/0', status: '2/0/1' } });
+    assert.deepEqual(d.addresses, { command: '2/0/0', status: '2/0/1' });
+    assert.equal(new DeviceStore(f.gas, f.gaPath).list()[0].templateId, 'switch');
+    assert.equal(fs.readFileSync(f.gaPath, 'utf8'), before);
+    assert.throws(() => store.save({ name: 'Wrong DPT', templateId: 'switch', addresses: { command: '1/0/1', status: '2/0/1' } }), /DPT mismatch/);
+    f.gas.find(g => g.address === '2/0/0').direction = 'knx2mqtt';
+    assert.throws(() => store.save({ name: 'Wrong direction', templateId: 'switch', addresses: { command: '2/0/0', status: '2/0/1' } }, d.id), /Bidirectional/);
+  } finally { f.cleanup(); }
+});
