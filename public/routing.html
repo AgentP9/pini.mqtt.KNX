@@ -17,7 +17,7 @@ body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:42
 </div><aside class="col-12 col-xl-3">
 <div class="card mb-3"><div class="card-header fw-semibold">MQTT-Device anlegen</div><form class="card-body" id="mqtt-device-form">
 <label class="form-label" for="mqtt-device-name">Device-Name</label><input class="form-control mb-2" id="mqtt-device-name" required maxlength="120" placeholder="Sonos Esszimmer">
-<label class="form-label" for="mqtt-device-template">Template</label><select class="form-select mb-2" id="mqtt-device-template"><option value="sonos">Sonos Player</option><option value="generic">Generisches MQTT-Device</option></select>
+<label class="form-label" for="mqtt-device-template">Template</label><select class="form-select mb-2" id="mqtt-device-template"><option value="sonos">Sonos Player</option><option value="shelly-plug-s">Shelly Plug S</option><option value="generic">Generisches MQTT-Device</option></select>
 <label class="form-label" for="mqtt-device-base">MQTT-Basistopic</label><input class="form-control mb-3" id="mqtt-device-base" required placeholder="sonos/devices/Esszimmer">
 <button class="btn btn-outline-primary w-100" type="submit">MQTT-Device hinzufügen</button></form></div>
 <div class="card mb-3"><div class="card-header fw-semibold">MQTT-Device-Signal hinzufügen</div><form class="card-body" id="mqtt-signal-form">
@@ -47,6 +47,7 @@ const signals=()=>devices.flatMap(d=>{const t=templates.find(t=>t.id===d.templat
 const endpointSignals=()=>[...graph.endpoints.map(e=>({ref:{type:'mqtt',id:e.id},name:e.name+' · '+e.topic,type:e.payloadType})),...(graph.mqttDevices||[]).flatMap(d=>d.signals.map(x=>({ref:{type:'mqttDevice',id:d.id,signal:x.key},name:d.name+' · '+x.topic,type:x.payloadType,topic:x.topic,direction:x.direction})))];
 const mqttTemplates={
  sonos:[{key:'control',suffix:'/control',payloadType:'text',direction:'input'},{key:'volume',suffix:'/set/volume',payloadType:'number',direction:'input'},{key:'state',suffix:'/state',payloadType:'text',direction:'output'},{key:'volumeStatus',suffix:'/volume',payloadType:'number',direction:'output'}],
+ 'shelly-plug-s':[{key:'switchCommand',suffix:'/command/switch:0',payloadType:'text',direction:'input'}],
  generic:[{key:'command',suffix:'/set',payloadType:'text',direction:'input'},{key:'status',suffix:'/state',payloadType:'text',direction:'output'}]
 };
 function mqttTemplateUpgrade(device){
@@ -238,9 +239,7 @@ $('mqtt-device-form').addEventListener('submit',e=>{
  const name=$('mqtt-device-name').value.trim(),base=$('mqtt-device-base').value.trim().replace(/\/$/,'');
  if(!name||!base||/[+#\s]/.test(base)||base.startsWith('knx/')){notice('Ungültiges Basistopic.',true);return}
  const templateId=$('mqtt-device-template').value;
- const definitions=templateId==='sonos'?
- [{key:'control',label:'Wiedergabe',suffix:'/control',payloadType:'text',direction:'input'},{key:'volume',label:'Lautstärke setzen',suffix:'/set/volume',payloadType:'number',direction:'input'},{key:'state',label:'Wiedergabestatus',suffix:'/state',payloadType:'text',direction:'output'},{key:'volumeStatus',label:'Lautstärke Istwert',suffix:'/volume',payloadType:'number',direction:'output'}]:
- [{key:'command',label:'Befehl',suffix:'/set',payloadType:'text',direction:'input'},{key:'status',label:'Status',suffix:'/state',payloadType:'text',direction:'output'}];
+ const definitions=(mqttTemplates[templateId]||[]).map(d=>({...d,label:d.key}));
  const signals=definitions.map(d=>({key:d.key,label:d.label,topic:base+d.suffix,payloadType:d.payloadType,direction:d.direction}));
  if((graph.mqttDevices||[]).some(d=>d.signals.some(x=>signals.some(y=>y.topic===x.topic)))){notice('MQTT-Topic bereits vorhanden.',true);return}
  graph.mqttDevices.push({id:uid(),name,templateId,baseTopic:base,signals});dirty=true;e.target.reset();render();notice('MQTT-Device angelegt. Verbindungen noch nicht aktiviert.');
