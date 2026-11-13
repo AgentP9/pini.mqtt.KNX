@@ -978,7 +978,7 @@
         const value = ga && ga.lastValue != null ? formatValue(ga.lastValue, ga.dpt) : '–';
         return `<div class="device-detail"><span>${escHtml(o.label)} <code class="ms-1">${escHtml(address)}</code></span><span class="text-end">${escHtml(value)}</span></div>`;
       }).join('');
-      const status = missing.length ? '<span class="badge text-bg-warning">Mapping incomplete</span>' : '<span class="badge text-bg-secondary">Configured</span>';
+      const status = missing.length ? '<span class="badge text-bg-warning">Mapping incomplete</span>' : '';
       const setpointGA = d.addresses && gaByAddress.get(d.addresses.setpoint);
       const writable = isHeating && setpointGA && setpointGA.dpt === '9.001' && (!setpointGA.direction || ['both', 'mqtt2knx'].includes(setpointGA.direction));
       const setpointRaw = d.addresses && pendingGAValues.has(d.addresses.setpoint) ? pendingGAValues.get(d.addresses.setpoint) : setpointGA && setpointGA.lastValue;
