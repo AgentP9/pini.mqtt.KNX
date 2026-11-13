@@ -46,7 +46,7 @@ const signalKey=r=>r.type+':'+r.id+':'+(r.signal||'');
 const signals=()=>devices.flatMap(d=>{const t=templates.find(t=>t.id===d.templateId);return (t?.objects||[]).filter(o=>d.addresses?.[o.key]).map(o=>({ref:{type:'device',id:d.id,signal:o.key},name:d.name+' · '+o.label,type:o.dpt.startsWith('1.')?'boolean':'number',dpt:o.dpt,dir:o.direction||'both',address:d.addresses[o.key]}))});
 const endpointSignals=()=>[...graph.endpoints.map(e=>({ref:{type:'mqtt',id:e.id},name:e.name+' · '+e.topic,type:e.payloadType})),...(graph.mqttDevices||[]).flatMap(d=>d.signals.map(x=>({ref:{type:'mqttDevice',id:d.id,signal:x.key},name:d.name+' · '+x.topic,type:x.payloadType,topic:x.topic,direction:x.direction})))];
 const mqttTemplates={
- sonos:[{key:'control',suffix:'/control',payloadType:'text',direction:'input'},{key:'volume',suffix:'/set/volume',payloadType:'number',direction:'input'},{key:'state',suffix:'/state',payloadType:'text',direction:'output'}],
+ sonos:[{key:'control',suffix:'/control',payloadType:'text',direction:'input'},{key:'volume',suffix:'/set/volume',payloadType:'number',direction:'input'},{key:'state',suffix:'/state',payloadType:'text',direction:'output'},{key:'volumeStatus',suffix:'/volume',payloadType:'number',direction:'output'}],
  generic:[{key:'command',suffix:'/set',payloadType:'text',direction:'input'},{key:'status',suffix:'/state',payloadType:'text',direction:'output'}]
 };
 function mqttTemplateUpgrade(device){
@@ -239,7 +239,7 @@ $('mqtt-device-form').addEventListener('submit',e=>{
  if(!name||!base||/[+#\s]/.test(base)||base.startsWith('knx/')){notice('Ungültiges Basistopic.',true);return}
  const templateId=$('mqtt-device-template').value;
  const definitions=templateId==='sonos'?
- [{key:'control',label:'Wiedergabe',suffix:'/control',payloadType:'text',direction:'input'},{key:'volume',label:'Lautstärke setzen',suffix:'/set/volume',payloadType:'number',direction:'input'},{key:'state',label:'Wiedergabestatus',suffix:'/state',payloadType:'text',direction:'output'}]:
+ [{key:'control',label:'Wiedergabe',suffix:'/control',payloadType:'text',direction:'input'},{key:'volume',label:'Lautstärke setzen',suffix:'/set/volume',payloadType:'number',direction:'input'},{key:'state',label:'Wiedergabestatus',suffix:'/state',payloadType:'text',direction:'output'},{key:'volumeStatus',label:'Lautstärke Istwert',suffix:'/volume',payloadType:'number',direction:'output'}]:
  [{key:'command',label:'Befehl',suffix:'/set',payloadType:'text',direction:'input'},{key:'status',label:'Status',suffix:'/state',payloadType:'text',direction:'output'}];
  const signals=definitions.map(d=>({key:d.key,label:d.label,topic:base+d.suffix,payloadType:d.payloadType,direction:d.direction}));
  if((graph.mqttDevices||[]).some(d=>d.signals.some(x=>signals.some(y=>y.topic===x.topic)))){notice('MQTT-Topic bereits vorhanden.',true);return}
