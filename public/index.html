@@ -43,6 +43,9 @@
     .device-card details { border-top: 1px solid var(--bs-border-color); }
     .device-card summary { cursor: pointer; padding: .7rem 1rem; color: var(--bs-secondary-color); font-size: .85rem; }
     .device-card summary:hover { background: var(--bs-tertiary-bg); }
+    .device-switch-panel { border: 1px solid var(--bs-border-color); border-radius: .75rem; padding: 1rem; }
+    .device-switch-feedback { font-size: .9rem; }
+    .device-switch-message { min-height: 1.1rem; font-size: .78rem; }
     .device-metric .metric-header { display: flex; align-items: center; justify-content: space-between; gap: .4rem; min-height: 1.8rem; }
     .device-setpoint-edit { padding: .2rem .4rem; line-height: 1; }
     .device-setpoint-form[hidden] { display: none !important; }
@@ -853,6 +856,7 @@
     target.innerHTML = visible.map(d => {
       const tpl = deviceTemplate(d.templateId);
       const isHeating = d.templateId === 'room-heating';
+      const isSwitch = d.templateId === 'switch';
       const missing = Object.values(d.addresses || {}).filter(address => !gaByAddress.has(address));
       const detailRows = (tpl ? tpl.objects : []).filter(o => d.addresses && d.addresses[o.key]).map(o => {
         const address = d.addresses[o.key];
@@ -867,6 +871,22 @@
       const defaultSetpoint = Number.isFinite(Number(setpointRaw)) && setpointRaw !== undefined && setpointRaw !== null && setpointRaw !== '' ? Number(setpointRaw).toFixed(1) : '21.0';
       const editButton = writable ? `<button type="button" class="btn btn-sm btn-outline-secondary device-setpoint-edit" data-id="${escHtml(d.id)}" aria-label="Edit setpoint for ${escHtml(d.name)}" title="Write new setpoint to KNX"><i class="bi bi-pencil"></i></button>` : '';
       const metrics = isHeating ? `<div class="device-metrics">${metric(d, 'temperature', 'Current temperature')}${metric(d, 'setpoint', 'Setpoint', editButton)}</div>` : '';
+      const switchStatusAddress = isSwitch && d.addresses && d.addresses.status;
+      const switchStatusGA = switchStatusAddress && gaByAddress.get(switchStatusAddress);
+      const switchRaw = switchStatusGA && switchStatusGA.lastValue;
+      const switchState = switchRaw === true || switchRaw === 1 || ['1', 'true', 'on', 'ein'].includes(String(switchRaw).toLowerCase()) ? true
+        : switchRaw === false || switchRaw === 0 || ['0', 'false', 'off', 'aus'].includes(String(switchRaw).toLowerCase()) ? false : null;
+      const switchCommandGA = isSwitch && d.addresses && gaByAddress.get(d.addresses.command);
+      const switchWritable = isSwitch && switchCommandGA && switchCommandGA.dpt === '1.001' && ['both', 'mqtt2knx'].includes(switchCommandGA.direction || 'both');
+      const switchPanel = isSwitch ? `<div class="device-switch-panel">
+        <div class="d-flex align-items-center justify-content-between gap-3">
+          <div><div class="small text-muted">Actuator feedback</div><div class="device-switch-feedback fw-semibold">${switchState === null ? 'Unknown' : switchState ? 'On' : 'Off'}</div><div class="small text-muted">${escHtml(switchStatusAddress || 'Status not assigned')}</div></div>
+          <div class="form-check form-switch">
+            <input class="form-check-input device-switch-toggle" type="checkbox" role="switch" data-id="${escHtml(d.id)}" aria-label="Switch ${escHtml(d.name)}" ${switchState === true ? 'checked' : ''} ${switchWritable ? '' : 'disabled'} style="width:2.8rem;height:1.5rem">
+          </div>
+        </div>
+        <div class="device-switch-message text-muted mt-2" data-id="${escHtml(d.id)}" role="status"></div>
+      </div>` : '';
       return `<div class="col-12 col-xl-6"><article class="card device-card h-100">
         <div class="card-body">
           <div class="d-flex align-items-start gap-3 mb-3">
@@ -878,6 +898,7 @@
             </div>
           </div>
           ${metrics}
+          ${switchPanel}
         </div>
         <details data-device-id="${escHtml(d.id)}" ${expanded.has(d.id) ? 'open' : ''}><summary>Technical details · ${Object.keys(d.addresses || {}).length} group addresses</summary>${detailRows || '<div class="px-3 pb-3 text-muted small">No addresses assigned</div>'}</details>
       </article></div>`;
@@ -930,6 +951,33 @@
     } finally { button.disabled = false; }
   });
   document.getElementById('setpointModal').addEventListener('hidden.bs.modal', () => { setpointDeviceId = null; });
+  document.getElementById('device-list').addEventListener('change', async e => {
+    const toggle = e.target.closest('.device-switch-toggle');
+    if (!toggle) return;
+    const device = devices.find(d => d.id === toggle.dataset.id);
+    if (!device || device.templateId !== 'switch') return;
+    const ga = configuredGAs.find(g => g.address === device.addresses.status);
+    const raw = ga && ga.lastValue;
+    const actualOn = raw === true || raw === 1 || ['1', 'true', 'on', 'ein'].includes(String(raw).toLowerCase());
+    const desired = toggle.checked;
+    // Keep the switch showing feedback, not the unconfirmed command.
+    toggle.checked = actualOn;
+    toggle.disabled = true;
+    const message = toggle.closest('.device-switch-panel').querySelector('.device-switch-message');
+    message.textContent = 'Sending command…';
+    try {
+      const response = await fetch('/api/devices/' + encodeURIComponent(device.id) + '/switch', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value: desired }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Switch write failed');
+      message.textContent = 'Command sent; awaiting actuator status feedback.';
+      message.className = 'device-switch-message text-muted mt-2';
+    } catch (err) {
+      message.textContent = 'Write failed: ' + err.message;
+      message.className = 'device-switch-message text-danger mt-2';
+    } finally { toggle.disabled = false; }
+  });
   document.getElementById('btn-add-device').addEventListener('click', () => openDeviceEditor());
   deviceTemplateSelect.addEventListener('change', () => renderDeviceFields());
   document.getElementById('device-list').addEventListener('click', e => {
