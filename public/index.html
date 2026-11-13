@@ -551,8 +551,8 @@
       gaBody.innerHTML = '<tr><td colspan="9" class="text-center empty-msg p-3">No group addresses configured.</td></tr>';
       return;
     }
-    // Visually group contiguous device cells without HTML rowspan so Bootstrap's
-    // alternating row backgrounds remain continuous across every column.
+    // Use real rowspan for contiguous visible rows. Recreate the per-row zebra
+    // background inside each spanning cell after layout.
     const deviceGroups = sorted.map(ga => {
       const assigned = assignedDevices(ga.address);
       if (assigned.length === 1) return { key: 'configured:' + assigned[0].id, kind: 'configured' };
@@ -560,13 +560,14 @@
       const suggestion = suggestDeviceForGA(ga);
       return suggestion ? { key: 'suggested:' + suggestion.templateId + ':' + suggestion.name.toLowerCase() + ':' + Object.entries(suggestion.addresses).sort().map(([k, v]) => k + '=' + v).join('|'), kind: 'suggested' } : null;
     });
-    const groupStarts = sorted.map(() => true);
+    const spans = sorted.map(() => 1);
     for (let i = 0; i < sorted.length;) {
       const group = deviceGroups[i];
       if (!group) { i++; continue; }
       let end = i + 1;
       while (end < sorted.length && deviceGroups[end] && deviceGroups[end].key === group.key) end++;
-      for (let j = i + 1; j < end; j++) groupStarts[j] = false;
+      spans[i] = end - i;
+      for (let j = i + 1; j < end; j++) spans[j] = 0;
       i = end;
     }
     gaBody.innerHTML = sorted.map((ga, rowIndex) => {
@@ -592,7 +593,7 @@
         <td><small class="text-muted">${escHtml(ga.comment || '')}</small></td>
         <td class="text-center">${dirIcon}</td>
         <td>${routesBadge}${repeatBadge}</td>
-        <td class="align-middle">${groupStarts[rowIndex] ? deviceCell : ' '}</td>
+        ${spans[rowIndex] ? `<td rowspan="${spans[rowIndex]}" class="align-middle ga-device-cell">${deviceCell}</td>` : ''}
         <td class="ga-last-value"><strong>${escHtml(ga.lastValue !== undefined && ga.lastValue !== null ? formatValue(ga.lastValue, ga.dpt) : '–')}</strong></td>
         <td class="text-end text-nowrap">
           <button class="btn btn-sm btn-outline-secondary btn-edit-ga me-1" data-address="${escHtml(ga.address)}" aria-label="Edit"><i class="bi bi-pencil-fill"></i></button>
@@ -601,6 +602,27 @@
       </tr>
     `;
     }).join('');
+    // Bootstrap stripes are painted on individual cells; a rowspan would otherwise
+    // inherit only the first row's stripe. Build matching stripe bands using actual
+    // rendered row heights, including when filtering or sorting changes the order.
+    for (const cell of gaBody.querySelectorAll('td.ga-device-cell[rowspan]')) {
+      const count = Number(cell.rowSpan);
+      if (count < 2) continue;
+      const rows = Array.from(gaBody.rows);
+      const first = rows.indexOf(cell.parentElement);
+      if (first < 0) continue;
+      let offset = 0;
+      const stops = [];
+      for (let i = first; i < Math.min(first + count, rows.length); i++) {
+        const height = rows[i].getBoundingClientRect().height;
+        const stripe = i % 2 === 1 ? 'var(--bs-table-striped-bg)' : 'transparent';
+        stops.push(stripe + ' ' + offset + 'px', stripe + ' ' + (offset + height) + 'px');
+        offset += height;
+      }
+      cell.style.boxShadow = 'none';
+      cell.style.backgroundColor = 'var(--bs-table-bg)';
+      cell.style.backgroundImage = 'linear-gradient(to bottom, ' + stops.join(', ') + ')';
+    }
   }
 
   // ── GA table column sorting ───────────────────────────────────────────────────
