@@ -65,6 +65,15 @@ class WebServer {
       } catch (err) { res.status(400).json({ error: err.message }); }
     });
 
+    this.app.get('/api/routing/migration-preview', (_req, res) => res.json(this.routingStore.migrationPreview()));
+    this.app.post('/api/routing/migrate', (req, res) => {
+      try {
+        const data = this.routingStore.migrate(req.body && req.body.keys);
+        this.eventEmitter.emit('routing-changed', data);
+        res.json(data);
+      } catch (err) { res.status(400).json({ error: err.message }); }
+    });
+
     // Diagnostic write only for an existing room-heating device's setpoint object.
     // This endpoint never changes configuration or fabricates a confirmed device value.
     this.app.post('/api/devices/:id/setpoint', (req, res) => {
