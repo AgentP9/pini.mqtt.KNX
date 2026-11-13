@@ -67,7 +67,11 @@ function isFocused(r){
  if(focusRoute)return r.id===focusRoute;
  if(!focusAddress)return true;
  const list=signals();
- return [r.from,r.to].some(ref=>list.some(s=>signalKey(s.ref)===signalKey(ref)&&s.address===focusAddress));
+ // A GA deep-link selects its device, not only that one signal.
+ // This keeps the Sonos state -> KNX status feedback visible when the
+ // designer was opened from the switch command GA.
+ const deviceIds=new Set(list.filter(s=>s.address===focusAddress).map(s=>s.ref.id));
+ return [r.from,r.to].some(ref=>ref.type==='device'&&deviceIds.has(ref.id));
 }
 function transformLabel(r){
  if(!r.transform)return 'Direkt';
