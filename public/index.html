@@ -39,7 +39,11 @@
     }
     .direction-knx  { color: #0d6efd; font-weight: 600; }
     .direction-mqtt { color: #198754; font-weight: 600; }
-    #log-wrapper { max-height: 60vh; overflow-y: auto; }
+    #log-wrapper { height: calc(100dvh - 8rem); overflow-y: auto; }
+    #trafficDrawer { --bs-offcanvas-width: min(960px, 100vw); }
+    #trafficDrawer .offcanvas-body { min-height: 0; }
+    #trafficDrawer table { min-width: 680px; }
+    @media (max-width: 575.98px) { #trafficDrawer { --bs-offcanvas-width: 100vw; } }
     .table-sm td, .table-sm th { vertical-align: middle; }
     #ga-table td { font-size: 0.9rem; }
     .empty-msg { color: #6c757d; font-style: italic; }
@@ -78,6 +82,7 @@
     <div class="d-flex gap-2 align-items-center">
       <span id="knx-badge"  class="badge bg-secondary badge-status">KNX: …</span>
       <span id="mqtt-badge" class="badge bg-secondary badge-status">MQTT: …</span>
+      <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="offcanvas" data-bs-target="#trafficDrawer" aria-controls="trafficDrawer" aria-label="Open live traffic logs" title="Live traffic logs"><i class="bi bi-terminal"></i> <span class="d-none d-sm-inline">Live Logs</span></button>
       <button class="btn btn-sm btn-outline-light" id="btn-restart-mqtt" title="Restart MQTT connection" aria-label="Restart MQTT connection">
         <i class="bi bi-arrow-repeat"></i>
       </button>
@@ -173,13 +178,15 @@
     </div>
   </div>
 
-  <!-- Traffic Log card -->
-  <div class="card shadow-sm mb-4">
-    <div class="card-header d-flex justify-content-between align-items-center">
-      <span class="fw-semibold">Live Traffic Log</span>
-      <button class="btn btn-sm btn-outline-secondary" id="btn-clear">Clear</button>
+</div><!-- /container -->
+
+  <!-- Live traffic drawer -->
+  <div class="offcanvas offcanvas-end" tabindex="-1" id="trafficDrawer" aria-labelledby="trafficDrawerTitle">
+    <div class="offcanvas-header border-bottom">
+      <h5 class="offcanvas-title" id="trafficDrawerTitle"><i class="bi bi-terminal me-2"></i>Live Traffic Log</h5>
+      <div class="d-flex align-items-center gap-2"><button class="btn btn-sm btn-outline-secondary" id="btn-clear">Clear</button><button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button></div>
     </div>
-    <div class="card-body p-0">
+    <div class="offcanvas-body p-0">
       <div id="log-wrapper">
         <table class="table table-sm table-hover mb-0">
           <thead class="table-dark sticky-top">
@@ -200,7 +207,6 @@
     </div>
   </div>
 
-</div><!-- /container -->
 
 <!-- Add / Edit Group Address Modal -->
 <div class="modal fade" id="gaModal" tabindex="-1" aria-labelledby="gaModalTitle" aria-hidden="true">
