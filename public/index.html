@@ -551,8 +551,8 @@
       gaBody.innerHTML = '<tr><td colspan="9" class="text-center empty-msg p-3">No group addresses configured.</td></tr>';
       return;
     }
-    // Rowspan only contiguous visible rows belonging to the same device.
-    // A sort/filter can split a group; each contiguous run gets its own cell.
+    // Visually group contiguous device cells without HTML rowspan so Bootstrap's
+    // alternating row backgrounds remain continuous across every column.
     const deviceGroups = sorted.map(ga => {
       const assigned = assignedDevices(ga.address);
       if (assigned.length === 1) return { key: 'configured:' + assigned[0].id, kind: 'configured' };
@@ -560,14 +560,13 @@
       const suggestion = suggestDeviceForGA(ga);
       return suggestion ? { key: 'suggested:' + suggestion.templateId + ':' + suggestion.name.toLowerCase() + ':' + Object.entries(suggestion.addresses).sort().map(([k, v]) => k + '=' + v).join('|'), kind: 'suggested' } : null;
     });
-    const spans = sorted.map(() => 1);
+    const groupStarts = sorted.map(() => true);
     for (let i = 0; i < sorted.length;) {
       const group = deviceGroups[i];
       if (!group) { i++; continue; }
       let end = i + 1;
       while (end < sorted.length && deviceGroups[end] && deviceGroups[end].key === group.key) end++;
-      spans[i] = end - i;
-      for (let j = i + 1; j < end; j++) spans[j] = 0;
+      for (let j = i + 1; j < end; j++) groupStarts[j] = false;
       i = end;
     }
     gaBody.innerHTML = sorted.map((ga, rowIndex) => {
@@ -580,7 +579,7 @@
         : '';
       const assignments = assignedDevices(ga.address);
       const suggestion = assignments.length ? null : suggestDeviceForGA(ga);
-      const deviceCell = assignments.length ? assignments.map(d => `<div><span class="fw-semibold">${escHtml(d.name)}</span><span class="small text-muted ms-1">(${escHtml(d.role)})</span></div>`).join('') : suggestion ? `<button type="button" class="btn btn-sm btn-outline-primary btn-suggest-device text-start" data-address="${escHtml(ga.address)}" title="Review suggested device mapping"><i class="bi bi-lightbulb me-1"></i>Suggest: ${escHtml(suggestion.name)} <span class="text-muted">(${escHtml(suggestion.templateName)})</span></button>` : '<span class="text-muted">–</span>';
+      const deviceCell = assignments.length ? assignments.map(d => `<div><span class="fw-semibold">${escHtml(d.name)}</span><span class="small text-muted ms-1">(${escHtml(d.role)})</span></div>`).join('') : suggestion ? `<button type="button" class="btn btn-sm btn-outline-primary btn-suggest-device text-start" data-address="${escHtml(ga.address)}" title="Review suggested device mapping"><i class="bi bi-lightbulb me-1"></i>${escHtml(suggestion.name)} <span class="text-muted">(${escHtml(suggestion.templateName)})</span></button>` : '<span class="text-muted">–</span>';
       const dir = ga.direction || 'both';
       const dirIcon = dir === 'knx2mqtt' ? '<i class="bi bi-arrow-right" title="KNX → MQTT only"></i>'
                     : dir === 'mqtt2knx' ? '<i class="bi bi-arrow-left"  title="MQTT → KNX only"></i>'
@@ -593,7 +592,7 @@
         <td><small class="text-muted">${escHtml(ga.comment || '')}</small></td>
         <td class="text-center">${dirIcon}</td>
         <td>${routesBadge}${repeatBadge}</td>
-        ${spans[rowIndex] ? `<td rowspan="${spans[rowIndex]}" class="align-middle">${deviceCell}</td>` : ''}
+        <td class="align-middle">${groupStarts[rowIndex] ? deviceCell : ' '}</td>
         <td class="ga-last-value"><strong>${escHtml(ga.lastValue !== undefined && ga.lastValue !== null ? formatValue(ga.lastValue, ga.dpt) : '–')}</strong></td>
         <td class="text-end text-nowrap">
           <button class="btn btn-sm btn-outline-secondary btn-edit-ga me-1" data-address="${escHtml(ga.address)}" aria-label="Edit"><i class="bi bi-pencil-fill"></i></button>
