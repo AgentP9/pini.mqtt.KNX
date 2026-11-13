@@ -615,12 +615,14 @@
       const stops = [];
       for (let i = first; i < Math.min(first + count, rows.length); i++) {
         const height = rows[i].getBoundingClientRect().height;
-        const stripe = i % 2 === 0 ? 'var(--bs-table-striped-bg)' : 'transparent';
+        const stripe = i % 2 === 1 ? 'var(--bs-table-striped-bg)' : 'transparent';
         stops.push(stripe + ' ' + offset + 'px', stripe + ' ' + (offset + height) + 'px');
         offset += height;
       }
-      cell.style.boxShadow = 'none';
-      cell.style.backgroundColor = 'var(--bs-table-bg)';
+      // Bootstrap table stripes are drawn with an inset box-shadow, which otherwise
+      // paints over our gradient. Override it with !important for rowspan cells only.
+      cell.style.setProperty('box-shadow', 'none', 'important');
+      cell.style.setProperty('background-color', 'var(--bs-table-bg)', 'important');
       cell.style.backgroundImage = 'linear-gradient(to bottom, ' + stops.join(', ') + ')';
     }
   }
