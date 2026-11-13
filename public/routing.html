@@ -192,7 +192,7 @@ $('route-dialog-form').addEventListener('submit',e=>{
   if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))throw Error('JSON-Objekt erwartet');
   let transform;
   if(Object.hasOwn(parsed,'jsonPath')){
-    if(typeof parsed.jsonPath!=='string'||!/^[a-zA-Z_$][\\w$]*(?:\\.[a-zA-Z_$][\\w$]*){0,9}$/.test(parsed.jsonPath))throw Error('Ungültiger JSON-Feldpfad');
+    if(typeof parsed.jsonPath!=='string'||!/^[a-zA-Z_$][\w$]*(?:\.[a-zA-Z_$][\w$]*){0,9}$/.test(parsed.jsonPath))throw Error('Ungültiger JSON-Feldpfad');
     if(parsed.values!==undefined&&(!parsed.values||typeof parsed.values!=='object'||Array.isArray(parsed.values)))throw Error('Ungültige JSON-Wertetabelle');
     transform={kind:'json',path:parsed.jsonPath,...(parsed.values?{values:parsed.values}:{}),...(Object.hasOwn(parsed,'*')?{defaultValue:parsed['*']}:{})};
    }
