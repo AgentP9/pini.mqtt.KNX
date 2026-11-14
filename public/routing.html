@@ -33,7 +33,7 @@ body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:42
 <button class="btn btn-outline-primary w-100" type="submit"><i class="bi bi-plus-lg"></i> MQTT hinzufügen</button></form></div>
 
 <p class="small muted mt-3">Bestehende GA-Routen bleiben aktiv. Neue Verbindungen werden separat gespeichert. Vor dem Aktivieren werden Signaltypen und Schreibrichtungen geprüft.</p>
-</aside></div></main><dialog id="route-dialog" aria-labelledby="route-dialog-title"><form id="route-dialog-form" class="p-3"><h3 class="h5 mb-3" id="route-dialog-title">Verbindung bearbeiten</h3><div id="route-dialog-path" class="small text-secondary mb-3"></div><label class="form-label" for="route-dialog-direction">Datenfluss</label><select class="form-select mb-3" id="route-dialog-direction"><option value="knx2mqtt">KNX → MQTT</option><option value="mqtt2knx">MQTT → KNX</option></select><div class="small text-secondary mb-3" id="route-dialog-direction-hint"></div><label class="form-label" for="route-dialog-map">Wertumwandlung (JSON)</label><textarea class="form-control mb-2" id="route-dialog-map" rows="5" spellcheck="false"></textarea><p class="small text-secondary mb-3">JSON-Feld aus MQTT extrahieren: <code>{"jsonPath":"output","values":{"true":"ON","false":"OFF"}}</code>. Verschachtelte Felder: <code>aenergy.total</code>.</p><div class="form-check mb-4"><input class="form-check-input" type="checkbox" id="route-dialog-enabled"><label class="form-check-label" for="route-dialog-enabled">Verbindung aktiv</label></div><div class="d-flex gap-2 justify-content-between"><button type="button" class="btn btn-outline-danger" id="route-dialog-delete">Verbindung löschen</button><div class="d-flex gap-2"><button type="button" class="btn btn-outline-secondary" id="route-dialog-cancel">Abbrechen</button><button type="submit" class="btn btn-primary">Übernehmen</button></div></div><p class="small text-secondary mt-3 mb-0">Änderungen anschließend aktivieren.</p></form></dialog>
+</aside></div></main><dialog id="route-dialog" aria-labelledby="route-dialog-title"><form id="route-dialog-form" class="p-3"><h3 class="h5 mb-3" id="route-dialog-title">Verbindung bearbeiten</h3><div id="route-dialog-path" class="small text-secondary mb-3"></div><label class="form-label" for="route-dialog-direction">Datenfluss</label><select class="form-select mb-3" id="route-dialog-direction"><option value="knx2mqtt">KNX → MQTT</option><option value="mqtt2knx">MQTT → KNX</option><option value="knx2knx">KNX → KNX</option></select><div class="small text-secondary mb-3" id="route-dialog-direction-hint"></div><label class="form-label" for="route-dialog-map">Wertumwandlung (JSON)</label><textarea class="form-control mb-2" id="route-dialog-map" rows="5" spellcheck="false"></textarea><p class="small text-secondary mb-3">JSON-Feld aus MQTT extrahieren: <code>{"jsonPath":"output","values":{"true":"ON","false":"OFF"}}</code>. Verschachtelte Felder: <code>aenergy.total</code>.</p><div class="form-check mb-4"><input class="form-check-input" type="checkbox" id="route-dialog-enabled"><label class="form-check-label" for="route-dialog-enabled">Verbindung aktiv</label></div><div class="d-flex gap-2 justify-content-between"><button type="button" class="btn btn-outline-danger" id="route-dialog-delete">Verbindung löschen</button><div class="d-flex gap-2"><button type="button" class="btn btn-outline-secondary" id="route-dialog-cancel">Abbrechen</button><button type="submit" class="btn btn-primary">Übernehmen</button></div></div><p class="small text-secondary mt-3 mb-0">Änderungen anschließend aktivieren.</p></form></dialog>
 <script>
 let graph={endpoints:[],mqttDevices:[],routes:[]},devices=[],templates=[],selected=null,dirty=false,migration=null;
 let focusAddress=new URLSearchParams(location.search).get("ga"),focusRoute=new URLSearchParams(location.search).get("route"),focusDevice=new URLSearchParams(location.search).get("device");
@@ -131,33 +131,34 @@ function drawLinks(routes=graph.routes.filter(isFocused)){
  for(const r of routes){
   const a=find(r.from),b=find(r.to);if(!a||!b)continue;
   const p=a.getBoundingClientRect(),q=b.getBoundingClientRect();
+  const knxToKnx=r.from.type==='device'&&r.to.type==='device';
   const fromDevice=r.from.type==='device',left=fromDevice?p:q,right=fromDevice?q:p;
   const x1=left.right-rect.left+root.scrollLeft,y1=left.top+left.height/2-rect.top+root.scrollTop;
   const x2=right.left-rect.left+root.scrollLeft,y2=right.top+right.height/2-rect.top+root.scrollTop;
   const mid=(x1+x2)/2,ns='http://www.w3.org/2000/svg';
   const path=document.createElementNS(ns,'path');
-  path.setAttribute('d','M '+(r.from.type==='device'?x1:x1+2)+' '+y1+' C '+mid+' '+y1+', '+mid+' '+y2+', '+(r.from.type==='device'?x2-2:x2)+' '+y2);
+  path.setAttribute('d',knxToKnx?'M '+x1+' '+y1+' C '+(x1+70)+' '+y1+', '+(x2+70)+' '+y2+', '+x2+' '+y2:'M '+(r.from.type==='device'?x1:x1+2)+' '+y1+' C '+mid+' '+y1+', '+mid+' '+y2+', '+(r.from.type==='device'?x2-2:x2)+' '+y2);
   path.setAttribute('class','connection-path'+(r.enabled?'':' inactive'));
   svg.appendChild(path);
   // Arrowhead immediately before the destination connector circle.
   const forward=r.from.type==='device';
-  const tipX=forward?x2-2:x1+2;
+  const tipX=knxToKnx?x2:forward?x2-2:x1+2;
   const tipY=forward?y2:y1;
   const arrow=document.createElementNS(ns,'path');
-  arrow.setAttribute('d',forward?'M -7 -4 L 0 0 L -7 4':'M 7 -4 L 0 0 L 7 4');
+  arrow.setAttribute('d',knxToKnx?'M 7 -4 L 0 0 L 7 4':forward?'M -7 -4 L 0 0 L -7 4':'M 7 -4 L 0 0 L 7 4');
   arrow.setAttribute('transform','translate('+tipX+' '+tipY+')');
   arrow.setAttribute('class','connection-arrow'+(r.enabled?'':' inactive'));
   svg.appendChild(arrow);
   const chip=document.createElement('button');chip.type='button';chip.className='btn btn-sm btn-light border route-transform edit-transform'+(r.enabled?'':' inactive');
   chip.dataset.id=r.id;chip.textContent=transformLabel(r);chip.title='Wertumwandlung bearbeiten';
-  chip.style.left=mid+'px';chip.style.top=((y1+y2)/2)+'px';root.appendChild(chip);
+  chip.style.left=(knxToKnx?x1+70:mid)+'px';chip.style.top=((y1+y2)/2)+'px';root.appendChild(chip);
   
  }
 }
 $('clear-focus').onclick=()=>{focusAddress=null;focusRoute=null;focusDevice=null;history.replaceState(null,'',location.pathname);render()};
 function renderRoutes(){ /* Connections are managed directly on the canvas. */ }
 function signalHtml(s){const key=signalKey(s.ref);const button='<button class="btn btn-sm btn-outline-primary signal-btn '+(selected&&signalKey(selected.ref)===key?'selected':'')+'" data-key="'+esc(key)+'" title="Als Quelle oder Ziel wählen"><i class="bi bi-circle"></i></button>';const label='<span>'+esc(s.name.split(' · ').slice(1).join(' · '))+' <span class="muted">'+(s.ref.type==='device'?' · '+esc(s.address)+' · DPT '+esc(s.dpt):' ('+esc(s.type)+')')+'</span></span>';return '<div class="signal">'+(s.ref.type==='device'?label+button:button+label)+'</div>'}
-function choose(ref){const all=[...signals(),...endpointSignals()];const next=all.find(s=>signalKey(s.ref)===signalKey(ref));if(!next)return;if(!selected){selected=next;notice('Quelle gewählt: '+next.name+'. Jetzt Ziel auswählen.');render();return}const from=selected;selected=null;if((from.ref.type==='device')===(next.ref.type==='device')){notice('Eine Verbindung benötigt ein Device und einen MQTT-Endpunkt.',true);render();return}if(from.type!==next.type){notice('Datentypen unterscheiden sich. Nach dem Verbinden eine Wertumwandlung konfigurieren.',true)}if(from.ref.type==='device'&&!['both','knx2mqtt'].includes(from.dir)){notice('Dieses Device-Signal kann nicht gelesen werden.',true);render();return}if(next.ref.type==='device'&&!['status','volumeStatus'].includes(next.ref.signal)&&!['both','mqtt2knx'].includes(next.dir)){notice('Dieses Device-Signal ist nicht schreibbar.',true);render();return}if(next.ref.type==='mqttDevice'&&!['input','both'].includes(next.direction)){notice('Dieses MQTT-Signal ist kein Eingang.',true);render();return}if(from.ref.type==='mqttDevice'&&!['output','both'].includes(from.direction)){notice('Dieses MQTT-Signal ist kein Ausgang.',true);render();return}if(graph.routes.some(r=>signalKey(r.from)===signalKey(from.ref)&&signalKey(r.to)===signalKey(next.ref))){notice('Diese Verbindung besteht bereits.',true);render();return}graph.routes.push({id:uid(),from:from.ref,to:next.ref,enabled:true,...(from.type!==next.type?{transform:{kind:'map',values:{}}}:{})});dirty=true;notice('Verbindung hinzugefügt. Mit „Änderungen aktivieren“ speichern.');render()}
+function choose(ref){const all=[...signals(),...endpointSignals()];const next=all.find(s=>signalKey(s.ref)===signalKey(ref));if(!next)return;if(!selected){selected=next;notice('Quelle gewählt: '+next.name+'. Jetzt Ziel auswählen.');render();return}const from=selected;selected=null;if(from.ref.type!=='device'&&next.ref.type!=='device'){notice('Mindestens ein Endpunkt muss KNX sein.',true);render();return}if(signalKey(from.ref)===signalKey(next.ref)||(from.ref.type==='device'&&next.ref.type==='device'&&from.address===next.address)){notice('Quelle und Ziel müssen unterschiedliche Gruppenadressen haben.',true);render();return}if(from.ref.type==='device'&&next.ref.type==='device'&&graph.routes.some(r=>r.from.type==='device'&&r.to.type==='device'&&signals().find(x=>signalKey(x.ref)===signalKey(r.from))?.address===next.address&&signals().find(x=>signalKey(x.ref)===signalKey(r.to))?.address===from.address)){notice('Direkte KNX-Rückkopplung nicht erlaubt.',true);render();return}if(from.type!==next.type){notice('Datentypen unterscheiden sich. Nach dem Verbinden eine Wertumwandlung konfigurieren.',true)}if(from.ref.type==='device'&&!['both','knx2mqtt'].includes(from.dir)){notice('Dieses Device-Signal kann nicht gelesen werden.',true);render();return}if(next.ref.type==='device'&&!['status','volumeStatus'].includes(next.ref.signal)&&!['both','mqtt2knx'].includes(next.dir)){notice('Dieses Device-Signal ist nicht schreibbar.',true);render();return}if(next.ref.type==='mqttDevice'&&!['input','both'].includes(next.direction)){notice('Dieses MQTT-Signal ist kein Eingang.',true);render();return}if(from.ref.type==='mqttDevice'&&!['output','both'].includes(from.direction)){notice('Dieses MQTT-Signal ist kein Ausgang.',true);render();return}if(graph.routes.some(r=>signalKey(r.from)===signalKey(from.ref)&&signalKey(r.to)===signalKey(next.ref))){notice('Diese Verbindung besteht bereits.',true);render();return}graph.routes.push({id:uid(),from:from.ref,to:next.ref,enabled:true,...(from.type!==next.type?{transform:{kind:'map',values:{}}}:{})});dirty=true;notice('Verbindung hinzugefügt. Mit „Änderungen aktivieren“ speichern.');render()}
 
 let editingRouteId=null;
 function routeMapText(r){
@@ -173,8 +174,8 @@ function openRouteDialog(id){
  const name=ref=>all.find(x=>signalKey(x.ref)===signalKey(ref))?.name||'Unbekannt';
  $('route-dialog-path').textContent=name(r.from)+' → '+name(r.to);
  $('route-dialog-map').value=routeMapText(r);
- $('route-dialog-direction').value=r.from.type==='device'?'knx2mqtt':'mqtt2knx';
- $('route-dialog-direction').disabled=Boolean(r.legacyKey);
+ $('route-dialog-direction').value=r.from.type==='device'?(r.to.type==='device'?'knx2knx':'knx2mqtt'):'mqtt2knx';
+ $('route-dialog-direction').disabled=Boolean(r.legacyKey)||r.to.type==='device'&&r.from.type==='device';
  $('route-dialog-direction-hint').textContent=r.legacyKey?'Migrierte Legacy-Verbindung: Richtung erst nach Ablösen der Legacy-Route änderbar.':'Die Richtung bestimmt, welches Signal sendet und welches empfängt.';
  $('route-dialog-enabled').checked=r.enabled;
  $('route-dialog').showModal();
@@ -199,8 +200,10 @@ $('route-dialog-form').addEventListener('submit',e=>{
   else if(Object.hasOwn(parsed,'constant')&&Object.keys(parsed).length===1)transform={kind:'constant',value:parsed.constant};
   else if(Object.keys(parsed).length){const {'*':fallback,...values}=parsed;transform={kind:'map',values,...(Object.hasOwn(parsed,'*')?{defaultValue:fallback}:{})}}
   const direction=$('route-dialog-direction').value;
-  const currentDirection=r.from.type==='device'?'knx2mqtt':'mqtt2knx';
+  const currentDirection=r.from.type==='device'?(r.to.type==='device'?'knx2knx':'knx2mqtt'):'mqtt2knx';
   if(direction!==currentDirection){
+   if(currentDirection==='knx2knx')throw Error('KNX→KNX: Richtung durch Auswahl von Quelle und Ziel festgelegt.');
+   if(direction==='knx2knx')throw Error('KNX→KNX-Verbindungen durch Auswahl zweier KNX-Signale erstellen.');
    if(r.legacyKey)throw Error('Migrierte Legacy-Verbindung kann nicht umgedreht werden.');
    const from=r.to,to=r.from;
    const all=[...signals(),...endpointSignals()];
