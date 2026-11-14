@@ -106,8 +106,15 @@ knxHandler.on('groupValueWrite', ({ address, value }) => {
       const destination = routingStore.resolve(route.to, routingStore.endpoints);
       const payload = routePayload(value, source.type, false, route.transform);
       if (payload === null) continue;
-      mqttHandler.publish(destination.topic, payload);
-      eventEmitter.emit('routing-traffic', { id: route.id, value: payload, direction: 'KNX→MQTT', timestamp: new Date().toISOString() });
+      if (route.to.type === 'device') {
+        if (!knxHandler.connected || source.address === destination.address) continue;
+        const knxPayload = routePayload(value, source.type, true, route.transform);
+        if (knxPayload === null || !knxHandler.write(destination.address, knxPayload)) continue;
+        eventEmitter.emit('routing-traffic', { id: route.id, value: knxPayload, direction: 'KNX→KNX', timestamp: new Date().toISOString() });
+      } else {
+        mqttHandler.publish(destination.topic, payload);
+        eventEmitter.emit('routing-traffic', { id: route.id, value: payload, direction: 'KNX→MQTT', timestamp: new Date().toISOString() });
+      }
     } catch (err) { console.warn('[ROUTING] Invalid KNX route:', err.message); }
   }
 });
