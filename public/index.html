@@ -465,7 +465,7 @@
 
   // Conservative, read-only device suggestions. Never create or modify devices automatically.
   function gaBaseName(name) {
-    return String(name || '').replace(/(?:[\s_-]+(?:play\s*\/\s*stop|an\s*\/\s*aus|schaltbefehl|schalten|schaltstatus|status|rückmeldung|rueckmeldung|feedback|command|ein\s*\/\s*aus|on\s*\/\s*off))\s*$/i, '').trim();
+    return String(name || '').replace(/(?:[\s_-]+(?:play\s*\/\s*stop|an\s*\/\s*aus|schaltbefehl|schalten|schaltstatus|dimmen\s+relativ|dimmwert|helligkeitswert|helligkeit|wert|status|rückmeldung|rueckmeldung|feedback|command|ein\s*\/\s*aus|on\s*\/\s*off))\s*$/i, '').trim();
   }
   function gaPosition(address) {
     const parts = String(address).split('/').map(Number);
@@ -486,6 +486,21 @@
     const occupied = new Set(devices.flatMap(d => Object.values(d.addresses || {})));
     const base = gaBaseName(ga.name);
     if (!base || base === ga.name && !/\s/.test(base)) return null;
+    // Prefer a complete four-address dimmer block over the generic switch
+    // and Sonos templates when all KNX datapoint types and names agree.
+    const dimmerTemplate=deviceTemplates.find(t=>t.id==='dimmer');
+    if(dimmerTemplate){
+      const matches={};
+      const pattern=/\\b(dimm|helligkeit|wert)\\b/i;
+      const group=configuredGAs.filter(g=>!occupied.has(g.address)&&gaBaseName(g.name).toLowerCase()===base.toLowerCase());
+      for(const object of dimmerTemplate.objects){
+        const candidates=group.filter(g=>gaDirectionMatches(g,object));
+        if(candidates.length===1)matches[object.key]=candidates[0].address;
+      }
+      const dimmingNamed=group.some(g=>/dimm/i.test(g.name||''));
+      if(dimmingNamed&&Object.keys(matches).length===4&&new Set(Object.values(matches)).size===4)
+        return {templateId:'dimmer',templateName:dimmerTemplate.name,name:base,addresses:matches,score:100};
+    }
     const candidates = [];
     for (const tpl of deviceTemplates) {
       const required = tpl.objects.filter(o => !o.optional);
