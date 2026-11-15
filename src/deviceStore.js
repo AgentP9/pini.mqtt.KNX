@@ -22,6 +22,14 @@ const TEMPLATES = Object.freeze({
       { key: 'brightness', label: 'Brightness value', dpt: '5.001', direction: 'knx2mqtt' },
     ],
   },
+  'roller-shutter': {
+    id: 'roller-shutter', name: 'Rollladen',
+    objects: [
+      { key: 'upDown', label: 'Auf/Ab', dpt: '1.008', direction: 'both' },
+      { key: 'stop', label: 'Stopp/Schritt', dpt: '1.017', direction: 'both' },
+      { key: 'position', label: 'Position', dpt: '5.001', direction: 'knx2mqtt' },
+    ],
+  },
   'sonos': {
     id: 'sonos', name: 'Sonos',
     objects: [
