@@ -318,7 +318,7 @@
       <label class="form-label" for="device-template">Template</label>
       <select class="form-select mb-3" id="device-template"></select>
       <div id="device-objects"></div>
-      <p class="small text-muted mt-2 mb-0">Select existing group addresses explicitly. No sequential address assumptions or automatic changes to DPT/direction.</p>
+      <p class="small text-muted mt-2 mb-0">Select existing group addresses explicitly. No sequential address assumptions or automatic changes to DPT. Routing directions are configured in the Routing Designer.</p>
     </div>
     <div class="modal-footer justify-content-between">
       <button type="button" class="btn btn-outline-danger d-none" id="btn-delete-device-dialog"><i class="bi bi-trash me-1"></i>Delete device</button>
@@ -495,11 +495,7 @@
     return !!(x && y && x[0] === y[0] && x[1] === y[1] && Math.abs(x[2] - y[2]) === 1);
   }
   function gaDirectionMatches(ga, obj) {
-    const dir = ga.direction || 'both';
-    return (!ga.dpt || ga.dpt === obj.dpt) &&
-      (obj.direction !== 'both' || dir === 'both') &&
-      (obj.direction !== 'knx2mqtt' || dir !== 'mqtt2knx') &&
-      (obj.direction !== 'mqtt2knx' || dir !== 'knx2mqtt');
+    return !ga.dpt || ga.dpt === obj.dpt;
   }
   function suggestDeviceForGA(ga) {
     if (assignedDevices(ga.address).length || !deviceTemplates.length) return null;
@@ -509,13 +505,13 @@
     // BigAssFan uses two independent command/status pairs. Match by signal
     // name and DPT, never by adjacency (the light status may skip an address).
     const fanTemplate=deviceTemplates.find(t=>t.id==='bigassfan');
-    if(fanTemplate && /^bigassfan(?:\\b|\\s|$)/i.test(base)){
-      const group=configuredGAs.filter(g=>!occupied.has(g.address)&&/^bigassfan\\b/i.test(g.name||''));
+    if(fanTemplate && /^bigassfan(?:\b|\s|$)/i.test(base)){
+      const group=configuredGAs.filter(g=>!occupied.has(g.address)&&/^bigassfan\b/i.test(g.name||''));
       const signalPatterns={
-        fanCommand:/^bigassfan\\s+power$/i,
-        fanStatus:/^bigassfan\\s+power\\s+status$/i,
-        lightCommand:/^bigassfan\\s+light$/i,
-        lightStatus:/^bigassfan\\s+light\\s+status$/i
+        fanCommand:/^bigassfan\s+power$/i,
+        fanStatus:/^bigassfan\s+power\s+status$/i,
+        lightCommand:/^bigassfan\s+light$/i,
+        lightStatus:/^bigassfan\s+light\s+status$/i
       };
       const matches={};
       for(const obj of fanTemplate.objects){
@@ -542,7 +538,7 @@
     const dimmerTemplate=deviceTemplates.find(t=>t.id==='dimmer');
     if(dimmerTemplate){
       const matches={};
-      const pattern=/\\b(dimm|helligkeit|wert)\\b/i;
+      const pattern=/\b(dimm|helligkeit|wert)\b/i;
       const group=configuredGAs.filter(g=>!occupied.has(g.address)&&gaBaseName(g.name).toLowerCase()===base.toLowerCase());
       for(const object of dimmerTemplate.objects){
         const candidates=group.filter(g=>gaDirectionMatches(g,object));
@@ -1102,7 +1098,7 @@ const route = { mqttTopic };
   function renderDeviceFields(mapping = {}) {
     const tpl = deviceTemplate(deviceTemplateSelect.value);
     deviceObjects.innerHTML = tpl ? tpl.objects.map(o => {
-      const candidates = configuredGAs.filter(g => (!g.dpt || g.dpt === o.dpt) && (o.direction !== 'both' || !g.direction || g.direction === 'both') && (o.direction !== 'knx2mqtt' || g.direction !== 'mqtt2knx') && (o.direction !== 'mqtt2knx' || g.direction !== 'knx2mqtt'));
+      const candidates = configuredGAs.filter(g => !g.dpt || g.dpt === o.dpt).sort((a,b) => { const x=gaPosition(a.address),y=gaPosition(b.address); return x&&y ? (x[0]-y[0]||x[1]-y[1]||x[2]-y[2]) : String(a.address).localeCompare(String(b.address),undefined,{numeric:true}); });
       const options = candidates.map(g => `<option value="${escHtml(g.address)}" ${mapping[o.key] === g.address ? 'selected' : ''}>${escHtml(g.address + ' – ' + (g.name || 'Unnamed'))}</option>`).join('');
       return `<div class="mb-3"><label class="form-label" for="device-object-${escHtml(o.key)}">${escHtml(o.label)} <small class="text-muted">DPT ${escHtml(o.dpt)}${o.optional ? ' · optional' : ''}</small></label><select class="form-select device-object" id="device-object-${escHtml(o.key)}" data-key="${escHtml(o.key)}"><option value="">Select address…</option>${options}</select></div>`;
     }).join('') : '';
