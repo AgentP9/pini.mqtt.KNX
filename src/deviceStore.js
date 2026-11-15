@@ -88,7 +88,7 @@ class DeviceStore {
     fs.mkdirSync(path.dirname(this.roomsFile), { recursive: true });
     const tmp = this.roomsFile + '.' + process.pid + '.tmp';
     try {
-      fs.writeFileSync(tmp, JSON.stringify(next, null, 2) + '\\n', { flag: 'wx' });
+      fs.writeFileSync(tmp, JSON.stringify(next, null, 2) + '\n', { flag: 'wx' });
       fs.renameSync(tmp, this.roomsFile);
     } catch (e) { try { fs.unlinkSync(tmp); } catch (_) {} throw e; }
     this.rooms = next;
