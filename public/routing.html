@@ -17,9 +17,9 @@ body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:42
 </div><aside class="col-12 col-xl-3">
 <div class="card mb-3"><div class="card-header fw-semibold">MQTT-Device anlegen</div><form class="card-body" id="mqtt-device-form">
 <label class="form-label" for="mqtt-device-name">Device-Name</label><input class="form-control mb-2" id="mqtt-device-name" required maxlength="120" placeholder="Sonos Esszimmer">
-<label class="form-label" for="mqtt-device-template">Template</label><select class="form-select mb-2" id="mqtt-device-template"><option value="sonos">Sonos Player</option><option value="shelly-plug-s">Shelly Plug S</option><option value="generic">Generisches MQTT-Device</option></select>
+<label class="form-label" for="mqtt-device-template">Template</label><select class="form-select mb-2" id="mqtt-device-template"><option value="sonos">Sonos Player</option><option value="shelly-plug-s">Shelly Plug S</option><option value="generic">Generisches MQTT-Device</option><option value="custom">Benutzerdefiniert</option></select>
 <label class="form-label" for="mqtt-device-base">MQTT-Basistopic</label><input class="form-control mb-3" id="mqtt-device-base" required placeholder="sonos/devices/Esszimmer">
-<button class="btn btn-outline-primary w-100" type="submit">MQTT-Device hinzufügen</button></form></div>
+<div id="custom-mqtt-settings" hidden><label class="form-label" for="custom-mqtt-count">Anzahl Kanäle (1–30)</label><input id="custom-mqtt-count" class="form-control mb-2" type="number" min="1" max="30" value="2"><div id="custom-mqtt-channels"></div></div><button class="btn btn-outline-primary w-100" type="submit">MQTT-Device hinzufügen</button></form></div>
 <div class="card mb-3"><div class="card-header fw-semibold">MQTT-Device-Signal hinzufügen</div><form class="card-body" id="mqtt-signal-form">
 <label class="form-label" for="signal-device">MQTT-Device</label><select class="form-select mb-2" id="signal-device" required></select>
 <label class="form-label" for="signal-topic">MQTT-Topic</label><input class="form-control mb-2" id="signal-topic" maxlength="240" required placeholder="sonos/devices/Esszimmer/set/mute">
@@ -245,15 +245,46 @@ document.addEventListener('click',e=>{
  const b=e.target.closest('.signal-btn');if(b){const all=[...signals(),...endpointSignals()];const s=all.find(s=>signalKey(s.ref)===b.dataset.key);if(s)choose(s.ref)}const del=e.target.closest('.delete-route');if(del){if(!confirm('Diese Verbindung wirklich löschen?'))return;graph.routes=graph.routes.filter(r=>r.id!==del.dataset.id);dirty=true;render()}const md=e.target.closest('.delete-mqtt-device');if(md){graph.mqttDevices=graph.mqttDevices.filter(d=>d.id!==md.dataset.id);graph.routes=graph.routes.filter(r=>!(r.from.type==='mqttDevice'&&r.from.id===md.dataset.id)&&!(r.to.type==='mqttDevice'&&r.to.id===md.dataset.id));dirty=true;render()}
 const ep=e.target.closest('.delete-endpoint');if(ep){graph.endpoints=graph.endpoints.filter(x=>x.id!==ep.dataset.id);graph.routes=graph.routes.filter(r=>r.from.id!==ep.dataset.id&&r.to.id!==ep.dataset.id);dirty=true;render()}});
 document.addEventListener('change',e=>{if(e.target.matches('.route-enabled')){const r=graph.routes.find(r=>r.id===e.target.dataset.id);if(r){r.enabled=e.target.checked;dirty=true;render()}}});
+function renderCustomMqttChannels(){
+ const custom=$('mqtt-device-template').value==='custom';
+ $('custom-mqtt-settings').hidden=!custom;
+ if(!custom)return;
+ const count=Number($('custom-mqtt-count').value),container=$('custom-mqtt-channels');
+ const previous=[...container.querySelectorAll('.custom-mqtt-channel')].map(el=>({label:el.querySelector('.custom-label').value,suffix:el.querySelector('.custom-suffix').value,type:el.querySelector('.custom-type').value,direction:el.querySelector('.custom-direction').value}));
+ if(!Number.isInteger(count)||count<1||count>30){container.innerHTML='<p class="text-danger small">Bitte 1 bis 30 Kanäle wählen.</p>';return;}
+ const options=(values,selected)=>values.map(([value,label])=>'<option value="'+value+'"'+(value===selected?' selected':'')+'>'+label+'</option>').join('');
+ container.innerHTML=Array.from({length:count},(_,i)=>{
+  const old=previous[i]||{label:'Kanal '+(i+1),suffix:'channel/'+(i+1),type:'text',direction:'both'};
+  return '<div class="custom-mqtt-channel border rounded p-2 mb-2"><div class="small fw-semibold mb-2">Kanal '+(i+1)+'</div>'+
+   '<label class="form-label small">Name</label><input class="form-control form-control-sm custom-label mb-2" maxlength="120" value="'+esc(old.label)+'" required>'+
+   '<label class="form-label small">Topic-Suffix</label><input class="form-control form-control-sm custom-suffix mb-2" maxlength="240" value="'+esc(old.suffix)+'" required>'+
+   '<label class="form-label small">Payload-Typ</label><select class="form-select form-select-sm custom-type mb-2">'+options([['boolean','Boolean'],['number','Zahl'],['text','Text']],old.type)+'</select>'+
+   '<label class="form-label small">Richtung</label><select class="form-select form-select-sm custom-direction">'+options([['input','An Device'],['output','Vom Device'],['both','Beide Richtungen']],old.direction)+'</select></div>';
+ }).join('');
+}
+$('mqtt-device-template').addEventListener('change',renderCustomMqttChannels);
+$('custom-mqtt-count').addEventListener('input',renderCustomMqttChannels);
+renderCustomMqttChannels();
 $('mqtt-device-form').addEventListener('submit',e=>{
  e.preventDefault();
  const name=$('mqtt-device-name').value.trim(),base=$('mqtt-device-base').value.trim().replace(/\/$/,'');
  if(!name||!base||/[+#\s]/.test(base)||base.startsWith('knx/')){notice('Ungültiges Basistopic.',true);return}
  const templateId=$('mqtt-device-template').value;
- const definitions=(mqttTemplates[templateId]||[]).map(d=>({...d,label:d.key}));
- const signals=definitions.map(d=>({key:d.key,label:d.label,topic:base+d.suffix,payloadType:d.payloadType,direction:d.direction}));
+ let signals;
+ if(templateId==='custom'){
+  const channels=[...document.querySelectorAll('.custom-mqtt-channel')];
+  if(channels.length!==Number($('custom-mqtt-count').value)||!channels.length||channels.length>30){notice('Ungültige Kanalanzahl.',true);return;}
+  signals=channels.map((el,i)=>{
+   const suffix=el.querySelector('.custom-suffix').value.trim();
+   return {key:'channel'+(i+1),label:el.querySelector('.custom-label').value.trim(),topic:base+'/'+suffix.split('/').filter(Boolean).join('/'),payloadType:el.querySelector('.custom-type').value,direction:el.querySelector('.custom-direction').value};
+  });
+  if(signals.some(x=>!x.label||x.label.length>120||x.topic===base+'/'||/[+#\\s]/.test(x.topic)||x.topic.length>240)||new Set(signals.map(x=>x.topic)).size!==signals.length){notice('Ungültige oder doppelte Kanal-Topics.',true);return;}
+ }else{
+  const definitions=(mqttTemplates[templateId]||[]).map(d=>({...d,label:d.key}));
+  signals=definitions.map(d=>({key:d.key,label:d.label,topic:base+d.suffix,payloadType:d.payloadType,direction:d.direction}));
+ }
  if((graph.mqttDevices||[]).some(d=>d.signals.some(x=>signals.some(y=>y.topic===x.topic)))){notice('MQTT-Topic bereits vorhanden.',true);return}
- graph.mqttDevices.push({id:uid(),name,templateId,baseTopic:base,signals});dirty=true;e.target.reset();render();notice('MQTT-Device angelegt. Verbindungen noch nicht aktiviert.');
+ graph.mqttDevices.push({id:uid(),name,templateId,baseTopic:base,signals});dirty=true;e.target.reset();renderCustomMqttChannels();render();notice('MQTT-Device angelegt. Verbindungen noch nicht aktiviert.');
 });
 $('mqtt-signal-form').addEventListener('submit',e=>{
  e.preventDefault();
