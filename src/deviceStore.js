@@ -30,6 +30,15 @@ const TEMPLATES = Object.freeze({
       { key: 'position', label: 'Position', dpt: '5.001', direction: 'knx2mqtt' },
     ],
   },
+  'bigassfan': {
+    id: 'bigassfan', name: 'BigAssFan',
+    objects: [
+      { key: 'fanCommand', label: 'Fan power', dpt: '1.001', direction: 'mqtt2knx' },
+      { key: 'fanStatus', label: 'Fan power status', dpt: '1.011', direction: 'knx2mqtt' },
+      { key: 'lightCommand', label: 'Light', dpt: '1.001', direction: 'mqtt2knx' },
+      { key: 'lightStatus', label: 'Light status', dpt: '1.011', direction: 'knx2mqtt' },
+    ],
+  },
   'sonos': {
     id: 'sonos', name: 'Sonos',
     objects: [
