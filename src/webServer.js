@@ -78,6 +78,14 @@ class WebServer {
     });
 
     // Visual routing designer: save a complete validated graph atomically.
+    this.app.get('/api/routing/settings', (_req, res) => res.json({ knxMqttBaseTopic: this.routingStore.knxMqttBaseTopic }));
+    this.app.put('/api/routing/settings', (req, res) => {
+      try {
+        const data = this.routingStore.save({ ...this.routingStore.list(), knxMqttBaseTopic: req.body?.knxMqttBaseTopic });
+        this.eventEmitter.emit('routing-changed', data);
+        res.json({ knxMqttBaseTopic: data.knxMqttBaseTopic });
+      } catch (err) { res.status(400).json({ error: err.message }); }
+    });
     this.app.get('/api/routing', (_req, res) => res.json(this.routingStore.list()));
     this.app.get('/api/routing/group-address-links', (_req, res) => {
       const links = {};
