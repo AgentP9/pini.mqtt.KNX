@@ -187,3 +187,90 @@ piniMqtt4KNX/
 ## License
 
 MIT
+
+## Visual Routing Designer (preview)
+
+Open **Routing Designer** in the dashboard navbar, or visit `/routing.html`.
+This deliberately does **not** embed Node-RED. It uses the existing device
+templates as typed KNX signal endpoints and lets you add named MQTT topics.
+Select a source signal, then a target signal, to create a direct route.
+Enable/disable or remove routes in the right sidebar and select
+**Änderungen aktivieren** to validate and atomically save them.
+
+- Routes are persisted in `routing.json` next to `devices.json` by default.
+  Override with `ROUTING_PATH`. Back up this file with the config volume.
+- Existing `groupaddresses.json`, GA custom routes, and `devices.json`
+  remain unchanged. Both legacy and new routing run simultaneously.
+- MQTT payload types: boolean (`true`/`false`), number (as text).
+  Device signals use their configured DPTs; incompatible types are rejected.
+- KNX→MQTT routes publish on actual KNX group-value events.
+  MQTT→KNX routes write only to configured writable device signals.
+  The UI shows recent route activity, not KNX actuator confirmation.
+- A destination may have only one visual route; legacy topic collisions are
+  rejected where detectable. The reserved `knx/` topic prefix is not accepted
+  for visual MQTT endpoints.
+- The editor is intended for a trusted LAN: **no authentication** is provided
+  by this application. Do not expose the web port to the public Internet.
+- No conversion, conditions, scheduling, retain flags, or arbitrary JavaScript
+  nodes are included yet. Add these later as explicit, validated extensions.
+
+Run `node --test` for the routing-store validation tests.
+
+### Migrate existing custom GA routes
+
+In Routing Designer, select **Bestehende Routen migrieren** to preview
+existing `groupaddresses.json` custom MQTT routes. Each compatible
+direction is listed separately and can be selected for migration. Confirming
+creates typed device↔MQTT connections in `routing.json`. The original GA
+route configuration is retained unchanged; the old forwarding path is
+suppressed for each enabled migrated direction to prevent double sends.
+Disabling or removing the migrated route restores the legacy forwarding
+behavior for that direction. This also means deleting a migrated route does
+**not** disable its underlying legacy route.
+
+Migration deliberately skips routes that have value maps, repeat intervals,
+unsupported DPTs, missing or ambiguous device mappings, or incompatible
+destinations. The reserved automatic `knx/<address>` path is not migrated.
+Always inspect the preview and back up the config volume before migration.
+
+### MQTT devices and Sonos migration (PR #26)
+
+The designer supports independent **MQTT devices**, in addition to KNX
+devices and standalone topics. Create a **Sonos Player** with a base topic such
+as `sonos/devices/Esszimmer`; it exposes `control` and `set/volume` signals.
+A generic MQTT device template is also available. These MQTT devices exist
+only in `routing.json`, not in the KNX device registry.
+
+Connections can have an optional JSON **value map**, e.g.
+`{"ON":"PLAY","OFF":"PAUSE"}`, or a **constant** using
+`{"constant":20}`. The first iteration edits these properties via a
+small JSON prompt; it does not provide Node-RED's arbitrary function nodes.
+Migration detects `sonos/devices/<room>/...` and groups matching topics into
+one Sonos MQTT device, preserving the supported forward value maps. It skips
+reverse mappings requiring manual review and routes with repeat intervals.
+Legacy `knx/<GA>` topics are deliberately not migrated.
+
+Before enabling migrated routes on real hardware, verify the mapping direction
+and payload format. Back up `routing.json` and `groupaddresses.json`.
+
+### MQTT devices and Sonos (visual designer preview)
+
+The editor now supports **MQTT devices** in addition to individual MQTT topics.
+Choose **Sonos Player** to create a device with `control` (text input) and
+`set/volume` (number input), or use **Generic MQTT Device** and add typed
+signals with an explicit input/output direction. A device signal can be
+connected to a KNX device signal and configured with a per-route value map
+(e.g. `{"ON":"PLAY","OFF":"PAUSE"}`) or a constant payload
+(e.g. `{"constant":20}`). The route transform editor currently uses a
+JSON prompt; it is not yet a polished form.
+
+Migration previews `sonos/devices/<name>/...` topics as a single suggested
+Sonos device and can import supported **KNX→MQTT** value maps. For legacy
+routes with a reverse value map, the MQTT→KNX direction is **not** migrated
+automatically; it remains on the legacy path. Repeat timers and the
+reserved `knx/` topics are also not migrated. Check the direction of each
+candidate and the resulting mappings before activation.
+
+Important: the visual routing feature is still a draft and has not been
+verified against a real KNX bus or Sonos player. Keep a backup of
+`groupaddresses.json`, `devices.json`, and `routing.json` before enabling.

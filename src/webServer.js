@@ -6,6 +6,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const DeviceStore = require('./deviceStore');
+const RoutingStore = require('./routingStore');
 
 class WebServer {
   /**
@@ -20,6 +21,7 @@ class WebServer {
     this.groupAddresses = groupAddresses;
     this.groupAddressesPath = groupAddressesPath;
     this.deviceStore = new DeviceStore(groupAddresses, groupAddressesPath);
+    this.routingStore = new RoutingStore(this.deviceStore, groupAddresses);
     this.app = express();
     this.server = http.createServer(this.app);
     this.io = new Server(this.server);
@@ -51,6 +53,87 @@ class WebServer {
         publishDevices();
         return res.json({ ok: true });
       } catch (err) { return res.status(500).json({ error: err.message }); }
+    });
+
+    // Visual routing designer: save a complete validated graph atomically.
+    this.app.get('/api/routing', (_req, res) => res.json(this.routingStore.list()));
+    this.app.get('/api/routing/group-address-links', (_req, res) => {
+      const links = {};
+      for (const r of this.routingStore.routes) {
+        if (!r.legacyKey) continue;
+        try {
+          const ref = r.from.type === 'device' ? r.from : r.to;
+          const signal = this.routingStore.resolve(ref, this.routingStore.endpoints);
+          (links[signal.address] ||= []).push({ id: r.id, enabled: r.enabled, legacyKey: r.legacyKey });
+        } catch (_) { /* stale device mapping: keep old GA route visible */ }
+      }
+      res.json(links);
+    });
+    this.app.put('/api/routing', (req, res) => {
+      try {
+        const data = this.routingStore.save(req.body || {});
+        this.eventEmitter.emit('routing-changed', data);
+        res.json(data);
+      } catch (err) { res.status(400).json({ error: err.message }); }
+    });
+
+    // Remove selected legacy GA routes only after explicitly confirming their
+    // current topic/address identity. Migrated graph routes are retained and
+    // detached from their legacy fallback marker.
+    this.app.post('/api/routing/legacy-cleanup', (req, res) => {
+      const selections = req.body?.routes;
+      if (!Array.isArray(selections) || !selections.length || selections.length > 200 ||
+          !selections.every(x => x && typeof x.address === 'string' && typeof x.topic === 'string')) {
+        return res.status(400).json({ error: 'Select legacy routes by address and topic' });
+      }
+      const keys = new Set(selections.map(x => JSON.stringify([x.address, x.topic])));
+      if (keys.size !== selections.length) return res.status(400).json({ error: 'Duplicate selection' });
+      const originalGAs = this.groupAddresses.map(g => ({ ...g, routes: g.routes?.map(r => ({ ...r })) }));
+      const originalGraph = this.routingStore.list();
+      const selected = [];
+      for (const x of selections) {
+        const ga = this.groupAddresses.find(g => g.address === x.address);
+        const legacy = ga?.routes?.find(r => r.mqttTopic === x.topic);
+        if (!legacy) return res.status(409).json({ error: 'Legacy route changed; reload preview' });
+        selected.push(x);
+      }
+      // Save graph without migration markers before removing legacy routes.
+      // If persistence fails, do not touch groupaddresses.json.
+      const cleanedRoutes = originalGraph.routes.map(r => {
+        if (!r.legacyKey) return r;
+        let pair;
+        try { const [address, topic] = JSON.parse(r.legacyKey); pair = JSON.stringify([address, topic]); }
+        catch (_) { return r; }
+        if (!keys.has(pair)) return r;
+        const { legacyKey, ...rest } = r;
+        return rest;
+      });
+      try {
+        // Remove from the in-memory legacy config first so routing validation
+        // sees the same destination ownership as after cleanup.
+        for (const ga of this.groupAddresses) {
+          ga.routes = (ga.routes || []).filter(r => !keys.has(JSON.stringify([ga.address, r.mqttTopic])));
+          if (!ga.routes.length) delete ga.routes;
+        }
+        this.routingStore.save({ ...originalGraph, routes: cleanedRoutes });
+        if (!this._saveGroupAddresses()) throw Error('Failed to save group addresses');
+        this.eventEmitter.emit('routing-changed', this.routingStore.list());
+        this.io.emit('groupaddresses', this._enrichGAs());
+        res.json({ deleted: selected.length, graph: this.routingStore.list() });
+      } catch (err) {
+        this.groupAddresses.splice(0, this.groupAddresses.length, ...originalGAs);
+        try { this.routingStore.save(originalGraph); } catch (_) { /* restore attempt; report failure below */ }
+        res.status(500).json({ error: err.message });
+      }
+    });
+
+    this.app.get('/api/routing/migration-preview', (_req, res) => res.json(this.routingStore.migrationPreview()));
+    this.app.post('/api/routing/migrate', (req, res) => {
+      try {
+        const data = this.routingStore.migrate(req.body && req.body.keys);
+        this.eventEmitter.emit('routing-changed', data);
+        res.json(data);
+      } catch (err) { res.status(400).json({ error: err.message }); }
     });
 
     // Diagnostic write only for an existing room-heating device's setpoint object.
@@ -108,7 +191,7 @@ class WebServer {
 
     // POST – add or update a group address
     this.app.post('/api/groupaddresses', (req, res) => {
-      const { address, name, dpt, comment, routes, direction, repeatInterval } = req.body || {};
+      const { address, name, dpt, comment, routes, direction } = req.body || {};
       if (!address) return res.status(400).json({ error: 'address is required' });
 
       const entry = {
@@ -122,9 +205,6 @@ class WebServer {
       if (!entry.routes) delete entry.routes;
       // Store direction only when it differs from the default ('both')
       if (direction && direction !== 'both') entry.direction = direction;
-      // Store repeatInterval only when it is a positive number
-      const ri = Number(repeatInterval);
-      if (ri > 0) entry.repeatInterval = ri;
 
       const idx = this.groupAddresses.findIndex((g) => g.address === address);
       const previous = idx >= 0 ? this.groupAddresses[idx] : null;
@@ -230,6 +310,8 @@ class WebServer {
       socket.on('mqtt-restart', () => this.eventEmitter.emit('mqtt-restart'));
       socket.on('disconnect', () => console.log('[WEB] Client disconnected'));
     });
+
+    eventEmitter.on('routing-traffic', entry => this.io.emit('routing-traffic', entry));
 
     // Forward traffic events to all web clients
     eventEmitter.on('traffic', (entry) => {
