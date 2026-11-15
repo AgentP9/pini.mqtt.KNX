@@ -32,6 +32,25 @@ class WebServer {
     this.app.use(express.static(path.join(__dirname, '../public')));
 
     // Device templates only reference existing group addresses. Existing GA routes stay untouched.
+    this.app.get('/api/rooms', (_req, res) => res.json(this.deviceStore.listRooms()));
+    const publishRooms = () => this.io.emit('rooms', this.deviceStore.listRooms());
+    const saveRoom = (req, res, id) => {
+      try {
+        const room = this.deviceStore.saveRoom(req.body, id);
+        if (!room) return res.status(404).json({ error: 'Room not found' });
+        publishRooms();
+        return res.json(room);
+      } catch (err) { return res.status(err.code ? 500 : 400).json({ error: err.message }); }
+    };
+    this.app.post('/api/rooms', (req, res) => saveRoom(req, res));
+    this.app.put('/api/rooms/:id', (req, res) => saveRoom(req, res, req.params.id));
+    this.app.delete('/api/rooms/:id', (req, res) => {
+      try {
+        if (!this.deviceStore.removeRoom(req.params.id)) return res.status(404).json({ error: 'Room not found' });
+        publishRooms();
+        return res.json({ ok: true });
+      } catch (err) { return res.status(err.code ? 500 : 409).json({ error: err.message }); }
+    });
     this.app.get('/api/device-templates', (_req, res) => res.json(this.deviceStore.templates()));
     this.app.get('/api/devices', (_req, res) => res.json(this.deviceStore.list()));
     const publishDevices = () => this.io.emit('devices', this.deviceStore.list());
@@ -40,6 +59,7 @@ class WebServer {
         const device = this.deviceStore.save(req.body, id);
         if (!device) return res.status(404).json({ error: 'Device not found' });
         publishDevices();
+        publishRooms();
         return res.json(device);
       } catch (err) {
         return res.status(err.message.includes('persist') || err.code ? 500 : 400).json({ error: err.message });
@@ -51,6 +71,7 @@ class WebServer {
       try {
         if (!this.deviceStore.remove(req.params.id)) return res.status(404).json({ error: 'Device not found' });
         publishDevices();
+        publishRooms();
         return res.json({ ok: true });
       } catch (err) { return res.status(500).json({ error: err.message }); }
     });
