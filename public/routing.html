@@ -91,7 +91,7 @@ function render(){
  const visibleMqttIds=new Set(focused.flatMap(r=>[r.from,r.to].filter(ref=>ref.type!=='device').map(ref=>ref.id)));
  const deviceCards=visibleDevices.map(d=>{
   const own=list.filter(x=>x.ref.id===d.id);
-  return {id:d.id,html:'<div class="node" data-node="device:'+esc(d.id)+'"><h3>'+esc(d.name)+'</h3>'+own.map(signalHtml).join('')+'<button type="button" class="btn btn-sm btn-outline-primary create-corresponding-mqtt mt-2" data-id="'+esc(d.id)+'">Create corresponding MQTT-Device</button></div>'};
+  return {id:d.id,html:'<div class="node" data-node="device:'+esc(d.id)+'"><div class="d-flex align-items-center justify-content-between gap-2"><h3 class="mb-0">'+esc(d.name)+'</h3><button type="button" class="btn btn-sm btn-outline-primary create-corresponding-mqtt" data-id="'+esc(d.id)+'" title="Corresponding MQTT-Device anlegen" aria-label="Corresponding MQTT-Device für '+esc(d.name)+' anlegen"><i class="bi bi-plus-square" aria-hidden="true"></i></button></div>'+own.map(signalHtml).join('')+'</div>'};
  });
  const mqttCards=[
  ...(graph.mqttDevices||[]).filter(d=>!focusAddress&&!focusRoute&&!focusDevice||visibleMqttIds.has(d.id)).map(d=>({id:d.id,html:'<div class="node" data-node="mqttDevice:'+esc(d.id)+'"><h3><i class="bi bi-speaker"></i> '+esc(d.name)+'</h3>'+eps.filter(x=>x.ref.type==='mqttDevice'&&x.ref.id===d.id).map(signalHtml).join('')+(mqttTemplateUpgrade(d)?.additions.length?'<button class="btn btn-sm btn-outline-primary upgrade-mqtt-device me-2" data-id="'+esc(d.id)+'"><i class="bi bi-arrow-up-circle"></i> Template aktualisieren ('+mqttTemplateUpgrade(d).additions.length+')</button>':'')+'<button class="btn btn-sm btn-link text-danger delete-mqtt-device" data-id="'+esc(d.id)+'">Entfernen</button></div>'})),
