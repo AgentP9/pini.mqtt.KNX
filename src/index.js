@@ -178,6 +178,8 @@ knxHandler.on('groupValueWrite', ({ address, src, value, name }) => {
 
 // ── MQTT → KNX ─────────────────────────────────────────────────────────────────
 mqttHandler.on('message', ({ topic, value }) => {
+  // Once migrated, only explicitly configured visual routes may write KNX.
+  if (routingStore.explicitKnxWrites) return;
   const prefix = config.topicPrefix + '/';
 
   // ── Default path: topic matches knx/<address> ──────────────────────────────
