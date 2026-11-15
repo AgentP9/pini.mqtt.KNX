@@ -14,9 +14,10 @@ class RoutingStore {
     this.endpoints = raw.endpoints || [];
     this.routes = raw.routes || [];
     this.explicitKnxWrites = raw.explicitKnxWrites === true;
+    this.knxMqttBaseTopic = raw.knxMqttBaseTopic || 'knx';
     this.validateAll(this.endpoints, this.routes, this.mqttDevices);
   }
-  list() { return { endpoints: this.endpoints, mqttDevices: this.mqttDevices, routes: this.routes, explicitKnxWrites: this.explicitKnxWrites }; }
+  list() { return { endpoints: this.endpoints, mqttDevices: this.mqttDevices, routes: this.routes, explicitKnxWrites: this.explicitKnxWrites, knxMqttBaseTopic: this.knxMqttBaseTopic }; }
   legacyKey(address, topic, direction) { return JSON.stringify([address, topic, direction]); }
   migrated(address, topic, direction) {
     const key = this.legacyKey(address, topic, direction);
@@ -164,7 +165,7 @@ class RoutingStore {
         if (!signal || typeof signal.key !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(signal.key) || keys.has(signal.key) ||
             typeof signal.label !== 'string' || !signal.label.trim() || signal.label.length > 120 ||
             typeof signal.topic !== 'string' || !signal.topic || signal.topic.length > 240 || /[+#\s\u0000-\u001f]/.test(signal.topic) ||
-            signal.topic.startsWith('knx/') || mqttTopics.has(signal.topic) || !['boolean','number','text'].includes(signal.payloadType) ||
+            (signal.topic.startsWith('knx/') && !device.knxDeviceId) || mqttTopics.has(signal.topic) || !['boolean','number','text'].includes(signal.payloadType) ||
             !['input','output','both'].includes(signal.direction)) throw Error('Invalid MQTT device signal');
         keys.add(signal.key);
         mqttTopics.add(signal.topic);
@@ -220,7 +221,9 @@ class RoutingStore {
     this.validateAll(next.endpoints, next.routes, mqttDevices);
     const explicitKnxWrites = next.explicitKnxWrites === undefined ? this.explicitKnxWrites : next.explicitKnxWrites;
     if (typeof explicitKnxWrites !== 'boolean') throw Error('Invalid explicit routing mode');
-    const data = JSON.stringify({ version: 2, endpoints: next.endpoints, mqttDevices, routes: next.routes, explicitKnxWrites }, null, 2) + '\n';
+    const knxMqttBaseTopic = next.knxMqttBaseTopic === undefined ? this.knxMqttBaseTopic : next.knxMqttBaseTopic;
+    if (typeof knxMqttBaseTopic !== 'string' || !knxMqttBaseTopic || knxMqttBaseTopic.length > 180 || /[+#\\s]/.test(knxMqttBaseTopic) || knxMqttBaseTopic.startsWith('/') || knxMqttBaseTopic.endsWith('/')) throw Error('Invalid KNX MQTT base topic');
+    const data = JSON.stringify({ version: 2, endpoints: next.endpoints, mqttDevices, routes: next.routes, explicitKnxWrites, knxMqttBaseTopic }, null, 2) + '\n';
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     const tmp = this.file + '.' + crypto.randomUUID() + '.tmp';
     try { fs.writeFileSync(tmp, data, { mode: 0o600 }); fs.renameSync(tmp, this.file); }
@@ -229,6 +232,7 @@ class RoutingStore {
     this.endpoints = next.endpoints;
     this.routes = next.routes;
     this.explicitKnxWrites = explicitKnxWrites;
+    this.knxMqttBaseTopic = knxMqttBaseTopic;
     return this.list();
   }
 }
