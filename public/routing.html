@@ -281,7 +281,7 @@ $('mqtt-device-form').addEventListener('submit',e=>{
    const suffix=el.querySelector('.custom-suffix').value.trim();
    return {key:'channel'+(i+1),label:suffix.split('/').filter(Boolean).join('/'),topic:base+'/'+suffix.split('/').filter(Boolean).join('/'),payloadType:el.querySelector('.custom-type').value,direction:el.querySelector('.custom-direction').value};
   });
-  if(signals.some(x=>!x.label||x.label.length>120||x.topic===base+'/'||/[+#\\s]/.test(x.topic)||x.topic.length>240)||new Set(signals.map(x=>x.topic)).size!==signals.length){notice('Ungültige oder doppelte Kanal-Topics.',true);return;}
+  if(signals.some(x=>!x.label||x.label.length>120||x.topic===base+'/'||/[+#\s]/.test(x.topic)||x.topic.length>240)||new Set(signals.map(x=>x.topic)).size!==signals.length){notice('Ungültige oder doppelte Kanal-Topics.',true);return;}
  }else{
   const definitions=(mqttTemplates[templateId]||[]).map(d=>({...d,label:d.key}));
   signals=definitions.map(d=>({key:d.key,label:d.label,topic:base+d.suffix,payloadType:d.payloadType,direction:d.direction}));
