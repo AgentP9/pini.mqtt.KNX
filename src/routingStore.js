@@ -13,9 +13,10 @@ class RoutingStore {
     this.mqttDevices = raw.mqttDevices || [];
     this.endpoints = raw.endpoints || [];
     this.routes = raw.routes || [];
+    this.explicitKnxWrites = raw.explicitKnxWrites === true;
     this.validateAll(this.endpoints, this.routes, this.mqttDevices);
   }
-  list() { return { endpoints: this.endpoints, mqttDevices: this.mqttDevices, routes: this.routes }; }
+  list() { return { endpoints: this.endpoints, mqttDevices: this.mqttDevices, routes: this.routes, explicitKnxWrites: this.explicitKnxWrites }; }
   legacyKey(address, topic, direction) { return JSON.stringify([address, topic, direction]); }
   migrated(address, topic, direction) {
     const key = this.legacyKey(address, topic, direction);
@@ -219,7 +220,9 @@ class RoutingStore {
   save(next) {
     const mqttDevices = next.mqttDevices === undefined ? this.mqttDevices : next.mqttDevices;
     this.validateAll(next.endpoints, next.routes, mqttDevices);
-    const data = JSON.stringify({ version: 2, endpoints: next.endpoints, mqttDevices, routes: next.routes }, null, 2) + '\n';
+    const explicitKnxWrites = next.explicitKnxWrites === undefined ? this.explicitKnxWrites : next.explicitKnxWrites;
+    if (typeof explicitKnxWrites !== 'boolean') throw Error('Invalid explicit routing mode');
+    const data = JSON.stringify({ version: 2, endpoints: next.endpoints, mqttDevices, routes: next.routes, explicitKnxWrites }, null, 2) + '\n';
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     const tmp = this.file + '.' + crypto.randomUUID() + '.tmp';
     try { fs.writeFileSync(tmp, data, { mode: 0o600 }); fs.renameSync(tmp, this.file); }
@@ -227,6 +230,7 @@ class RoutingStore {
     this.mqttDevices = mqttDevices;
     this.endpoints = next.endpoints;
     this.routes = next.routes;
+    this.explicitKnxWrites = explicitKnxWrites;
     return this.list();
   }
 }
