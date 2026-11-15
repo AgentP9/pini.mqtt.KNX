@@ -62,12 +62,42 @@ class DeviceStore {
   constructor(groupAddresses, groupAddressesPath) {
     this.groupAddresses = groupAddresses;
     this.file = process.env.DEVICES_PATH || path.join(path.dirname(groupAddressesPath), 'devices.json');
+    this.roomsFile = process.env.ROOMS_PATH || path.join(path.dirname(this.file), 'rooms.json');
+    this.rooms = fs.existsSync(this.roomsFile) ? JSON.parse(fs.readFileSync(this.roomsFile, 'utf8')) : [];
+    if (!Array.isArray(this.rooms)) throw new Error('rooms.json must contain an array');
     this.devices = [];
     if (fs.existsSync(this.file)) {
       const data = JSON.parse(fs.readFileSync(this.file, 'utf8'));
       if (!Array.isArray(data)) throw new Error('devices.json must contain an array');
       this.devices = data;
     }
+  }
+  listRooms() { return this.rooms.map(r => ({ ...r, deviceCount: this.devices.filter(d => d.roomId === r.id).length })); }
+  saveRoom(input, id) {
+    const name = typeof input?.name === 'string' ? input.name.trim() : '';
+    if (!name || name.length > 120) throw new Error('Room name is required (max 120 chars)');
+    if (this.rooms.some(r => r.name.toLowerCase() === name.toLowerCase() && r.id !== id)) throw new Error('Room already exists');
+    const existing = id ? this.rooms.find(r => r.id === id) : null;
+    if (id && !existing) return null;
+    const room = { id: existing?.id || crypto.randomUUID(), name };
+    const next = existing ? this.rooms.map(r => r.id === id ? room : r) : [...this.rooms, room];
+    this.persistRooms(next);
+    return room;
+  }
+  persistRooms(next) {
+    fs.mkdirSync(path.dirname(this.roomsFile), { recursive: true });
+    const tmp = this.roomsFile + '.' + process.pid + '.tmp';
+    try {
+      fs.writeFileSync(tmp, JSON.stringify(next, null, 2) + '\\n', { flag: 'wx' });
+      fs.renameSync(tmp, this.roomsFile);
+    } catch (e) { try { fs.unlinkSync(tmp); } catch (_) {} throw e; }
+    this.rooms = next;
+  }
+  removeRoom(id) {
+    if (!this.rooms.some(r => r.id === id)) return false;
+    if (this.devices.some(d => d.roomId === id)) throw new Error('Room still contains devices');
+    this.persistRooms(this.rooms.filter(r => r.id !== id));
+    return true;
   }
   list() { return this.devices.map(d => ({ ...d, missing: Object.values(d.addresses).filter(a => !this.groupAddresses.some(g => g.address === a)) })); }
   templates() { return Object.values(TEMPLATES); }
@@ -96,7 +126,9 @@ class DeviceStore {
       if (d.id === exceptId) continue;
       for (const addr of Object.values(addresses)) if (Object.values(d.addresses).includes(addr)) throw new Error('Address already assigned to device ' + d.name + ': ' + addr);
     }
-    return { name: input.name.trim(), templateId: tpl.id, addresses };
+    const roomId = input.roomId || null;
+    if (roomId !== null && (typeof roomId !== 'string' || !this.rooms.some(r => r.id === roomId))) throw new Error('Unknown room');
+    return { name: input.name.trim(), templateId: tpl.id, addresses, roomId };
   }
   persist(next) {
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
