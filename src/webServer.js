@@ -7,6 +7,7 @@ const { Server } = require('socket.io');
 const path = require('path');
 const DeviceStore = require('./deviceStore');
 const RoutingStore = require('./routingStore');
+const config = require('./config');
 
 class WebServer {
   /**
@@ -150,7 +151,7 @@ class WebServer {
 
     // Deliberate cutover: never disable implicit writes during an ordinary graph save.
     this.app.get('/api/routing/explicit-writes-preview', (_req, res) => {
-      const prefix = this.config.topicPrefix;
+      const prefix = config.topicPrefix;
       const implicit = this.groupAddresses.filter(ga => ['both', 'mqtt2knx'].includes(ga.direction || 'both')).map(ga => ({
         address: ga.address, topic: prefix + '/' + ga.address,
         name: ga.name || ga.address,
