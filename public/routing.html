@@ -132,17 +132,18 @@ function drawLinks(routes=graph.routes.filter(isFocused)){
   const a=find(r.from),b=find(r.to);if(!a||!b)continue;
   const p=a.getBoundingClientRect(),q=b.getBoundingClientRect();
   const knxToKnx=r.from.type==='device'&&r.to.type==='device';
+  const sameCard=knxToKnx&&r.from.id===r.to.id;
   const fromDevice=r.from.type==='device',left=fromDevice?p:q,right=fromDevice?q:p;
   const x1=left.right-rect.left+root.scrollLeft,y1=left.top+left.height/2-rect.top+root.scrollTop;
-  const x2=right.left-rect.left+root.scrollLeft,y2=right.top+right.height/2-rect.top+root.scrollTop;
-  const mid=(x1+x2)/2,ns='http://www.w3.org/2000/svg';
+  const x2=(knxToKnx?q.right:right.left)-rect.left+root.scrollLeft,y2=right.top+right.height/2-rect.top+root.scrollTop;
+  const mid=(x1+x2)/2,loopX=Math.max(x1,x2)+70,ns='http://www.w3.org/2000/svg';
   const path=document.createElementNS(ns,'path');
-  path.setAttribute('d',knxToKnx?'M '+x1+' '+y1+' C '+(x1+70)+' '+y1+', '+(x2+70)+' '+y2+', '+x2+' '+y2:'M '+(r.from.type==='device'?x1:x1+2)+' '+y1+' C '+mid+' '+y1+', '+mid+' '+y2+', '+(r.from.type==='device'?x2-2:x2)+' '+y2);
+  path.setAttribute('d',knxToKnx?'M '+x1+' '+y1+' C '+loopX+' '+y1+', '+loopX+' '+y2+', '+(x2+2)+' '+y2:'M '+(r.from.type==='device'?x1:x1+2)+' '+y1+' C '+mid+' '+y1+', '+mid+' '+y2+', '+(r.from.type==='device'?x2-2:x2)+' '+y2);
   path.setAttribute('class','connection-path'+(r.enabled?'':' inactive'));
   svg.appendChild(path);
   // Arrowhead immediately before the destination connector circle.
   const forward=r.from.type==='device';
-  const tipX=knxToKnx?x2:forward?x2-2:x1+2;
+  const tipX=knxToKnx?x2+2:forward?x2-2:x1+2;
   const tipY=forward?y2:y1;
   const arrow=document.createElementNS(ns,'path');
   arrow.setAttribute('d',knxToKnx?'M 7 -4 L 0 0 L 7 4':forward?'M -7 -4 L 0 0 L -7 4':'M 7 -4 L 0 0 L 7 4');
@@ -151,7 +152,7 @@ function drawLinks(routes=graph.routes.filter(isFocused)){
   svg.appendChild(arrow);
   const chip=document.createElement('button');chip.type='button';chip.className='btn btn-sm btn-light border route-transform edit-transform'+(r.enabled?'':' inactive');
   chip.dataset.id=r.id;chip.textContent=transformLabel(r);chip.title='Wertumwandlung bearbeiten';
-  chip.style.left=(knxToKnx?x1+70:mid)+'px';chip.style.top=((y1+y2)/2)+'px';root.appendChild(chip);
+  chip.style.left=(knxToKnx?loopX:mid)+'px';chip.style.top=((y1+y2)/2)+'px';root.appendChild(chip);
   
  }
 }
