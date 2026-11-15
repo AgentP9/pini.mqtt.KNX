@@ -106,14 +106,15 @@ function reverseRoutePayload(value, type, transform) {
 }
 knxHandler.on('groupValueWrite', ({ address, value }) => {
   for (const route of routingStore.routes) {
-    if (!route.enabled || route.from.type !== 'device') continue;
+    if (!route.enabled || (route.from.type !== 'device' && !route.bidirectional)) continue;
     try {
-      const source = routingStore.resolve(route.from, routingStore.endpoints);
+      const reverse = route.bidirectional && route.from.type !== 'device';
+      const source = routingStore.resolve(reverse ? route.to : route.from, routingStore.endpoints);
       if (source.address !== address) continue;
-      const destination = routingStore.resolve(route.to, routingStore.endpoints);
-      const payload = routePayload(value, source.type, false, route.transform);
+      const destination = routingStore.resolve(reverse ? route.from : route.to, routingStore.endpoints);
+      const payload = reverse ? reverseRoutePayload(value, source.type, route.transform) : routePayload(value, source.type, false, route.transform);
       if (payload === null) continue;
-      if (route.to.type === 'device') {
+      if (!reverse && route.to.type === 'device') {
         if (!knxHandler.connected || source.address === destination.address) continue;
         const knxPayload = routePayload(value, source.type, true, route.transform);
         if (knxPayload === null || !knxHandler.write(destination.address, knxPayload)) continue;
