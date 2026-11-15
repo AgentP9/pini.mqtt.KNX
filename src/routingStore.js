@@ -193,9 +193,8 @@ class RoutingStore {
       if (r.from.type !== 'device' && r.to.type !== 'device') throw Error('One side must be a KNX device');
       if (r.from.type === 'device' && r.to.type === 'device' && src.address === dst.address) throw Error('KNX source and target must use different group addresses');
       if (r.from.type === 'device' && r.to.type === 'device' && routes.some(other => other !== r && other.from?.type === 'device' && other.to?.type === 'device' && this.resolve(other.from, endpoints, mqttDevices).address === dst.address && this.resolve(other.to, endpoints, mqttDevices).address === src.address)) throw Error('Direct KNX feedback loop is not allowed');
-      if (r.from.type === 'mqttDevice' && !['output','both'].includes(src.direction) && !r.bidirectional) throw Error('MQTT signal is not readable');
-      if (r.to.type === 'mqttDevice' && !['input','both'].includes(dst.direction) && !r.bidirectional) throw Error('MQTT signal is not writable');
       if (src.type !== dst.type && !r.transform) throw Error('Signal types differ; a conversion is required');
+      if (r.bidirectional && r.transform && r.transform.kind !== 'map') throw Error('Bidirectional routing requires reversible value map');
       if (r.transform) {
         if (r.transform.kind === 'map') {
           if (!r.transform.values || typeof r.transform.values !== 'object' || Array.isArray(r.transform.values) ||
