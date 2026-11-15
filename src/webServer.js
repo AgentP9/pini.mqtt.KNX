@@ -148,6 +148,36 @@ class WebServer {
       }
     });
 
+    // Deliberate cutover: never disable implicit writes during an ordinary graph save.
+    this.app.get('/api/routing/explicit-writes-preview', (_req, res) => {
+      const prefix = this.config.topicPrefix;
+      const implicit = this.groupAddresses.filter(ga => ['both', 'mqtt2knx'].includes(ga.direction || 'both')).map(ga => ({
+        address: ga.address, topic: prefix + '/' + ga.address,
+        name: ga.name || ga.address,
+        covered: this.routingStore.routes.some(route => {
+          if (!route.enabled || route.to?.type !== 'device') return false;
+          try {
+            const dst = this.routingStore.resolve(route.to, this.routingStore.endpoints);
+            const src = this.routingStore.resolve(route.from, this.routingStore.endpoints);
+            return dst.address === ga.address && src.topic === prefix + '/' + ga.address;
+          } catch (_) { return false; }
+        })
+      }));
+      const legacy = this.groupAddresses.flatMap(ga => (ga.routes || []).filter(r => r.mqttTopic).map(r => ({
+        address: ga.address, topic: r.mqttTopic,
+        covered: this.routingStore.migrated(ga.address, r.mqttTopic, 'mqtt2knx')
+      })));
+      res.json({ explicitKnxWrites: this.routingStore.explicitKnxWrites, implicit, legacy });
+    });
+    this.app.post('/api/routing/explicit-writes-migrate', (req, res) => {
+      if (req.body?.confirm !== 'DISABLE_IMPLICIT_KNX_WRITES') return res.status(400).json({ error: 'Explicit confirmation required' });
+      if (this.routingStore.explicitKnxWrites) return res.json(this.routingStore.list());
+      try {
+        const next = this.routingStore.save({ ...this.routingStore.list(), explicitKnxWrites: true });
+        this.eventEmitter.emit('routing-changed', next);
+        res.json(next);
+      } catch (err) { res.status(500).json({ error: err.message }); }
+    });
     this.app.get('/api/routing/migration-preview', (_req, res) => res.json(this.routingStore.migrationPreview()));
     this.app.post('/api/routing/migrate', (req, res) => {
       try {
