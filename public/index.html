@@ -552,6 +552,17 @@
   function sortedGAs() {
     if (!sortCol) return configuredGAs.slice();
     return configuredGAs.slice().sort((a, b) => {
+      if (sortCol === 'address') {
+        const aParts = gaPosition(a.address), bParts = gaPosition(b.address);
+        if (aParts && bParts) {
+          for (let i = 0; i < 3; i++) {
+            if (aParts[i] !== bParts[i]) return (aParts[i] - bParts[i]) * sortDir;
+          }
+          return 0;
+        }
+        if (aParts) return -sortDir;
+        if (bParts) return sortDir;
+      }
       const av = String(sortCol === 'device' ? assignedDevices(a.address).map(d => d.name).join(', ') : a[sortCol] || '').toLowerCase();
       const bv = String(sortCol === 'device' ? assignedDevices(b.address).map(d => d.name).join(', ') : b[sortCol] || '').toLowerCase();
       return av < bv ? -sortDir : av > bv ? sortDir : 0;
