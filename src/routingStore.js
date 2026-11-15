@@ -187,12 +187,14 @@ class RoutingStore {
           throw Error('Invalid legacy migration reference');
         }
       }
+      if (r.bidirectional !== undefined && typeof r.bidirectional !== 'boolean') throw Error('Invalid bidirectional flag');
+      if (r.bidirectional && (r.legacyKey || r.from.type === 'device' && r.to.type === 'device')) throw Error('Bidirectional routing requires KNX and MQTT');
       const src = this.resolve(r.from, endpoints, mqttDevices), dst = this.resolve(r.to, endpoints, mqttDevices);
       if (r.from.type !== 'device' && r.to.type !== 'device') throw Error('One side must be a KNX device');
       if (r.from.type === 'device' && r.to.type === 'device' && src.address === dst.address) throw Error('KNX source and target must use different group addresses');
       if (r.from.type === 'device' && r.to.type === 'device' && routes.some(other => other !== r && other.from?.type === 'device' && other.to?.type === 'device' && this.resolve(other.from, endpoints, mqttDevices).address === dst.address && this.resolve(other.to, endpoints, mqttDevices).address === src.address)) throw Error('Direct KNX feedback loop is not allowed');
-      if (r.from.type === 'mqttDevice' && !['output','both'].includes(src.direction)) throw Error('MQTT signal is not readable');
-      if (r.to.type === 'mqttDevice' && !['input','both'].includes(dst.direction)) throw Error('MQTT signal is not writable');
+      if (r.from.type === 'mqttDevice' && !['output','both'].includes(src.direction) && !r.bidirectional) throw Error('MQTT signal is not readable');
+      if (r.to.type === 'mqttDevice' && !['input','both'].includes(dst.direction) && !r.bidirectional) throw Error('MQTT signal is not writable');
       if (src.type !== dst.type && !r.transform) throw Error('Signal types differ; a conversion is required');
       if (r.transform) {
         if (r.transform.kind === 'map') {
