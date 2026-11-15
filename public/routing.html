@@ -40,7 +40,7 @@ body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:42
 <label class="form-label" for="mqtt-device-name">Device-Name</label><input class="form-control mb-2" id="mqtt-device-name" required maxlength="120" placeholder="Sonos Esszimmer">
 <label class="form-label" for="mqtt-device-template">Template</label><select class="form-select mb-2" id="mqtt-device-template"><option value="sonos">Sonos Player</option><option value="shelly-plug-s">Shelly Plug S</option><option value="generic">Generisches MQTT-Device</option><option value="custom">Benutzerdefiniert</option></select>
 <label class="form-label" for="mqtt-device-base">MQTT-Basistopic</label><input class="form-control mb-3" id="mqtt-device-base" required placeholder="sonos/devices/Esszimmer">
-<div id="custom-mqtt-settings" hidden><label class="form-label" for="custom-mqtt-count">Anzahl Kanäle (1–30)</label><input id="custom-mqtt-count" class="form-control mb-2" type="number" min="1" max="30" value="2"><div id="custom-mqtt-channels"></div></div><div class="d-flex justify-content-end gap-2 mt-3"><button class="btn btn-outline-secondary" type="button" id="cancel-mqtt-device">Abbrechen</button><button class="btn btn-primary" type="submit">MQTT-Device hinzufügen</button></div></form></dialog><dialog id="route-dialog" aria-labelledby="route-dialog-title"><form id="route-dialog-form" class="p-3"><h3 class="h5 mb-3" id="route-dialog-title">Verbindung bearbeiten</h3><div id="route-dialog-path" class="small text-secondary mb-3"></div><label class="form-label" for="route-dialog-direction">Datenfluss</label><select class="form-select mb-3" id="route-dialog-direction"><option value="knx2mqtt">KNX → MQTT</option><option value="mqtt2knx">MQTT → KNX</option><option value="knx2knx">KNX → KNX</option></select><div class="small text-secondary mb-3" id="route-dialog-direction-hint"></div><label class="form-label" for="route-dialog-map">Wertumwandlung (JSON)</label><textarea class="form-control mb-2" id="route-dialog-map" rows="5" spellcheck="false"></textarea><p class="small text-secondary mb-3">JSON-Feld aus MQTT extrahieren: <code>{"jsonPath":"output","values":{"true":"ON","false":"OFF"}}</code>. Verschachtelte Felder: <code>aenergy.total</code>.</p><div class="form-check mb-4"><input class="form-check-input" type="checkbox" id="route-dialog-enabled"><label class="form-check-label" for="route-dialog-enabled">Verbindung aktiv</label></div><div class="d-flex gap-2 justify-content-between"><button type="button" class="btn btn-outline-danger" id="route-dialog-delete">Verbindung löschen</button><div class="d-flex gap-2"><button type="button" class="btn btn-outline-secondary" id="route-dialog-cancel">Abbrechen</button><button type="submit" class="btn btn-primary">Übernehmen</button></div></div><p class="small text-secondary mt-3 mb-0">Änderungen anschließend aktivieren.</p></form></dialog>
+<div id="custom-mqtt-settings" hidden><label class="form-label" for="custom-mqtt-count">Anzahl Kanäle (1–30)</label><input id="custom-mqtt-count" class="form-control mb-2" type="number" min="1" max="30" value="2"><div id="custom-mqtt-channels"></div></div><div class="d-flex justify-content-end gap-2 mt-3"><button class="btn btn-outline-secondary" type="button" id="cancel-mqtt-device">Abbrechen</button><button class="btn btn-primary" type="submit">MQTT-Device hinzufügen</button></div></form></dialog><dialog id="corresponding-mqtt-dialog" aria-labelledby="corresponding-mqtt-title" style="width:min(95vw,620px);max-height:90vh;overflow:auto;border:1px solid var(--bs-border-color,#ccc);border-radius:12px;padding:1rem"><form id="corresponding-mqtt-form"><h3 class="h5 mb-3" id="corresponding-mqtt-title">Corresponding MQTT-Device</h3><p class="small text-secondary" id="corresponding-mqtt-description"></p><label for="corresponding-mqtt-base" class="form-label">MQTT-Basistopic</label><input id="corresponding-mqtt-base" class="form-control mb-3" maxlength="180" required><p class="small text-secondary">Pro KNX-Signal wird ein MQTT-Kanal und eine KNX → MQTT-Route angelegt. Den Rückweg kannst du anschließend im Designer konfigurieren.</p><div class="d-flex justify-content-end gap-2"><button type="button" class="btn btn-outline-secondary" id="corresponding-mqtt-cancel">Abbrechen</button><button type="submit" class="btn btn-primary">Anlegen</button></div></form></dialog><dialog id="route-dialog" aria-labelledby="route-dialog-title"><form id="route-dialog-form" class="p-3"><h3 class="h5 mb-3" id="route-dialog-title">Verbindung bearbeiten</h3><div id="route-dialog-path" class="small text-secondary mb-3"></div><label class="form-label" for="route-dialog-direction">Datenfluss</label><select class="form-select mb-3" id="route-dialog-direction"><option value="knx2mqtt">KNX → MQTT</option><option value="mqtt2knx">MQTT → KNX</option><option value="knx2knx">KNX → KNX</option></select><div class="small text-secondary mb-3" id="route-dialog-direction-hint"></div><label class="form-label" for="route-dialog-map">Wertumwandlung (JSON)</label><textarea class="form-control mb-2" id="route-dialog-map" rows="5" spellcheck="false"></textarea><p class="small text-secondary mb-3">JSON-Feld aus MQTT extrahieren: <code>{"jsonPath":"output","values":{"true":"ON","false":"OFF"}}</code>. Verschachtelte Felder: <code>aenergy.total</code>.</p><div class="form-check mb-4"><input class="form-check-input" type="checkbox" id="route-dialog-enabled"><label class="form-check-label" for="route-dialog-enabled">Verbindung aktiv</label></div><div class="d-flex gap-2 justify-content-between"><button type="button" class="btn btn-outline-danger" id="route-dialog-delete">Verbindung löschen</button><div class="d-flex gap-2"><button type="button" class="btn btn-outline-secondary" id="route-dialog-cancel">Abbrechen</button><button type="submit" class="btn btn-primary">Übernehmen</button></div></div><p class="small text-secondary mt-3 mb-0">Änderungen anschließend aktivieren.</p></form></dialog>
 <script>
 let graph={endpoints:[],mqttDevices:[],routes:[]},devices=[],templates=[],selected=null,dirty=false,migration=null;
 let focusAddress=new URLSearchParams(location.search).get("ga"),focusRoute=new URLSearchParams(location.search).get("route"),focusDevice=new URLSearchParams(location.search).get("device");
@@ -91,7 +91,7 @@ function render(){
  const visibleMqttIds=new Set(focused.flatMap(r=>[r.from,r.to].filter(ref=>ref.type!=='device').map(ref=>ref.id)));
  const deviceCards=visibleDevices.map(d=>{
   const own=list.filter(x=>x.ref.id===d.id);
-  return {id:d.id,html:'<div class="node" data-node="device:'+esc(d.id)+'"><h3>'+esc(d.name)+'</h3>'+own.map(signalHtml).join('')+'</div>'};
+  return {id:d.id,html:'<div class="node" data-node="device:'+esc(d.id)+'"><h3>'+esc(d.name)+'</h3>'+own.map(signalHtml).join('')+'<button type="button" class="btn btn-sm btn-outline-primary create-corresponding-mqtt mt-2" data-id="'+esc(d.id)+'">Create corresponding MQTT-Device</button></div>'};
  });
  const mqttCards=[
  ...(graph.mqttDevices||[]).filter(d=>!focusAddress&&!focusRoute&&!focusDevice||visibleMqttIds.has(d.id)).map(d=>({id:d.id,html:'<div class="node" data-node="mqttDevice:'+esc(d.id)+'"><h3><i class="bi bi-speaker"></i> '+esc(d.name)+'</h3>'+eps.filter(x=>x.ref.type==='mqttDevice'&&x.ref.id===d.id).map(signalHtml).join('')+(mqttTemplateUpgrade(d)?.additions.length?'<button class="btn btn-sm btn-outline-primary upgrade-mqtt-device me-2" data-id="'+esc(d.id)+'"><i class="bi bi-arrow-up-circle"></i> Template aktualisieren ('+mqttTemplateUpgrade(d).additions.length+')</button>':'')+'<button class="btn btn-sm btn-link text-danger delete-mqtt-device" data-id="'+esc(d.id)+'">Entfernen</button></div>'})),
@@ -231,7 +231,37 @@ $('route-dialog-form').addEventListener('submit',e=>{
   dirty=true;$('route-dialog').close();editingRouteId=null;render();notice('Verbindung aktualisiert. Bitte Änderungen aktivieren.');
  }catch(err){notice('Verbindung konnte nicht geändert werden: '+err.message,true);$('route-dialog-map').focus()}
 });
+let correspondingDeviceId=null;
+$('corresponding-mqtt-cancel').onclick=()=>$('corresponding-mqtt-dialog').close();
+$('corresponding-mqtt-form').addEventListener('submit',e=>{
+ e.preventDefault();
+ const device=devices.find(d=>d.id===correspondingDeviceId);
+ if(!device){notice('KNX-Device nicht gefunden.',true);return;}
+ const base=$('corresponding-mqtt-base').value.trim().replace(/\/+$/,'');
+ const own=signals().filter(x=>x.ref.id===device.id);
+ if(!base||/[+#\s]/.test(base)||base.startsWith('knx/')||!own.length||own.length>30){notice('Ungültiges Basistopic oder keine KNX-Signale.',true);return;}
+ const existing=new Set([...graph.endpoints.map(x=>x.topic),...graph.mqttDevices.flatMap(d=>d.signals.map(x=>x.topic))]);
+ const mqttSignals=own.map(x=>({key:x.ref.signal,label:x.ref.signal,topic:base+'/'+x.ref.signal,payloadType:x.type,direction:'both'}));
+ if(mqttSignals.some(x=>x.topic.length>240||existing.has(x.topic))||new Set(mqttSignals.map(x=>x.topic)).size!==mqttSignals.length){notice('MQTT-Topic bereits vergeben oder ungültig.',true);return;}
+ if(graph.mqttDevices.length>=100||graph.routes.length+own.length>500){notice('Routing-Limit erreicht.',true);return;}
+ const id=uid();
+ graph.mqttDevices.push({id,name:device.name,templateId:'custom',baseTopic:base,signals:mqttSignals});
+ for(const x of own)graph.routes.push({id:uid(),from:x.ref,to:{type:'mqttDevice',id,signal:x.ref.signal},enabled:true});
+ dirty=true;correspondingDeviceId=null;$('corresponding-mqtt-dialog').close();render();
+ notice('MQTT-Device und '+own.length+' KNX → MQTT-Routen vorbereitet. Mit „Änderungen aktivieren“ speichern.');
+});
 document.addEventListener('click',e=>{
+ const create=e.target.closest('.create-corresponding-mqtt');
+ if(create){
+  const device=devices.find(d=>d.id===create.dataset.id);
+  if(!device)return;
+  correspondingDeviceId=device.id;
+  $('corresponding-mqtt-description').textContent=device.name+' · '+signals().filter(x=>x.ref.id===device.id).length+' Signale';
+  $('corresponding-mqtt-base').value='devices/'+device.id;
+  $('corresponding-mqtt-dialog').showModal();
+  return;
+ }
+
  const edit=e.target.closest('.edit-transform');if(edit){openRouteDialog(edit.dataset.id);return}
  const upgrade=e.target.closest('.upgrade-mqtt-device');
  if(upgrade){
