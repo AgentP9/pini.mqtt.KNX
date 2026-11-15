@@ -116,10 +116,6 @@ class DeviceStore {
       const ga = this.groupAddresses.find(g => g.address === addr);
       if (!ga) throw new Error('Group address not configured: ' + addr);
       if (ga.dpt && ga.dpt !== obj.dpt) throw new Error('DPT mismatch for ' + addr + ': expected ' + obj.dpt);
-      const direction = ga.direction || 'both';
-      if (obj.direction === 'knx2mqtt' && direction === 'mqtt2knx') throw new Error('Direction mismatch for ' + addr);
-      if (obj.direction === 'mqtt2knx' && direction === 'knx2mqtt') throw new Error('Direction mismatch for ' + addr);
-      if (obj.direction === 'both' && direction !== 'both') throw new Error('Bidirectional object requires both directions: ' + addr);
       addresses[obj.key] = addr;
     }
     for (const d of this.devices) {
