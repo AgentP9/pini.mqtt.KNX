@@ -13,6 +13,15 @@ const TEMPLATES = Object.freeze({
       { key: 'status', label: 'Switch status', dpt: '1.011', direction: 'knx2mqtt' },
     ],
   },
+  'dimmer': {
+    id: 'dimmer', name: 'Dimmer',
+    objects: [
+      { key: 'command', label: 'Switch command', dpt: '1.001', direction: 'both' },
+      { key: 'dimRelative', label: 'Relative dimming', dpt: '3.007', direction: 'both' },
+      { key: 'status', label: 'Switch status', dpt: '1.011', direction: 'knx2mqtt' },
+      { key: 'brightness', label: 'Brightness value', dpt: '5.001', direction: 'knx2mqtt' },
+    ],
+  },
   'sonos': {
     id: 'sonos', name: 'Sonos',
     objects: [
