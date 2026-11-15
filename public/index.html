@@ -1031,7 +1031,23 @@ const route = { mqttTopic };
       const hint = !address ? 'Not assigned' : !ga ? 'Address missing' : pending ? address + ' · sent, not confirmed' : !Number.isFinite(numeric) ? 'No live value' : address;
       return `<div class="device-metric"><div class="metric-header"><div class="metric-label mb-0">${escHtml(label)}</div>${actions}</div><div class="metric-value">${escHtml(value)}</div><div class="small text-muted mt-2">${escHtml(hint)}</div>${editor}</div>`;
     };
-    target.innerHTML = visible.map(d => {
+    const sortedRooms=[...rooms].sort((a,b)=>a.name.localeCompare(b.name,'de',{sensitivity:'base'}));
+    const roomOrder=new Map(sortedRooms.map((room,index)=>[room.id,index]));
+    const roomColors=['#3b82f6','#10b981','#a855f7','#f59e0b','#ec4899','#06b6d4','#ef4444','#84cc16'];
+    const ordered=[...visible].sort((a,b)=>{
+      const ai=roomOrder.has(a.roomId)?roomOrder.get(a.roomId):Infinity;
+      const bi=roomOrder.has(b.roomId)?roomOrder.get(b.roomId):Infinity;
+      return ai-bi||a.name.localeCompare(b.name,'de',{sensitivity:'base'});
+    });
+    let previousRoom=null;
+    target.innerHTML = ordered.map(d => {
+      const room=rooms.find(r=>r.id===d.roomId);
+      const roomKey=room?.id||'unassigned';
+      const color=room?roomColors[roomOrder.get(room.id)%roomColors.length]:'#94a3b8';
+      const firstOfRoom=previousRoom!==roomKey;
+      previousRoom=roomKey;
+      const heading=firstOfRoom?'<div class="col-12 mt-4"><div class="d-flex align-items-center gap-2 pb-2 border-bottom" style="border-bottom-color:'+color+' !important"><span aria-hidden="true" style="width:5px;height:22px;border-radius:4px;background:'+color+'"></span><h3 class="h6 mb-0">'+escHtml(room?.name||'Ohne Raum')+'</h3><span class="small text-muted">'+ordered.filter(item=>(item.roomId||'unassigned')===roomKey).length+' Devices</span></div></div>':'';
+
       const tpl = deviceTemplate(d.templateId);
       const isHeating = d.templateId === 'room-heating';
       const isSwitch = d.templateId === 'switch';
@@ -1065,7 +1081,7 @@ const route = { mqttTopic };
         </div>
         <div class="device-switch-message text-muted mt-2" data-id="${escHtml(d.id)}" role="status"></div>
       </div>` : '';
-      return `<div class="col-12 col-xl-6"><article class="card device-card h-100" data-routing-device="${escHtml(d.id)}" title="Routing Designer für dieses Device öffnen" tabindex="0" role="link">
+      return heading+`<div class="col-12 col-xl-6"><article class="card device-card h-100" style="border-left:3px solid ${color}" data-routing-device="${escHtml(d.id)}" title="Routing Designer für dieses Device öffnen" tabindex="0" role="link">
         <div class="card-body">
           <div class="d-flex align-items-start gap-3 mb-3">
             <div class="device-icon" aria-hidden="true"><i class="bi ${isHeating ? 'bi-thermometer-half' : 'bi-grid'}"></i></div>
