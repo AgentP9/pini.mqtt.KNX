@@ -484,7 +484,7 @@
 
   // Conservative, read-only device suggestions. Never create or modify devices automatically.
   function gaBaseName(name) {
-    return String(name || '').replace(/(?:[\s_-]+(?:play\s*\/\s*stop|auf\s*\/\s*ab|stopp\s*\/\s*schritt|stopp|position|an\s*\/\s*aus|schaltbefehl|schalten|schaltstatus|dimmen\s+relativ|dimmwert|helligkeitswert|helligkeit|wert|status|rückmeldung|rueckmeldung|feedback|command|ein\s*\/\s*aus|on\s*\/\s*off))\s*$/i, '').trim();
+    return String(name || '').replace(/(?:[\s_-]+(?:play\s*\/\s*stop|auf\s*\/\s*ab|stopp\s*\/\s*schritt|stopp|position|an\s*\/\s*aus|schaltbefehl|schalten|schaltstatus|dimmen\s+(?:relativ|absolut)|dimmwert|helligkeitswert|helligkeit|wert|status|rückmeldung|rueckmeldung|feedback|command|ein\s*\/\s*aus|on\s*\/\s*off))\s*$/i, '').trim();
   }
   function gaPosition(address) {
     const parts = String(address).split('/').map(Number);
@@ -532,6 +532,24 @@
       }
       if(Object.keys(matches).length===3&&new Set(Object.values(matches)).size===3)
         return {templateId:'roller-shutter',templateName:shutterTemplate.name,name:base,addresses:matches,score:100};
+    }
+    // Absolute dimmers share DPTs across command and status; names disambiguate.
+    const absoluteTemplate=deviceTemplates.find(t=>t.id==='dimmer-absolute');
+    if(absoluteTemplate){
+      const group=configuredGAs.filter(g=>!occupied.has(g.address)&&gaBaseName(g.name).toLowerCase()===base.toLowerCase());
+      const patterns={
+        command:/(?:^|\s)(?:an\s*\/\s*aus|schalten|schaltbefehl)$/i,
+        dimAbsolute:/(?:^|\s)(?:dimmen\s+absolut|dimmwert)$/i,
+        status:/(?:^|\s)(?:status|schaltstatus)$/i,
+        brightness:/(?:^|\s)(?:wert|helligkeitswert|helligkeit)$/i
+      };
+      const matches={};
+      for(const obj of absoluteTemplate.objects){
+        const found=group.filter(g=>patterns[obj.key].test((g.name||'').trim())&&gaDirectionMatches(g,obj));
+        if(found.length===1)matches[obj.key]=found[0].address;
+      }
+      if(Object.keys(matches).length===4&&new Set(Object.values(matches)).size===4)
+        return {templateId:'dimmer-absolute',templateName:absoluteTemplate.name,name:base,addresses:matches,score:100};
     }
     // Prefer a complete four-address dimmer block over the generic switch
     // and Sonos templates when all KNX datapoint types and names agree.
