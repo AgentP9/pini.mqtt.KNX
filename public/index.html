@@ -1114,9 +1114,9 @@ const route = { mqttTopic };
   function renderDeviceFields(mapping = {}) {
     const tpl = deviceTemplate(deviceTemplateSelect.value);
     deviceObjects.innerHTML = tpl ? tpl.objects.map(o => {
-      const candidates = configuredGAs.filter(g => !g.dpt || g.dpt === o.dpt).sort((a,b) => { const x=gaPosition(a.address),y=gaPosition(b.address); return x&&y ? (x[0]-y[0]||x[1]-y[1]||x[2]-y[2]) : String(a.address).localeCompare(String(b.address),undefined,{numeric:true}); });
+      const candidates = configuredGAs.filter(g => gaDirectionMatches(g, o) && (tpl.id !== 'roller-shutter' || o.key !== 'stop' || !g.dpt || ['1.007','1.009','1.017'].includes(g.dpt))).sort((a,b) => { const x=gaPosition(a.address),y=gaPosition(b.address); return x&&y ? (x[0]-y[0]||x[1]-y[1]||x[2]-y[2]) : String(a.address).localeCompare(String(b.address),undefined,{numeric:true}); });
       const options = candidates.map(g => `<option value="${escHtml(g.address)}" ${mapping[o.key] === g.address ? 'selected' : ''}>${escHtml(g.address + ' – ' + (g.name || 'Unnamed'))}</option>`).join('');
-      return `<div class="mb-3"><label class="form-label" for="device-object-${escHtml(o.key)}">${escHtml(o.label)} <small class="text-muted">DPT ${escHtml(o.dpt)}${o.optional ? ' · optional' : ''}</small></label><select class="form-select device-object" id="device-object-${escHtml(o.key)}" data-key="${escHtml(o.key)}"><option value="">Select address…</option>${options}</select></div>`;
+      return `<div class="mb-3"><label class="form-label" for="device-object-${escHtml(o.key)}">${escHtml(o.label)} <small class="text-muted">DPT ${escHtml(tpl.id === 'roller-shutter' && o.key === 'stop' ? '1.007 / 1.009 / 1.017' : o.dpt)}${o.optional ? ' · optional' : ''}</small></label><select class="form-select device-object" id="device-object-${escHtml(o.key)}" data-key="${escHtml(o.key)}"><option value="">Select address…</option>${options}</select></div>`;
     }).join('') : '';
   }
   function openDeviceEditor(device) {
