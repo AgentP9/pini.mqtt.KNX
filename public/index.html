@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#212529" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="piniMqtt4KNX" />
   <title>piniMqtt4KNX – Dashboard</title>
@@ -1264,11 +1265,7 @@
   switchView(location.hash === '#view-addresses' ? 'addresses' : location.hash === '#view-devices' ? 'devices' : localStorage.getItem('dashboard-view') === 'addresses' ? 'addresses' : 'devices');
 
   // ── PWA service worker ────────────────────────────────────────────────────────
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch((err) => {
-      console.warn('Service worker registration failed:', err);
-    });
-  }
+
 
   // ── Clear button ──────────────────────────────────────────────────────────────
   document.getElementById('btn-clear').addEventListener('click', () => {
