@@ -107,6 +107,48 @@ class WebServer {
       } catch (err) { res.status(400).json({ error: err.message }); }
     });
 
+    // Destructive, opt-in cutover. Preserve backups and never remove GA/device definitions.
+    this.app.get('/api/routing/full-cleanup-preview', (_req, res) => {
+      const legacyRoutes = this.groupAddresses.flatMap(ga => (ga.routes || []).filter(route => route.mqttTopic).map(route => ({ address: ga.address, topic: route.mqttTopic })));
+      const implicitKnxToMqtt = this.groupAddresses.filter(ga => ['both','knx2mqtt'].includes(ga.direction || 'both')).map(ga => ({ address: ga.address, topic: config.topicPrefix + '/' + ga.address }));
+      const implicitMqttToKnx = this.groupAddresses.filter(ga => ['both','mqtt2knx'].includes(ga.direction || 'both')).map(ga => ({ address: ga.address, topic: config.topicPrefix + '/' + ga.address }));
+      res.json({ alreadyCleaned: this.routingStore.legacyCleaned, legacyRoutes, implicitKnxToMqtt, implicitMqttToKnx, legacyMarkers: this.routingStore.routes.filter(route => route.legacyKey).length, activeRoutes: this.routingStore.routes.filter(route => route.enabled).length });
+    });
+    this.app.post('/api/routing/full-cleanup', (req, res) => {
+      if (req.body?.confirm !== 'DELETE_LEGACY_ROUTING') return res.status(400).json({ error: 'Explicit confirmation required' });
+      if (this.routingStore.legacyCleaned) return res.json({ alreadyCleaned: true, graph: this.routingStore.list() });
+      const oldGraph = this.routingStore.list();
+      const oldGAs = this.groupAddresses.map(ga => structuredClone(ga));
+      const graphFile = this.routingStore.file;
+      const gaFile = this.groupAddressesPath;
+      const backups = [];
+      try {
+        // Backups are made before modifying either persistent file.
+        const suffix = '.before-legacy-cleanup-' + new Date().toISOString().replace(/[:.]/g,'-') + '-' + require('crypto').randomUUID().slice(0,8) + '.bak';
+        for (const file of [graphFile, gaFile]) {
+          const backup = file + suffix;
+          if (fs.existsSync(file)) fs.copyFileSync(file, backup, fs.constants.COPYFILE_EXCL);
+          else fs.writeFileSync(backup, file === graphFile ? JSON.stringify(oldGraph, null, 2) : JSON.stringify(oldGAs, null, 2), { flag: 'wx', mode: 0o600 });
+          backups.push({ file, backup });
+        }
+        const cleanedRoutes = oldGraph.routes.map(({ legacyKey, ...route }) => route);
+        for (const ga of this.groupAddresses) delete ga.routes;
+        const graph = this.routingStore.save({ ...oldGraph, routes: cleanedRoutes, explicitKnxWrites: true, legacyCleaned: true });
+        if (!this._saveGroupAddresses()) throw Error('Could not persist group addresses');
+        this.eventEmitter.emit('routing-changed', graph);
+        this.io.emit('groupaddresses', this._enrichGAs());
+        res.json({ ok: true, removedLegacyRoutes: oldGAs.reduce((n,ga)=>n+(ga.routes||[]).length,0), removedMarkers: oldGraph.routes.filter(route=>route.legacyKey).length, backupFiles: backups.map(x=>x.backup), graph });
+      } catch (err) {
+        this.groupAddresses.splice(0, this.groupAddresses.length, ...oldGAs);
+        for (const { file, backup } of backups) {
+          try { fs.copyFileSync(backup, file); } catch (_) { /* report original failure */ }
+        }
+        // Restore the in-memory state even if a disk rollback failed.
+        Object.assign(this.routingStore, { endpoints: oldGraph.endpoints, mqttDevices: oldGraph.mqttDevices, routes: oldGraph.routes, explicitKnxWrites: oldGraph.explicitKnxWrites, legacyCleaned: oldGraph.legacyCleaned, knxMqttBaseTopic: oldGraph.knxMqttBaseTopic });
+        res.status(500).json({ error: err.message, backupFiles: backups.map(x=>x.backup) });
+      }
+    });
+
     // Remove selected legacy GA routes only after explicitly confirming their
     // current topic/address identity. Migrated graph routes are retained and
     // detached from their legacy fallback marker.
