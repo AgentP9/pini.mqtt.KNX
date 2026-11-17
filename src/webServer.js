@@ -87,187 +87,9 @@ class WebServer {
       } catch (err) { res.status(400).json({ error: err.message }); }
     });
     this.app.get('/api/routing', (_req, res) => res.json(this.routingStore.list()));
-    this.app.get('/api/routing/group-address-links', (_req, res) => {
-      const links = {};
-      for (const r of this.routingStore.routes) {
-        if (!r.legacyKey) continue;
-        try {
-          const ref = r.from.type === 'device' ? r.from : r.to;
-          const signal = this.routingStore.resolve(ref, this.routingStore.endpoints);
-          (links[signal.address] ||= []).push({ id: r.id, enabled: r.enabled, legacyKey: r.legacyKey });
-        } catch (_) { /* stale device mapping: keep old GA route visible */ }
-      }
-      res.json(links);
-    });
     this.app.put('/api/routing', (req, res) => {
       try {
         const data = this.routingStore.save(req.body || {});
-        this.eventEmitter.emit('routing-changed', data);
-        res.json(data);
-      } catch (err) { res.status(400).json({ error: err.message }); }
-    });
-
-    // Destructive, opt-in cutover. Preserve backups and never remove GA/device definitions.
-    this.app.get('/api/routing/full-cleanup-preview', (_req, res) => {
-      const store = this.routingStore;
-      const describe = (route, direction) => {
-        try {
-          const from = store.resolve(direction === 'forward' ? route.from : route.to, store.endpoints);
-          const to = store.resolve(direction === 'forward' ? route.to : route.from, store.endpoints);
-          return { address: from.address || to.address, topic: from.topic || to.topic };
-        } catch (_) { return null; }
-      };
-      // Compare both physical directions independently; a matching inactive route is NOT coverage.
-      const active = store.routes.flatMap(route => {
-        const forward = describe(route, 'forward');
-        const reverse = route.bidirectional ? describe(route, 'reverse') : null;
-        return [...(forward ? [{ ...forward, direction: route.from.type === 'device' ? 'knx2mqtt' : 'mqtt2knx', routeId: route.id, enabled: route.enabled }] : []),
-          ...(reverse ? [{ ...reverse, direction: route.from.type === 'device' ? 'mqtt2knx' : 'knx2mqtt', routeId: route.id, enabled: route.enabled }] : [])].filter(x => x.address && x.topic);
-      });
-      const candidates = [];
-      for (const ga of this.groupAddresses) {
-        const directions = [];
-        if (['both','knx2mqtt'].includes(ga.direction || 'both')) directions.push('knx2mqtt');
-        if (['both','mqtt2knx'].includes(ga.direction || 'both')) directions.push('mqtt2knx');
-        for (const direction of directions) {
-          candidates.push({ address: ga.address, topic: config.topicPrefix + '/' + ga.address, direction, origin: 'implicit' });
-          for (const legacy of ga.routes || []) if (legacy.mqttTopic) candidates.push({ address: ga.address, topic: legacy.mqttTopic, direction, origin: 'legacy-route' });
-        }
-      }
-      const connections = candidates.map(item => {
-        const matches = active.filter(r => r.address === item.address && r.topic === item.topic && r.direction === item.direction);
-        const enabled = matches.filter(r => r.enabled);
-        return { ...item, status: enabled.length ? 'covered' : matches.length ? 'inactive' : 'missing', routeIds: matches.map(r => r.routeId) };
-      });
-      res.json({
-        alreadyCleaned: store.legacyCleaned,
-        connections,
-        legacyRoutes: this.groupAddresses.flatMap(ga => (ga.routes || []).filter(r => r.mqttTopic).map(r => ({ address: ga.address, topic: r.mqttTopic }))),
-        legacyMarkers: store.routes.filter(route => route.legacyKey).length,
-        activeRoutes: store.routes.filter(route => route.enabled).length
-      });
-    });
-    this.app.post('/api/routing/full-cleanup', (req, res) => {
-      if (req.body?.confirm !== 'DELETE_LEGACY_ROUTING') return res.status(400).json({ error: 'Explicit confirmation required' });
-      if (this.routingStore.legacyCleaned) return res.json({ alreadyCleaned: true, graph: this.routingStore.list() });
-      const oldGraph = this.routingStore.list();
-      const oldGAs = this.groupAddresses.map(ga => structuredClone(ga));
-      const graphFile = this.routingStore.file;
-      const gaFile = this.groupAddressesPath;
-      const backups = [];
-      try {
-        // Backups are made before modifying either persistent file.
-        const suffix = '.before-legacy-cleanup-' + new Date().toISOString().replace(/[:.]/g,'-') + '-' + require('crypto').randomUUID().slice(0,8) + '.bak';
-        for (const file of [graphFile, gaFile]) {
-          const backup = file + suffix;
-          if (fs.existsSync(file)) fs.copyFileSync(file, backup, fs.constants.COPYFILE_EXCL);
-          else fs.writeFileSync(backup, file === graphFile ? JSON.stringify(oldGraph, null, 2) : JSON.stringify(oldGAs, null, 2), { flag: 'wx', mode: 0o600 });
-          backups.push({ file, backup });
-        }
-        const cleanedRoutes = oldGraph.routes.map(({ legacyKey, ...route }) => route);
-        for (const ga of this.groupAddresses) delete ga.routes;
-        const graph = this.routingStore.save({ ...oldGraph, routes: cleanedRoutes, explicitKnxWrites: true, legacyCleaned: true });
-        if (!this._saveGroupAddresses()) throw Error('Could not persist group addresses');
-        this.eventEmitter.emit('routing-changed', graph);
-        this.io.emit('groupaddresses', this._enrichGAs());
-        res.json({ ok: true, removedLegacyRoutes: oldGAs.reduce((n,ga)=>n+(ga.routes||[]).length,0), removedMarkers: oldGraph.routes.filter(route=>route.legacyKey).length, backupFiles: backups.map(x=>x.backup), graph });
-      } catch (err) {
-        this.groupAddresses.splice(0, this.groupAddresses.length, ...oldGAs);
-        for (const { file, backup } of backups) {
-          try { fs.copyFileSync(backup, file); } catch (_) { /* report original failure */ }
-        }
-        // Restore the in-memory state even if a disk rollback failed.
-        Object.assign(this.routingStore, { endpoints: oldGraph.endpoints, mqttDevices: oldGraph.mqttDevices, routes: oldGraph.routes, explicitKnxWrites: oldGraph.explicitKnxWrites, legacyCleaned: oldGraph.legacyCleaned, knxMqttBaseTopic: oldGraph.knxMqttBaseTopic });
-        res.status(500).json({ error: err.message, backupFiles: backups.map(x=>x.backup) });
-      }
-    });
-
-    // Remove selected legacy GA routes only after explicitly confirming their
-    // current topic/address identity. Migrated graph routes are retained and
-    // detached from their legacy fallback marker.
-    this.app.post('/api/routing/legacy-cleanup', (req, res) => {
-      if (this.routingStore.legacyCleaned) return res.status(409).json({ error: 'Legacy routing has been permanently cleaned' });
-      const selections = req.body?.routes;
-      if (!Array.isArray(selections) || !selections.length || selections.length > 200 ||
-          !selections.every(x => x && typeof x.address === 'string' && typeof x.topic === 'string')) {
-        return res.status(400).json({ error: 'Select legacy routes by address and topic' });
-      }
-      const keys = new Set(selections.map(x => JSON.stringify([x.address, x.topic])));
-      if (keys.size !== selections.length) return res.status(400).json({ error: 'Duplicate selection' });
-      const originalGAs = this.groupAddresses.map(g => ({ ...g, routes: g.routes?.map(r => ({ ...r })) }));
-      const originalGraph = this.routingStore.list();
-      const selected = [];
-      for (const x of selections) {
-        const ga = this.groupAddresses.find(g => g.address === x.address);
-        const legacy = ga?.routes?.find(r => r.mqttTopic === x.topic);
-        if (!legacy) return res.status(409).json({ error: 'Legacy route changed; reload preview' });
-        selected.push(x);
-      }
-      // Save graph without migration markers before removing legacy routes.
-      // If persistence fails, do not touch groupaddresses.json.
-      const cleanedRoutes = originalGraph.routes.map(r => {
-        if (!r.legacyKey) return r;
-        let pair;
-        try { const [address, topic] = JSON.parse(r.legacyKey); pair = JSON.stringify([address, topic]); }
-        catch (_) { return r; }
-        if (!keys.has(pair)) return r;
-        const { legacyKey, ...rest } = r;
-        return rest;
-      });
-      try {
-        // Remove from the in-memory legacy config first so routing validation
-        // sees the same destination ownership as after cleanup.
-        for (const ga of this.groupAddresses) {
-          ga.routes = (ga.routes || []).filter(r => !keys.has(JSON.stringify([ga.address, r.mqttTopic])));
-          if (!ga.routes.length) delete ga.routes;
-        }
-        this.routingStore.save({ ...originalGraph, routes: cleanedRoutes });
-        if (!this._saveGroupAddresses()) throw Error('Failed to save group addresses');
-        this.eventEmitter.emit('routing-changed', this.routingStore.list());
-        this.io.emit('groupaddresses', this._enrichGAs());
-        res.json({ deleted: selected.length, graph: this.routingStore.list() });
-      } catch (err) {
-        this.groupAddresses.splice(0, this.groupAddresses.length, ...originalGAs);
-        try { this.routingStore.save(originalGraph); } catch (_) { /* restore attempt; report failure below */ }
-        res.status(500).json({ error: err.message });
-      }
-    });
-
-    // Deliberate cutover: never disable implicit writes during an ordinary graph save.
-    this.app.get('/api/routing/explicit-writes-preview', (_req, res) => {
-      const prefix = config.topicPrefix;
-      const implicit = this.groupAddresses.filter(ga => ['both', 'mqtt2knx'].includes(ga.direction || 'both')).map(ga => ({
-        address: ga.address, topic: prefix + '/' + ga.address,
-        name: ga.name || ga.address,
-        covered: this.routingStore.routes.some(route => {
-          if (!route.enabled || route.to?.type !== 'device') return false;
-          try {
-            const dst = this.routingStore.resolve(route.to, this.routingStore.endpoints);
-            const src = this.routingStore.resolve(route.from, this.routingStore.endpoints);
-            return dst.address === ga.address && src.topic === prefix + '/' + ga.address;
-          } catch (_) { return false; }
-        })
-      }));
-      const legacy = this.groupAddresses.flatMap(ga => (ga.routes || []).filter(r => r.mqttTopic).map(r => ({
-        address: ga.address, topic: r.mqttTopic,
-        covered: this.routingStore.migrated(ga.address, r.mqttTopic, 'mqtt2knx')
-      })));
-      res.json({ explicitKnxWrites: this.routingStore.explicitKnxWrites, implicit, legacy });
-    });
-    this.app.post('/api/routing/explicit-writes-migrate', (req, res) => {
-      if (req.body?.confirm !== 'DISABLE_IMPLICIT_KNX_WRITES') return res.status(400).json({ error: 'Explicit confirmation required' });
-      if (this.routingStore.explicitKnxWrites) return res.json(this.routingStore.list());
-      try {
-        const next = this.routingStore.save({ ...this.routingStore.list(), explicitKnxWrites: true });
-        this.eventEmitter.emit('routing-changed', next);
-        res.json(next);
-      } catch (err) { res.status(500).json({ error: err.message }); }
-    });
-    this.app.get('/api/routing/migration-preview', (_req, res) => res.json(this.routingStore.migrationPreview()));
-    this.app.post('/api/routing/migrate', (req, res) => {
-      if (this.routingStore.legacyCleaned) return res.status(409).json({ error: 'Legacy routing has been permanently cleaned' });
-      try {
-        const data = this.routingStore.migrate(req.body && req.body.keys);
         this.eventEmitter.emit('routing-changed', data);
         res.json(data);
       } catch (err) { res.status(400).json({ error: err.message }); }
@@ -281,7 +103,7 @@ class WebServer {
       if (device.templateId !== 'room-heating') return res.status(400).json({ error: 'Not a heating device' });
       const address = device.addresses && device.addresses.setpoint;
       const ga = this.groupAddresses.find(g => g.address === address);
-      if (!ga || ga.dpt !== '9.001' || !['both', 'mqtt2knx'].includes(ga.direction || 'both')) {
+      if (!ga || ga.dpt !== '9.001') {
         return res.status(409).json({ error: 'Setpoint GA missing or not writable as DPT 9.001' });
       }
       const value = req.body && req.body.value;
@@ -305,7 +127,7 @@ class WebServer {
       if (device.templateId !== 'switch') return res.status(400).json({ error: 'Not a switch device' });
       const address = device.addresses && device.addresses.command;
       const ga = this.groupAddresses.find(g => g.address === address);
-      if (!ga || ga.dpt !== '1.001' || !['both', 'mqtt2knx'].includes(ga.direction || 'both')) {
+      if (!ga || ga.dpt !== '1.001') {
         return res.status(409).json({ error: 'Switch command GA missing or not writable as DPT 1.001' });
       }
       if (typeof req.body?.value !== 'boolean') return res.status(400).json({ error: 'Switch value must be boolean' });
@@ -328,21 +150,15 @@ class WebServer {
 
     // POST – add or update a group address
     this.app.post('/api/groupaddresses', (req, res) => {
-      const { address, name, dpt, comment, routes, direction } = req.body || {};
+      const { address, name, dpt, comment } = req.body || {};
       if (!address) return res.status(400).json({ error: 'address is required' });
-      if (this.routingStore.legacyCleaned && Array.isArray(routes) && routes.length) return res.status(409).json({ error: 'Legacy GA routes are disabled; use Routing Designer' });
 
       const entry = {
         address,
         name: name || '',
         dpt: dpt || '',
         comment: comment || '',
-        routes: Array.isArray(routes) ? routes : undefined,
       };
-      // Remove the routes key entirely when not provided so the JSON stays clean
-      if (!entry.routes) delete entry.routes;
-      // Store direction only when it differs from the default ('both')
-      if (direction && direction !== 'both') entry.direction = direction;
 
       const idx = this.groupAddresses.findIndex((g) => g.address === address);
       const previous = idx >= 0 ? this.groupAddresses[idx] : null;
@@ -378,22 +194,13 @@ class WebServer {
 
       let added = 0, updated = 0;
       for (const item of addresses) {
-        const { address, name, dpt, comment, routes, direction, repeatInterval } = item || {};
+        const { address, name, dpt, comment } = item || {}
         if (!address) continue;
         const entry = { address, name: name || '', dpt: dpt || '', comment: comment || '' };
-        if (Array.isArray(routes)) {
-          if (routes.length > 0) entry.routes = routes;
-          // else: omit routes key so the JSON stays clean (mirrors POST endpoint behaviour)
-        }
-        // Store direction only when it differs from the default ('both')
-        if (direction && direction !== 'both') entry.direction = direction;
-        // Store repeatInterval only when it is a positive number
-        const ri = Number(repeatInterval);
-        if (ri > 0) entry.repeatInterval = ri;
         const idx = this.groupAddresses.findIndex((g) => g.address === address);
         if (idx >= 0) {
           // Merge: keep existing values unless the import provides new ones
-          this.groupAddresses[idx] = { ...this.groupAddresses[idx], ...entry };
+          this.groupAddresses[idx] = entry;
           updated++;
         } else {
           this.groupAddresses.push(entry);
