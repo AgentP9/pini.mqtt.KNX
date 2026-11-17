@@ -9,12 +9,10 @@ const RECONNECT_MAX_DELAY = 60000;  // 60 s
 class MqttHandler extends EventEmitter {
   /**
    * @param {{ host: string, port: number, username?: string, password?: string }} config
-   * @param {string} topicPrefix  e.g. "knx"
    */
-  constructor(config, topicPrefix) {
+  constructor(config) {
     super();
     this.config = config;
-    this.topicPrefix = topicPrefix;
     this.client = null;
     this.connected = false;
     this._manualReconnectRequested = false;
