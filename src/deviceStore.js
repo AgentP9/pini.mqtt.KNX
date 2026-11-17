@@ -22,6 +22,15 @@ const TEMPLATES = Object.freeze({
       { key: 'brightness', label: 'Brightness value', dpt: '5.001', direction: 'knx2mqtt' },
     ],
   },
+  'dimmer-absolute': {
+    id: 'dimmer-absolute', name: 'Dimmer (absolut)',
+    objects: [
+      { key: 'command', label: 'An/Aus', dpt: '1.001', direction: 'both' },
+      { key: 'dimAbsolute', label: 'Dimmen absolut', dpt: '5.001', direction: 'both' },
+      { key: 'status', label: 'Schaltstatus', dpt: '1.001', direction: 'knx2mqtt' },
+      { key: 'brightness', label: 'Helligkeitswert', dpt: '5.001', direction: 'knx2mqtt' },
+    ],
+  },
   'roller-shutter': {
     id: 'roller-shutter', name: 'Rollladen',
     objects: [
