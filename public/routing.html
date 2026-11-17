@@ -294,7 +294,6 @@ $('route-dialog-form').addEventListener('submit',e=>{
   const currentlyForward=isKnxToKnx||r.from.type==='device';
   const wantsForward=direction==='forward'||direction==='both';
   if(direction!=='both'&&currentlyForward!==wantsForward){
-   if(r.legacyKey)throw Error('Migrierte Legacy-Verbindung kann nicht umgedreht werden.');
    const from=r.to,to=r.from;
    const all=[...signals(),...endpointSignals()];
    const src=all.find(x=>signalKey(x.ref)===signalKey(from));
