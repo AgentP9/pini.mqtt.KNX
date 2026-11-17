@@ -13,7 +13,7 @@ const webServer = new WebServer(config.webPort, eventEmitter, config.groupAddres
 
 // ── Connections ────────────────────────────────────────────────────────────────
 const knxHandler = new KnxHandler(config.knx, config.groupAddresses);
-const mqttHandler = new MqttHandler(config.mqtt, config.topicPrefix);
+const mqttHandler = new MqttHandler(config.mqtt);
 
 // ── Router helpers ─────────────────────────────────────────────────────────────
 
