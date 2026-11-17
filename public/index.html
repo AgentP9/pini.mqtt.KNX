@@ -1319,7 +1319,7 @@ const route = { mqttTopic };
   fetch('/api/rooms').then(r=>r.json()).then(data=>{rooms=data;renderRooms();}).catch(err=>console.error('Rooms unavailable',err));
   socket.on('rooms',data=>{rooms=data;renderRooms();});
   document.getElementById('room-filter').addEventListener('change',renderDevices);
-  fetch('/api/device-templates').then(r => r.json()).then(t => { deviceTemplates = t; renderDevices(); }).catch(err => console.error('Templates unavailable', err));
+  fetch('/api/device-templates').then(r => { if (!r.ok) throw Error('Template HTTP '+r.status); return r.json(); }).then(t => { deviceTemplates = t; renderGATable(configuredGAs); }).catch(err => console.error('Templates unavailable', err));
   refreshMigratedGALinks();
   fetch('/api/devices').then(r => r.json()).then(d => { devices = d; renderDevices(); renderGATable(configuredGAs); }).catch(err => console.error('Devices unavailable', err));
   socket.on('devices', d => { devices = d; renderDevices(); renderGATable(configuredGAs); });
