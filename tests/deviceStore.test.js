@@ -144,3 +144,17 @@ test('system template maps KNX date, time, datetime and day/night addresses', ()
   assert.deepEqual(device.missing,[]);
  } finally {f.cleanup();}
 });
+
+test('switch status is optional while command remains required', () => {
+  const f = fixture();
+  try {
+    f.gas.push({ address: '2/0/0', dpt: '1.001', direction: 'both' });
+    const store = new DeviceStore(f.gas, f.gaPath);
+    const template = store.templates().find(t => t.id === 'switch');
+    assert.equal(template.objects.find(o => o.key === 'status').optional, true);
+    const device = store.save({ name: 'Light', templateId: 'switch', addresses: { command: '2/0/0' } });
+    assert.deepEqual(device.addresses, { command: '2/0/0' });
+    assert.deepEqual(new DeviceStore(f.gas, f.gaPath).list()[0].addresses, { command: '2/0/0' });
+    assert.throws(() => store.save({ name: 'Invalid', templateId: 'switch', addresses: {} }), /Invalid or missing group address/);
+  } finally { f.cleanup(); }
+});
