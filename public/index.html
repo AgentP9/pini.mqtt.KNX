@@ -475,7 +475,7 @@
   // ── Group addresses table ─────────────────────────────────────────────────────
   let configuredGAs = [];
   const pendingGAValues = new Map();
-  let sortCol = null;
+  let sortCol = 'address';
   let sortDir = 1; // 1 = asc, -1 = desc
 
   function assignedDevices(address) {
@@ -761,6 +761,8 @@
       renderGATable(configuredGAs);
     });
   });
+
+  updateSortIndicators();
 
   /** Update the Last Value cell for a GA row without re-rendering the whole table. */
   function updateGALastValue(entry) {
