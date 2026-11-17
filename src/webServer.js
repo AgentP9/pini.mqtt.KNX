@@ -121,7 +121,7 @@ class WebServer {
       const active = store.routes.flatMap(route => {
         const forward = describe(route, 'forward');
         const reverse = route.bidirectional ? describe(route, 'reverse') : null;
-        return [{ ...forward, direction: route.from.type === 'device' ? 'knx2mqtt' : 'mqtt2knx', routeId: route.id, enabled: route.enabled },
+        return [...(forward ? [{ ...forward, direction: route.from.type === 'device' ? 'knx2mqtt' : 'mqtt2knx', routeId: route.id, enabled: route.enabled }] : []),
           ...(reverse ? [{ ...reverse, direction: route.from.type === 'device' ? 'mqtt2knx' : 'knx2mqtt', routeId: route.id, enabled: route.enabled }] : [])].filter(x => x.address && x.topic);
       });
       const candidates = [];
