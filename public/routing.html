@@ -117,7 +117,23 @@ function render(){
   return {id:d.id,html:'<div class="node" data-node="device:'+esc(d.id)+'"><div class="knx-node-header d-flex align-items-center justify-content-between gap-2"'+headerStyle+'><h3 class="mb-0">'+esc(deviceTitle(d.name,d.roomId))+'</h3><button type="button" class="btn btn-sm btn-outline-primary create-corresponding-mqtt" data-id="'+esc(d.id)+'" title="Corresponding MQTT-Device anlegen" aria-label="Corresponding MQTT-Device für '+esc(d.name)+' anlegen"><i class="bi bi-plus-square" aria-hidden="true"></i></button></div>'+own.map(signalHtml).join('')+'</div>'};
  });
  const mqttCards=[
- ...(graph.mqttDevices||[]).filter(d=>!focusAddress&&!focusRoute&&!focusDevice||visibleMqttIds.has(d.id)).map(d=>{const linked=devices.find(device=>device.id===d.knxDeviceId)||devices.find(device=>device.name===d.name);const roomColor=linked&&roomColorById.get(linked.roomId);const headerStyle=roomColor?' style="background:color-mix(in srgb, '+roomColor+' 18%, var(--bs-body-bg));border-bottom:2px solid '+roomColor+'"':'';return {id:d.id,html:'<div class="node" data-node="mqttDevice:'+esc(d.id)+'"><div class="mqtt-node-header d-flex align-items-center justify-content-between gap-2"'+headerStyle+'><h3 class="mb-0">'+esc(deviceTitle(d.name,linked?.roomId))+'</h3><button type="button" class="btn btn-sm btn-outline-secondary edit-mqtt-device" data-id="'+esc(d.id)+'" title="MQTT-Device bearbeiten" aria-label="MQTT-Device '+esc(d.name)+' bearbeiten"><i class="bi bi-pencil-square" aria-hidden="true"></i></button></div>'+eps.filter(x=>x.ref.type==='mqttDevice'&&x.ref.id===d.id).map(signalHtml).join('')+(mqttTemplateUpgrade(d)?.additions.length?'<button class="btn btn-sm btn-outline-primary upgrade-mqtt-device me-2" data-id="'+esc(d.id)+'"><i class="bi bi-arrow-up-circle"></i> Template aktualisieren ('+mqttTemplateUpgrade(d).additions.length+')</button>':'')+'</div>'};}),
+ ...(graph.mqttDevices||[]).filter(d=>!focusAddress&&!focusRoute&&!focusDevice||visibleMqttIds.has(d.id)).map(d=>{const linked=(()=>{
+  // Routing is the primary association: device names are not unique across rooms.
+  const counts=new Map();
+  for(const route of graph.routes){
+   if(![route.from,route.to].some(ref=>ref.type==='mqttDevice'&&ref.id===d.id))continue;
+   for(const ref of [route.from,route.to]){
+    if(ref.type!=='device')continue;
+    counts.set(ref.id,(counts.get(ref.id)||0)+1);
+   }
+  }
+  const matches=[...counts].sort((a,b)=>b[1]-a[1]);
+  if(matches.length)return devices.find(device=>device.id===matches[0][0]);
+  const explicit=devices.find(device=>device.id===d.knxDeviceId);
+  if(explicit)return explicit;
+  const sameName=devices.filter(device=>device.name===d.name);
+  return sameName.length===1?sameName[0]:null;
+ })();const roomColor=linked&&roomColorById.get(linked.roomId);const headerStyle=roomColor?' style="background:color-mix(in srgb, '+roomColor+' 18%, var(--bs-body-bg));border-bottom:2px solid '+roomColor+'"':'';return {id:d.id,html:'<div class="node" data-node="mqttDevice:'+esc(d.id)+'"><div class="mqtt-node-header d-flex align-items-center justify-content-between gap-2"'+headerStyle+'><h3 class="mb-0">'+esc(deviceTitle(d.name,linked?.roomId))+'</h3><button type="button" class="btn btn-sm btn-outline-secondary edit-mqtt-device" data-id="'+esc(d.id)+'" title="MQTT-Device bearbeiten" aria-label="MQTT-Device '+esc(d.name)+' bearbeiten"><i class="bi bi-pencil-square" aria-hidden="true"></i></button></div>'+eps.filter(x=>x.ref.type==='mqttDevice'&&x.ref.id===d.id).map(signalHtml).join('')+(mqttTemplateUpgrade(d)?.additions.length?'<button class="btn btn-sm btn-outline-primary upgrade-mqtt-device me-2" data-id="'+esc(d.id)+'"><i class="bi bi-arrow-up-circle"></i> Template aktualisieren ('+mqttTemplateUpgrade(d).additions.length+')</button>':'')+'</div>'};}),
  ...eps.filter(x=>x.ref.type==='mqtt'&&(!focusAddress&&!focusRoute||visibleMqttIds.has(x.ref.id))).map(x=>({id:x.ref.id,html:'<div class="node" data-node="mqtt:'+esc(x.ref.id)+'"><h3>'+esc(graph.endpoints.find(e=>e.id===x.ref.id).name)+'</h3>'+signalHtml(x)+'<button class="btn btn-sm btn-link text-danger delete-endpoint" data-id="'+esc(x.ref.id)+'">Entfernen</button></div>'}))
  ];
  // Order the right-hand cards by their connected KNX device, so related
