@@ -230,14 +230,15 @@ function openRouteDialog(id){
  const name=ref=>all.find(x=>signalKey(x.ref)===signalKey(ref))?.name||'Unbekannt';
  $('route-dialog-path').textContent=name(r.from)+' → '+name(r.to);
  $('route-dialog-map').value=routeMapText(r);
- const left=r.from.type==='device'?'KNX':'MQTT',right=r.to.type==='device'?'KNX':'MQTT';
+ const knxFrom=r.from.type==='device',knxTo=r.to.type==='device';
+ const left='KNX',right=knxFrom&&knxTo?'KNX':'MQTT';
  $('route-dialog-source').textContent=left;
  $('route-dialog-target').textContent=right;
  const button=$('route-dialog-direction');
- button.dataset.direction=r.bidirectional?'both':'forward';
+ button.dataset.direction=r.bidirectional?'both':knxFrom?'forward':'reverse';
  button.disabled=Boolean(r.legacyKey);
- button.textContent=button.dataset.direction==='both'?'↔':'→';
- $('route-dialog-direction-hint').textContent=r.legacyKey?'Migrierte Legacy-Verbindung: Richtung erst nach Ablösen der Legacy-Route änderbar.':left==='KNX'&&right==='KNX'?'KNX-Verbindungen können in beide Einzelrichtungen geschaltet werden.':'Klicken, um zwischen →, ← und ↔ zu wechseln.';
+ button.textContent={forward:'→',reverse:'←',both:'↔'}[button.dataset.direction];
+ $('route-dialog-direction-hint').textContent=r.legacyKey?'Migrierte Legacy-Verbindung: Richtung erst nach Ablösen der Legacy-Route änderbar.':right==='KNX'?'KNX-Verbindungen können in beide Einzelrichtungen geschaltet werden.':'Klicken, um zwischen →, ← und ↔ zu wechseln.';
  $('route-dialog-enabled').checked=r.enabled;
  $('route-dialog').showModal();
 }
@@ -270,7 +271,10 @@ $('route-dialog-form').addEventListener('submit',e=>{
   const direction=$('route-dialog-direction').dataset.direction;
   if(direction==='both' && r.from.type==='device'&&r.to.type==='device')throw Error('KNX ↔ KNX wird nicht unterstützt.');
   if(direction==='both' && transform && transform.kind!=='map')throw Error('Bidirektionale Wertumwandlung unterstützt nur direkte Wertetabellen.');
-  if(direction==='reverse'){
+  const isKnxToKnx=r.from.type==='device'&&r.to.type==='device';
+  const currentlyForward=isKnxToKnx||r.from.type==='device';
+  const wantsForward=direction==='forward'||direction==='both';
+  if(direction!=='both'&&currentlyForward!==wantsForward){
    if(r.legacyKey)throw Error('Migrierte Legacy-Verbindung kann nicht umgedreht werden.');
    const from=r.to,to=r.from;
    const all=[...signals(),...endpointSignals()];
