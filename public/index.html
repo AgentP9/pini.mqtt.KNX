@@ -1261,7 +1261,7 @@
   window.addEventListener('hashchange',applyDashboardHash);
   applyDashboardHash();
   fetch('/api/routing').then(r=>{if(!r.ok)throw Error('routing');return r.json()}).then(data=>{const active=(data.routes||[]).filter(route=>route.enabled).length;document.getElementById('routing-count').textContent=active+' aktiv';}).catch(()=>{document.getElementById('routing-count').textContent='–';});
-  switchView(localStorage.getItem('dashboard-view') === 'addresses' ? 'addresses' : 'devices');
+  switchView(location.hash === '#view-addresses' ? 'addresses' : location.hash === '#view-devices' ? 'devices' : localStorage.getItem('dashboard-view') === 'addresses' ? 'addresses' : 'devices');
 
   // ── PWA service worker ────────────────────────────────────────────────────────
   if ('serviceWorker' in navigator) {
