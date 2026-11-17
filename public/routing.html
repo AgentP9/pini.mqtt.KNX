@@ -330,7 +330,7 @@ $('route-dialog-form').addEventListener('submit',e=>{
   r.enabled=requestedEnabled;
   if(requestedEnabled||!r.suspendedByChannel)delete r.suspendedByChannel;
   dirty=true;$('route-dialog').close();editingRouteId=null;render();notice('Verbindung aktualisiert. Bitte Änderungen aktivieren.');
- }catch(err){notice('Verbindung konnte nicht geändert werden: '+err.message,true);$('route-dialog-map').focus()}
+ }catch(err){notice('Verbindung konnte nicht geändert werden: '+err.message,true);console.warn('Route update rejected:',err);if(err instanceof SyntaxError || /JSON|Wertetabelle|Wertumwandlung|Datentyp/.test(err.message))$('route-dialog-map').focus();}
 });
 let editingMqttId=null;
 function openMqttEditor(id){
