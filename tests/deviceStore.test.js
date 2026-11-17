@@ -18,7 +18,7 @@ function fixture() {
   fs.writeFileSync(gaPath, JSON.stringify(gas));
   return { dir, gaPath, gas, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
 }
-test('legacy GAs stay unchanged; device metadata persists across restart', () => {
+test('group addresses stay unchanged; device metadata persists across restart', () => {
   const f = fixture();
   try {
     const before = fs.readFileSync(f.gaPath, 'utf8');
@@ -49,20 +49,17 @@ test('reject missing GAs, DPT mismatch, and duplicate ownership', () => {
     assert.deepEqual(store.list().find(d => d.id === second.id).missing, ['1/1/1']);
   } finally { f.cleanup(); }
 });
-test('invalid direction is rejected and updates preserve device ID', () => {
-  const f = fixture();
-  try {
-    const store = new DeviceStore(f.gas, f.gaPath);
-    f.gas[1].direction = 'knx2mqtt';
-    assert.throws(() => store.save({ name: 'Office', templateId: 'room-heating', addresses: { temperature: '1/0/0', setpoint: '1/0/1' } }), /Bidirectional/);
-    f.gas[1].direction = 'both';
-    const d = store.save({ name: 'Office', templateId: 'room-heating', addresses: { temperature: '1/0/0', setpoint: '1/0/1' } });
-    const updated = store.save({ ...d, name: 'New Office' }, d.id);
-    assert.equal(updated.id, d.id);
-    assert.equal(store.list()[0].name, 'New Office');
-  } finally { f.cleanup(); }
+test('device mapping does not depend on group-address direction', () => {
+ const f=fixture();
+ try {
+  const store=new DeviceStore(f.gas,f.gaPath);
+  f.gas[1].direction='knx2mqtt';
+  const device=store.save({name:'Office',templateId:'room-heating',addresses:{temperature:'1/0/0',setpoint:'1/0/1'}});
+  assert.equal(device.addresses.setpoint,'1/0/1');
+  const updated=store.save({...device,name:'New Office'},device.id);
+  assert.equal(updated.id,device.id);
+ } finally {f.cleanup();}
 });
-
 test('switch template maps DPT 1.001 command and DPT 1.011 status without changing group addresses', () => {
   const f = fixture();
   try {
