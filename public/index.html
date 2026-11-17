@@ -225,7 +225,6 @@
                   <th data-sort="name"   >Name</th>
                   <th data-sort="dpt"    >DPT</th>
                   <th data-sort="comment">Comment</th>
-                  <th title="Routing direction">Dir</th>
                   <th title="Custom MQTT route topics">Routes</th>
                   <th data-sort="device" title="Assigned device">Device</th>
                   <th>Last Value</th>
@@ -1011,7 +1010,7 @@
       }).join('');
       const status = missing.length ? '<span class="badge text-bg-warning">Mapping incomplete</span>' : '';
       const setpointGA = d.addresses && gaByAddress.get(d.addresses.setpoint);
-      const writable = isHeating && setpointGA && setpointGA.dpt === '9.001' && (!setpointGA.direction || ['both', 'mqtt2knx'].includes(setpointGA.direction));
+      const writable = isHeating && setpointGA && setpointGA.dpt === '9.001';
       const setpointRaw = d.addresses && pendingGAValues.has(d.addresses.setpoint) ? pendingGAValues.get(d.addresses.setpoint) : setpointGA && setpointGA.lastValue;
       const defaultSetpoint = Number.isFinite(Number(setpointRaw)) && setpointRaw !== undefined && setpointRaw !== null && setpointRaw !== '' ? Number(setpointRaw).toFixed(1) : '21.0';
       const editButton = writable ? `<button type="button" class="btn btn-sm btn-outline-secondary device-setpoint-edit" data-id="${escHtml(d.id)}" aria-label="Edit setpoint for ${escHtml(d.name)}" title="Write new setpoint to KNX"><i class="bi bi-pencil"></i></button>` : '';
@@ -1022,7 +1021,7 @@
       const switchState = switchRaw === true || switchRaw === 1 || ['1', 'true', 'on', 'ein'].includes(String(switchRaw).toLowerCase()) ? true
         : switchRaw === false || switchRaw === 0 || ['0', 'false', 'off', 'aus'].includes(String(switchRaw).toLowerCase()) ? false : null;
       const switchCommandGA = isSwitch && d.addresses && gaByAddress.get(d.addresses.command);
-      const switchWritable = isSwitch && switchCommandGA && switchCommandGA.dpt === '1.001' && ['both', 'mqtt2knx'].includes(switchCommandGA.direction || 'both');
+      const switchWritable = isSwitch && switchCommandGA && switchCommandGA.dpt === '1.001';
       const switchPanel = isSwitch ? `<div class="device-switch-panel">
         <div class="d-flex align-items-center justify-content-between gap-3">
           <div><div class="small text-muted">Actuator feedback</div><div class="device-switch-feedback fw-semibold">${switchState === null ? 'Unknown' : switchState ? 'On' : 'Off'}</div><div class="small text-muted">${escHtml(switchStatusAddress || 'Status not assigned')}</div></div>
@@ -1147,7 +1146,7 @@
       if (!device || device.templateId !== 'room-heating') return;
       const address = device.addresses && device.addresses.setpoint;
       const ga = configuredGAs.find(g => g.address === address);
-      if (!ga || ga.dpt !== '9.001' || !['both', 'mqtt2knx'].includes(ga.direction || 'both')) return;
+      if (!ga || ga.dpt !== '9.001') return;
       setpointDeviceId = device.id;
       document.getElementById('setpointModalTitle').textContent = device.name + ' – Setpoint';
       document.getElementById('setpoint-modal-address').textContent = 'KNX group address: ' + address;
