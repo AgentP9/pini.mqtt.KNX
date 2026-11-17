@@ -35,3 +35,13 @@ Before deploying this breaking architecture cleanup, back up your configuration 
 ## Testing
 
 Run `npm test` to execute the Node.js regression tests. Verify real KNX and MQTT traffic in your installation before relying on automation.
+
+## Progressive Web App (PWA)
+
+The dashboard, KNX-Devices, group-address editor, Routing Designer and settings can be opened as one installable app. The web app manifest and service worker are served from the application origin. Use **App installieren** when offered by the browser, or on iOS use Safari → Share → Add to Home Screen.
+
+**HTTPS is required** for service workers and installation on remote hosts (localhost is exempt). When using an IP address or local HTTP domain, configure a trusted HTTPS reverse proxy; the PWA cannot be installed reliably over plain HTTP.
+
+The service worker caches only the static shell resources and the offline notice. It deliberately does **not** cache KNX/MQTT values, API responses, configuration screens or Socket.IO messages. If the server cannot be reached, navigation displays an offline notice rather than stale controls. All writes and live interactions require the server.
+
+Test installability and the app icon in Chrome/Edge and Safari on the actual deployment origin. The current SVG icon is provided in the manifest; platform-specific PNG icons may be needed for optimal installation on some devices.

@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#212529" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="piniMqtt4KNX" />
   <title>piniMqtt4KNX – Dashboard</title>
@@ -32,6 +33,8 @@
     href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
     crossorigin="anonymous"
   />
+  <link rel="stylesheet" href="/app-shell.css" />
+  <script src="/app-shell.js" defer></script>
   <style>
     .device-card { border: 1px solid var(--bs-border-color); border-radius: 1rem; overflow: hidden; transition: box-shadow .15s ease; }
     .device-card:hover { box-shadow: 0 .35rem 1.2rem rgba(0,0,0,.08); }
@@ -100,27 +103,32 @@
 </head>
 <body>
 
-<!-- Navbar -->
-<nav class="navbar navbar-dark bg-dark mb-4">
-  <div class="container-fluid">
-    <span class="navbar-brand fw-bold">⚡ piniMqtt4KNX</span>
-    <div class="d-flex gap-2 align-items-center">
-      <span id="knx-badge"  class="badge bg-secondary badge-status">KNX: …</span>
-      <span id="mqtt-badge" class="badge bg-secondary badge-status">MQTT: …</span>
-      <a class="btn btn-sm btn-outline-light" href="/routing.html"><i class="bi bi-diagram-3"></i> <span class="d-none d-sm-inline">Routing Designer</span></a>
-      <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="offcanvas" data-bs-target="#trafficDrawer" aria-controls="trafficDrawer" aria-label="Open live traffic logs" title="Live traffic logs"><i class="bi bi-terminal"></i> <span class="d-none d-sm-inline">Live Logs</span></button>
-      <button class="btn btn-sm btn-outline-light" id="btn-restart-mqtt" title="Restart MQTT connection" aria-label="Restart MQTT connection">
-        <i class="bi bi-arrow-repeat"></i>
-      </button>
-      <button class="btn btn-sm btn-outline-light" id="btn-dark-mode" title="Toggle dark mode" aria-label="Toggle dark mode">
-        <i class="bi bi-moon-fill" id="dark-mode-icon"></i>
-      </button>
-    </div>
+<header class="app-shell"><div class="app-shell-inner">
+  <a class="app-brand" href="/"><i class="bi bi-lightning-charge-fill text-primary me-1"></i> pini.mqtt.KNX</a>
+  <nav class="app-nav" aria-label="Hauptnavigation">
+    <a href="/" aria-current="page"><i class="bi bi-speedometer2"></i> Übersicht</a>
+    <a href="/#view-devices"><i class="bi bi-grid"></i> KNX-Devices</a>
+    <a href="/#view-addresses"><i class="bi bi-list-ul"></i> Gruppenadressen</a>
+    <a href="/routing.html"><i class="bi bi-diagram-3"></i> Verbindungen</a>
+    <a href="/settings.html"><i class="bi bi-gear"></i> Einstellungen</a>
+  </nav>
+  <div class="app-shell-actions">
+    <span id="knx-badge" class="badge bg-secondary badge-status">KNX: …</span>
+    <span id="mqtt-badge" class="badge bg-secondary badge-status">MQTT: …</span>
+    <button class="btn btn-sm" type="button" data-bs-toggle="offcanvas" data-bs-target="#trafficDrawer" aria-controls="trafficDrawer" aria-label="Live Logs" title="Live Logs"><i class="bi bi-terminal"></i></button>
+    <button class="btn btn-sm" id="btn-restart-mqtt" title="MQTT neu verbinden" aria-label="MQTT neu verbinden"><i class="bi bi-arrow-repeat"></i></button>
+    <button class="btn btn-sm" id="btn-dark-mode" title="Darstellung wechseln" aria-label="Darstellung wechseln"><i class="bi bi-moon-fill" id="dark-mode-icon"></i></button>
   </div>
-</nav>
+</div></header>
 
 <div class="container-fluid px-4">
 
+  <div class="app-page-head"><div><div class="app-eyebrow">Systemübersicht</div><h1 class="app-page-title h3">KNX und MQTT. Ein System.</h1><p class="app-page-subtitle">Gruppenadressen definieren KNX-Objekte, Devices strukturieren sie und Verbindungen bestimmen den Datenfluss.</p></div><a class="btn btn-primary" href="/routing.html"><i class="bi bi-diagram-3 me-1"></i> Verbindungen verwalten <span id="routing-count" class="badge text-bg-light ms-1" aria-label="Aktive Verbindungen">…</span></a></div>
+  <nav class="app-workflow mb-4" aria-label="Konfigurationsablauf">
+    <a href="/#view-addresses"><span class="step-icon"><i class="bi bi-list-ul"></i></span><span><strong>1. Gruppenadressen</strong><small>KNX-Adressen und DPTs importieren und pflegen</small></span></a>
+    <a href="/#view-devices"><span class="step-icon"><i class="bi bi-grid"></i></span><span><strong>2. Devices</strong><small>KNX-Signale Räumen und Geräten zuordnen</small></span></a>
+    <a href="/routing.html"><span class="step-icon"><i class="bi bi-diagram-3"></i></span><span><strong>3. Verbindungen</strong><small>Richtung, MQTT-Topics und Wertumwandlung festlegen</small></span></a>
+  </nav>
   <!-- Stats -->
   <div class="row g-3 mb-4">
     <div class="col-6 col-sm-3">
@@ -1250,14 +1258,14 @@
   }
   document.getElementById('tab-devices').addEventListener('click', () => switchView('devices'));
   document.getElementById('tab-addresses').addEventListener('click', () => switchView('addresses'));
-  switchView(localStorage.getItem('dashboard-view') === 'addresses' ? 'addresses' : 'devices');
+  function applyDashboardHash(){if(location.hash==='#view-addresses')switchView('addresses');else if(location.hash==='#view-devices')switchView('devices');}
+  window.addEventListener('hashchange',applyDashboardHash);
+  applyDashboardHash();
+  fetch('/api/routing').then(r=>{if(!r.ok)throw Error('routing');return r.json()}).then(data=>{const active=(data.routes||[]).filter(route=>route.enabled).length;document.getElementById('routing-count').textContent=active+' aktiv';}).catch(()=>{document.getElementById('routing-count').textContent='–';});
+  switchView(location.hash === '#view-addresses' ? 'addresses' : location.hash === '#view-devices' ? 'devices' : localStorage.getItem('dashboard-view') === 'addresses' ? 'addresses' : 'devices');
 
   // ── PWA service worker ────────────────────────────────────────────────────────
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch((err) => {
-      console.warn('Service worker registration failed:', err);
-    });
-  }
+
 
   // ── Clear button ──────────────────────────────────────────────────────────────
   document.getElementById('btn-clear').addEventListener('click', () => {
