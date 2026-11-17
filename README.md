@@ -45,3 +45,15 @@ The dashboard, KNX-Devices, group-address editor, Routing Designer and settings 
 The service worker caches only the static shell resources and the offline notice. It deliberately does **not** cache KNX/MQTT values, API responses, configuration screens or Socket.IO messages. If the server cannot be reached, navigation displays an offline notice rather than stale controls. All writes and live interactions require the server.
 
 Test installability and the app icon in Chrome/Edge and Safari on the actual deployment origin. The current SVG icon is provided in the manifest; platform-specific PNG icons may be needed for optimal installation on some devices.
+
+## openHAB ZIP export
+
+In **Verbindungen**, choose **openHAB Export (.zip)** to download a snapshot of all configured MQTT endpoint and MQTT-device topics. The ZIP contains:
+
+- `knx-mqtt.things`: one openHAB MQTT Generic Thing with channels for every topic.
+- `knx-mqtt.items`: linked openHAB Items (Switch, Number, String).
+- `README.txt`: installation instructions, topic counts and warnings.
+
+Set the MQTT broker UID in the generated `.things` file (default placeholder: `mqtt:broker:knx`) and place the files in the corresponding `things` and `items` directories under `$OPENHAB_CONF`. The export respects enabled Routing Designer directions: KNX→MQTT uses a state topic, MQTT→KNX uses a command topic, and bidirectional routes use both. Unconnected topics are included as read-only channels for completeness. A command-only channel is **not** treated as confirmed actuator state. Transformations continue to run in the bridge; review payload types and conversions before using the Items in automations. No credentials or secrets are included.
+
+The endpoint is `GET /api/export/openhab`. The download is generated on demand and is not cached.
