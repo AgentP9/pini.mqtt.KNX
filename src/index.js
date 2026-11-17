@@ -48,6 +48,7 @@ function applyReverseValueMap(value, valueMap) {
  * Safe to call multiple times (broker deduplicates subscriptions).
  */
 function subscribeRouteTopics() {
+  if (webServer.routingStore.legacyCleaned) return;
   const seen = new Set();
   for (const ga of config.groupAddresses) {
     if (!Array.isArray(ga.routes)) continue;
@@ -155,12 +156,13 @@ eventEmitter.on('routing-changed', subscribeVisualRoutes);
 
 // ── KNX → MQTT ─────────────────────────────────────────────────────────────────
 knxHandler.on('groupValueWrite', ({ address, src, value, name }) => {
+  const legacyEnabled = !routingStore.legacyCleaned;
   const topic = `${config.topicPrefix}/${address}`;
   const ga = config.groupAddresses.find((g) => g.address === address);
   const configured = Boolean(ga);
 
   // Only forward to MQTT when the address is in the configuration
-  if (configured) {
+  if (configured && legacyEnabled) {
     const direction = ga.direction || 'both';
     // Forward to MQTT only when direction allows KNX→MQTT
     if (direction === 'both' || direction === 'knx2mqtt') {
@@ -197,7 +199,7 @@ knxHandler.on('groupValueWrite', ({ address, src, value, name }) => {
 // ── MQTT → KNX ─────────────────────────────────────────────────────────────────
 mqttHandler.on('message', ({ topic, value }) => {
   // Once migrated, only explicitly configured visual routes may write KNX.
-  if (routingStore.explicitKnxWrites) return;
+  if (routingStore.explicitKnxWrites || routingStore.legacyCleaned) return;
   const prefix = config.topicPrefix + '/';
 
   // ── Default path: topic matches knx/<address> ──────────────────────────────

@@ -107,10 +107,86 @@ class WebServer {
       } catch (err) { res.status(400).json({ error: err.message }); }
     });
 
+    // Destructive, opt-in cutover. Preserve backups and never remove GA/device definitions.
+    this.app.get('/api/routing/full-cleanup-preview', (_req, res) => {
+      const store = this.routingStore;
+      const describe = (route, direction) => {
+        try {
+          const from = store.resolve(direction === 'forward' ? route.from : route.to, store.endpoints);
+          const to = store.resolve(direction === 'forward' ? route.to : route.from, store.endpoints);
+          return { address: from.address || to.address, topic: from.topic || to.topic };
+        } catch (_) { return null; }
+      };
+      // Compare both physical directions independently; a matching inactive route is NOT coverage.
+      const active = store.routes.flatMap(route => {
+        const forward = describe(route, 'forward');
+        const reverse = route.bidirectional ? describe(route, 'reverse') : null;
+        return [...(forward ? [{ ...forward, direction: route.from.type === 'device' ? 'knx2mqtt' : 'mqtt2knx', routeId: route.id, enabled: route.enabled }] : []),
+          ...(reverse ? [{ ...reverse, direction: route.from.type === 'device' ? 'mqtt2knx' : 'knx2mqtt', routeId: route.id, enabled: route.enabled }] : [])].filter(x => x.address && x.topic);
+      });
+      const candidates = [];
+      for (const ga of this.groupAddresses) {
+        const directions = [];
+        if (['both','knx2mqtt'].includes(ga.direction || 'both')) directions.push('knx2mqtt');
+        if (['both','mqtt2knx'].includes(ga.direction || 'both')) directions.push('mqtt2knx');
+        for (const direction of directions) {
+          candidates.push({ address: ga.address, topic: config.topicPrefix + '/' + ga.address, direction, origin: 'implicit' });
+          for (const legacy of ga.routes || []) if (legacy.mqttTopic) candidates.push({ address: ga.address, topic: legacy.mqttTopic, direction, origin: 'legacy-route' });
+        }
+      }
+      const connections = candidates.map(item => {
+        const matches = active.filter(r => r.address === item.address && r.topic === item.topic && r.direction === item.direction);
+        const enabled = matches.filter(r => r.enabled);
+        return { ...item, status: enabled.length ? 'covered' : matches.length ? 'inactive' : 'missing', routeIds: matches.map(r => r.routeId) };
+      });
+      res.json({
+        alreadyCleaned: store.legacyCleaned,
+        connections,
+        legacyRoutes: this.groupAddresses.flatMap(ga => (ga.routes || []).filter(r => r.mqttTopic).map(r => ({ address: ga.address, topic: r.mqttTopic }))),
+        legacyMarkers: store.routes.filter(route => route.legacyKey).length,
+        activeRoutes: store.routes.filter(route => route.enabled).length
+      });
+    });
+    this.app.post('/api/routing/full-cleanup', (req, res) => {
+      if (req.body?.confirm !== 'DELETE_LEGACY_ROUTING') return res.status(400).json({ error: 'Explicit confirmation required' });
+      if (this.routingStore.legacyCleaned) return res.json({ alreadyCleaned: true, graph: this.routingStore.list() });
+      const oldGraph = this.routingStore.list();
+      const oldGAs = this.groupAddresses.map(ga => structuredClone(ga));
+      const graphFile = this.routingStore.file;
+      const gaFile = this.groupAddressesPath;
+      const backups = [];
+      try {
+        // Backups are made before modifying either persistent file.
+        const suffix = '.before-legacy-cleanup-' + new Date().toISOString().replace(/[:.]/g,'-') + '-' + require('crypto').randomUUID().slice(0,8) + '.bak';
+        for (const file of [graphFile, gaFile]) {
+          const backup = file + suffix;
+          if (fs.existsSync(file)) fs.copyFileSync(file, backup, fs.constants.COPYFILE_EXCL);
+          else fs.writeFileSync(backup, file === graphFile ? JSON.stringify(oldGraph, null, 2) : JSON.stringify(oldGAs, null, 2), { flag: 'wx', mode: 0o600 });
+          backups.push({ file, backup });
+        }
+        const cleanedRoutes = oldGraph.routes.map(({ legacyKey, ...route }) => route);
+        for (const ga of this.groupAddresses) delete ga.routes;
+        const graph = this.routingStore.save({ ...oldGraph, routes: cleanedRoutes, explicitKnxWrites: true, legacyCleaned: true });
+        if (!this._saveGroupAddresses()) throw Error('Could not persist group addresses');
+        this.eventEmitter.emit('routing-changed', graph);
+        this.io.emit('groupaddresses', this._enrichGAs());
+        res.json({ ok: true, removedLegacyRoutes: oldGAs.reduce((n,ga)=>n+(ga.routes||[]).length,0), removedMarkers: oldGraph.routes.filter(route=>route.legacyKey).length, backupFiles: backups.map(x=>x.backup), graph });
+      } catch (err) {
+        this.groupAddresses.splice(0, this.groupAddresses.length, ...oldGAs);
+        for (const { file, backup } of backups) {
+          try { fs.copyFileSync(backup, file); } catch (_) { /* report original failure */ }
+        }
+        // Restore the in-memory state even if a disk rollback failed.
+        Object.assign(this.routingStore, { endpoints: oldGraph.endpoints, mqttDevices: oldGraph.mqttDevices, routes: oldGraph.routes, explicitKnxWrites: oldGraph.explicitKnxWrites, legacyCleaned: oldGraph.legacyCleaned, knxMqttBaseTopic: oldGraph.knxMqttBaseTopic });
+        res.status(500).json({ error: err.message, backupFiles: backups.map(x=>x.backup) });
+      }
+    });
+
     // Remove selected legacy GA routes only after explicitly confirming their
     // current topic/address identity. Migrated graph routes are retained and
     // detached from their legacy fallback marker.
     this.app.post('/api/routing/legacy-cleanup', (req, res) => {
+      if (this.routingStore.legacyCleaned) return res.status(409).json({ error: 'Legacy routing has been permanently cleaned' });
       const selections = req.body?.routes;
       if (!Array.isArray(selections) || !selections.length || selections.length > 200 ||
           !selections.every(x => x && typeof x.address === 'string' && typeof x.topic === 'string')) {
@@ -189,6 +265,7 @@ class WebServer {
     });
     this.app.get('/api/routing/migration-preview', (_req, res) => res.json(this.routingStore.migrationPreview()));
     this.app.post('/api/routing/migrate', (req, res) => {
+      if (this.routingStore.legacyCleaned) return res.status(409).json({ error: 'Legacy routing has been permanently cleaned' });
       try {
         const data = this.routingStore.migrate(req.body && req.body.keys);
         this.eventEmitter.emit('routing-changed', data);
@@ -253,6 +330,7 @@ class WebServer {
     this.app.post('/api/groupaddresses', (req, res) => {
       const { address, name, dpt, comment, routes, direction } = req.body || {};
       if (!address) return res.status(400).json({ error: 'address is required' });
+      if (this.routingStore.legacyCleaned && Array.isArray(routes) && routes.length) return res.status(409).json({ error: 'Legacy GA routes are disabled; use Routing Designer' });
 
       const entry = {
         address,

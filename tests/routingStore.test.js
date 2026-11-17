@@ -174,3 +174,19 @@ test('disabled MQTT channels persist while their routes remain present but inact
   assert.equal(f.store.routes[0].enabled,true);
  } finally {f.cleanup()}
 });
+
+test('full legacy cutover persists explicit-only mode and cannot be undone via ordinary saves', () => {
+ const f=fixture();
+ try {
+  const route={id:'r1',from:{type:'device',id:'d1',signal:'status'},to:{type:'mqtt',id:'m1'},enabled:true};
+  const result=f.store.save({endpoints:[f.endpoint],routes:[route],explicitKnxWrites:true,legacyCleaned:true});
+  assert.equal(result.legacyCleaned,true);
+  assert.equal(result.explicitKnxWrites,true);
+  assert.equal(result.routes.length,1);
+  const reloaded=new RoutingStore(f.store.deviceStore,f.gas,f.store.file);
+  assert.equal(reloaded.legacyCleaned,true);
+  assert.throws(()=>reloaded.save({...reloaded.list(),legacyCleaned:false}),/Invalid legacy cleanup state/);
+  assert.throws(()=>reloaded.save({...reloaded.list(),explicitKnxWrites:false}),/Invalid legacy cleanup state/);
+  assert.throws(()=>reloaded.save({...reloaded.list(),routes:[{...route,legacyKey:'obsolete'}]}),/Legacy migration markers/);
+ } finally {f.cleanup();}
+});
