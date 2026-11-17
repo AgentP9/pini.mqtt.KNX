@@ -80,3 +80,20 @@ test('switch template maps DPT 1.001 command and DPT 1.011 status without changi
     assert.throws(() => store.save({ name: 'Wrong direction', templateId: 'switch', addresses: { command: '2/0/0', status: '2/0/1' } }, d.id), /Bidirectional/);
   } finally { f.cleanup(); }
 });
+
+test('roller shutter accepts ETS stop/step DPT 1.007', () => {
+  const f = fixture();
+  try {
+    f.gas.push(
+      { address: '0/1/0', name: 'Esszimmer Terrasse links Auf/Ab', dpt: '1.008', direction: 'both' },
+      { address: '0/1/1', name: 'Esszimmer Terrasse links Stopp/Schritt', dpt: '1.007', direction: 'both' },
+      { address: '0/1/2', name: 'Esszimmer Terrasse links Position', dpt: '5.001', direction: 'knx2mqtt' }
+    );
+    const store = new DeviceStore(f.gas, f.gaPath);
+    const device = store.save({ name: 'Esszimmer Terrasse links', templateId: 'roller-shutter',
+      addresses: { upDown: '0/1/0', stop: '0/1/1', position: '0/1/2' } });
+    assert.equal(device.templateId, 'roller-shutter');
+    assert.equal(device.addresses.stop, '0/1/1');
+    assert.deepEqual(device.missing, []);
+  } finally { f.cleanup(); }
+});
