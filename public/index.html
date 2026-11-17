@@ -495,7 +495,7 @@
     return !!(x && y && x[0] === y[0] && x[1] === y[1] && Math.abs(x[2] - y[2]) === 1);
   }
   function gaDirectionMatches(ga, obj) {
-    return !ga.dpt || ga.dpt === obj.dpt || (obj.key === 'stop' && ga.dpt === '1.017');
+    return !ga.dpt || ga.dpt === obj.dpt || (obj.key === 'stop' && ['1.017', '1.009'].includes(ga.dpt));
   }
   function suggestDeviceForGA(ga) {
     if (assignedDevices(ga.address).length || !deviceTemplates.length) return null;
