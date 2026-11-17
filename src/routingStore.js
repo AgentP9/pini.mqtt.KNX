@@ -14,10 +14,11 @@ class RoutingStore {
     this.endpoints = raw.endpoints || [];
     this.routes = raw.routes || [];
     this.explicitKnxWrites = raw.explicitKnxWrites === true;
+    this.legacyCleaned = raw.legacyCleaned === true;
     this.knxMqttBaseTopic = raw.knxMqttBaseTopic || 'knx';
     this.validateAll(this.endpoints, this.routes, this.mqttDevices);
   }
-  list() { return { endpoints: this.endpoints, mqttDevices: this.mqttDevices, routes: this.routes, explicitKnxWrites: this.explicitKnxWrites, knxMqttBaseTopic: this.knxMqttBaseTopic }; }
+  list() { return { endpoints: this.endpoints, mqttDevices: this.mqttDevices, routes: this.routes, explicitKnxWrites: this.explicitKnxWrites, legacyCleaned: this.legacyCleaned, knxMqttBaseTopic: this.knxMqttBaseTopic }; }
   legacyKey(address, topic, direction) { return JSON.stringify([address, topic, direction]); }
   migrated(address, topic, direction) {
     const key = this.legacyKey(address, topic, direction);
@@ -223,9 +224,12 @@ class RoutingStore {
     this.validateAll(next.endpoints, next.routes, mqttDevices);
     const explicitKnxWrites = next.explicitKnxWrites === undefined ? this.explicitKnxWrites : next.explicitKnxWrites;
     if (typeof explicitKnxWrites !== 'boolean') throw Error('Invalid explicit routing mode');
+    const legacyCleaned = next.legacyCleaned === undefined ? this.legacyCleaned : next.legacyCleaned;
+    if (typeof legacyCleaned !== 'boolean' || (this.legacyCleaned && !legacyCleaned) || (legacyCleaned && !explicitKnxWrites)) throw Error('Invalid legacy cleanup state');
+    if (legacyCleaned && next.routes.some(route => route.legacyKey)) throw Error('Legacy migration markers must be removed before cleanup');
     const knxMqttBaseTopic = next.knxMqttBaseTopic === undefined ? this.knxMqttBaseTopic : next.knxMqttBaseTopic;
     if (typeof knxMqttBaseTopic !== 'string' || !knxMqttBaseTopic || knxMqttBaseTopic.length > 180 || /[+#\\s]/.test(knxMqttBaseTopic) || knxMqttBaseTopic.startsWith('/') || knxMqttBaseTopic.endsWith('/')) throw Error('Invalid KNX MQTT base topic');
-    const data = JSON.stringify({ version: 2, endpoints: next.endpoints, mqttDevices, routes: next.routes, explicitKnxWrites, knxMqttBaseTopic }, null, 2) + '\n';
+    const data = JSON.stringify({ version: 2, endpoints: next.endpoints, mqttDevices, routes: next.routes, explicitKnxWrites, legacyCleaned, knxMqttBaseTopic }, null, 2) + '\n';
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     const tmp = this.file + '.' + crypto.randomUUID() + '.tmp';
     try { fs.writeFileSync(tmp, data, { mode: 0o600 }); fs.renameSync(tmp, this.file); }
@@ -234,6 +238,7 @@ class RoutingStore {
     this.endpoints = next.endpoints;
     this.routes = next.routes;
     this.explicitKnxWrites = explicitKnxWrites;
+    this.legacyCleaned = legacyCleaned;
     this.knxMqttBaseTopic = knxMqttBaseTopic;
     return this.list();
   }
