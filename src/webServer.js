@@ -153,6 +153,7 @@ class WebServer {
     // current topic/address identity. Migrated graph routes are retained and
     // detached from their legacy fallback marker.
     this.app.post('/api/routing/legacy-cleanup', (req, res) => {
+      if (this.routingStore.legacyCleaned) return res.status(409).json({ error: 'Legacy routing has been permanently cleaned' });
       const selections = req.body?.routes;
       if (!Array.isArray(selections) || !selections.length || selections.length > 200 ||
           !selections.every(x => x && typeof x.address === 'string' && typeof x.topic === 'string')) {
@@ -231,6 +232,7 @@ class WebServer {
     });
     this.app.get('/api/routing/migration-preview', (_req, res) => res.json(this.routingStore.migrationPreview()));
     this.app.post('/api/routing/migrate', (req, res) => {
+      if (this.routingStore.legacyCleaned) return res.status(409).json({ error: 'Legacy routing has been permanently cleaned' });
       try {
         const data = this.routingStore.migrate(req.body && req.body.keys);
         this.eventEmitter.emit('routing-changed', data);
@@ -295,6 +297,7 @@ class WebServer {
     this.app.post('/api/groupaddresses', (req, res) => {
       const { address, name, dpt, comment, routes, direction } = req.body || {};
       if (!address) return res.status(400).json({ error: 'address is required' });
+      if (this.routingStore.legacyCleaned && Array.isArray(routes) && routes.length) return res.status(409).json({ error: 'Legacy GA routes are disabled; use Routing Designer' });
 
       const entry = {
         address,
