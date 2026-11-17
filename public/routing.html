@@ -255,9 +255,9 @@ function openRouteDialog(id){
  $('route-dialog-target').textContent=right;
  const button=$('route-dialog-direction');
  button.dataset.direction=r.bidirectional?'both':knxFrom?'forward':'reverse';
- button.disabled=Boolean(r.legacyKey);
+ button.disabled=false;
  button.textContent={forward:'→',reverse:'←',both:'↔'}[button.dataset.direction];
- $('route-dialog-direction-hint').textContent=r.legacyKey?'Migrierte Legacy-Verbindung: Richtung erst nach Ablösen der Legacy-Route änderbar.':right==='KNX'?'KNX-Verbindungen können in beide Einzelrichtungen geschaltet werden.':'Klicken, um zwischen →, ← und ↔ zu wechseln.';
+ $('route-dialog-direction-hint').textContent=right==='KNX'?'KNX-Verbindungen können in beide Einzelrichtungen geschaltet werden.':'Klicken, um zwischen →, ← und ↔ zu wechseln.';
  $('route-dialog-enabled').checked=r.enabled;
  $('route-dialog').showModal();
 }
