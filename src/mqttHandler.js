@@ -38,11 +38,6 @@ class MqttHandler extends EventEmitter {
       this.connected = true;
       this._reconnectDelay = RECONNECT_MIN_DELAY; // reset backoff on success
       console.log('[MQTT] Connected');
-      const sub = `${this.topicPrefix}/#`;
-      this.client.subscribe(sub, (err) => {
-        if (err) console.error('[MQTT] Subscribe error:', err.message);
-        else console.log(`[MQTT] Subscribed to ${sub}`);
-      });
       this.emit('connected');
     });
 
