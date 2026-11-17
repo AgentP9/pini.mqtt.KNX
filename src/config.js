@@ -8,7 +8,9 @@ const groupAddressesPath =
 let groupAddresses = [];
 try {
   const raw = fs.readFileSync(groupAddressesPath, 'utf8');
-  groupAddresses = JSON.parse(raw);
+  const parsed = JSON.parse(raw);
+  if (!Array.isArray(parsed)) throw new Error('groupaddresses.json must be an array');
+  groupAddresses = parsed.map(({ address, name, dpt, comment }) => ({ address, name, dpt, ...(comment !== undefined ? { comment } : {}) }));
   console.log(`Loaded ${groupAddresses.length} group address(es) from ${groupAddressesPath}`);
 } catch (err) {
   console.warn(`Could not load group addresses from ${groupAddressesPath}: ${err.message}`);
