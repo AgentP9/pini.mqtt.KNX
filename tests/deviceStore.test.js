@@ -128,3 +128,19 @@ test('absolute dimmer maps distinct 1.001 and 5.001 command/status addresses', (
   assert.deepEqual(device.missing,[]);
  } finally {f.cleanup();}
 });
+
+test('system template maps KNX date, time, datetime and day/night addresses', () => {
+ const f=fixture();
+ try {
+  f.gas.push(
+   {address:'9/0/0',name:'Datum',dpt:'11.001',direction:'knx2mqtt'},
+   {address:'9/0/1',name:'Uhrzeit',dpt:'10.001',direction:'knx2mqtt'},
+   {address:'9/0/2',name:'Datum / Uhrzeit',dpt:'19.001',direction:'knx2mqtt'},
+   {address:'9/0/3',name:'Tag / Nacht',dpt:'1.002',direction:'knx2mqtt'}
+  );
+  const store=new DeviceStore(f.gas,f.gaPath);
+  const device=store.save({name:'System',templateId:'system',addresses:{date:'9/0/0',time:'9/0/1',dateTime:'9/0/2',dayNight:'9/0/3'}});
+  assert.equal(device.templateId,'system');
+  assert.deepEqual(device.missing,[]);
+ } finally {f.cleanup();}
+});
