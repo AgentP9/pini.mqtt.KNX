@@ -13,9 +13,11 @@ class RoutingStore {
     this.mqttDevices = raw.mqttDevices || [];
     this.endpoints = raw.endpoints || [];
     this.routes = raw.routes || [];
+    this.explicitKnxWrites = raw.explicitKnxWrites === true;
+    this.knxMqttBaseTopic = raw.knxMqttBaseTopic || 'knx';
     this.validateAll(this.endpoints, this.routes, this.mqttDevices);
   }
-  list() { return { endpoints: this.endpoints, mqttDevices: this.mqttDevices, routes: this.routes }; }
+  list() { return { endpoints: this.endpoints, mqttDevices: this.mqttDevices, routes: this.routes, explicitKnxWrites: this.explicitKnxWrites, knxMqttBaseTopic: this.knxMqttBaseTopic }; }
   legacyKey(address, topic, direction) { return JSON.stringify([address, topic, direction]); }
   migrated(address, topic, direction) {
     const key = this.legacyKey(address, topic, direction);
@@ -155,7 +157,7 @@ class RoutingStore {
     const mqttTopics = new Set(topics);
     for (const device of mqttDevices) {
       if (!device || typeof device.id !== 'string' || deviceIds.has(device.id) || typeof device.name !== 'string' ||
-          !device.name.trim() || device.name.length > 120 || !['generic', 'sonos', 'shelly-plug-s'].includes(device.templateId) ||
+          !device.name.trim() || device.name.length > 120 || !['generic', 'sonos', 'shelly-plug-s', 'custom'].includes(device.templateId) ||
           !Array.isArray(device.signals) || !device.signals.length || device.signals.length > 30) throw Error('Invalid MQTT device');
       deviceIds.add(device.id);
       const keys = new Set();
@@ -163,7 +165,7 @@ class RoutingStore {
         if (!signal || typeof signal.key !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(signal.key) || keys.has(signal.key) ||
             typeof signal.label !== 'string' || !signal.label.trim() || signal.label.length > 120 ||
             typeof signal.topic !== 'string' || !signal.topic || signal.topic.length > 240 || /[+#\s\u0000-\u001f]/.test(signal.topic) ||
-            signal.topic.startsWith('knx/') || mqttTopics.has(signal.topic) || !['boolean','number','text'].includes(signal.payloadType) ||
+            (signal.topic.startsWith('knx/') && !device.knxDeviceId) || mqttTopics.has(signal.topic) || !['boolean','number','text'].includes(signal.payloadType) ||
             !['input','output','both'].includes(signal.direction)) throw Error('Invalid MQTT device signal');
         keys.add(signal.key);
         mqttTopics.add(signal.topic);
@@ -185,15 +187,14 @@ class RoutingStore {
           throw Error('Invalid legacy migration reference');
         }
       }
+      if (r.bidirectional !== undefined && typeof r.bidirectional !== 'boolean') throw Error('Invalid bidirectional flag');
+      if (r.bidirectional && (r.legacyKey || r.from.type === 'device' && r.to.type === 'device')) throw Error('Bidirectional routing requires KNX and MQTT');
       const src = this.resolve(r.from, endpoints, mqttDevices), dst = this.resolve(r.to, endpoints, mqttDevices);
       if (r.from.type !== 'device' && r.to.type !== 'device') throw Error('One side must be a KNX device');
       if (r.from.type === 'device' && r.to.type === 'device' && src.address === dst.address) throw Error('KNX source and target must use different group addresses');
       if (r.from.type === 'device' && r.to.type === 'device' && routes.some(other => other !== r && other.from?.type === 'device' && other.to?.type === 'device' && this.resolve(other.from, endpoints, mqttDevices).address === dst.address && this.resolve(other.to, endpoints, mqttDevices).address === src.address)) throw Error('Direct KNX feedback loop is not allowed');
-      if (r.from.type === 'device' && !['both','knx2mqtt'].includes(src.ga.direction || 'both')) throw Error('Device signal is not readable');
-      if (r.to.type === 'device' && !['status','volumeStatus'].includes(r.to.signal) && !['both','mqtt2knx'].includes(dst.ga.direction || 'both')) throw Error('Device signal is not writable');
-      if (r.from.type === 'mqttDevice' && !['output','both'].includes(src.direction)) throw Error('MQTT signal is not readable');
-      if (r.to.type === 'mqttDevice' && !['input','both'].includes(dst.direction)) throw Error('MQTT signal is not writable');
       if (src.type !== dst.type && !r.transform) throw Error('Signal types differ; a conversion is required');
+      if (r.bidirectional && r.transform && r.transform.kind !== 'map') throw Error('Bidirectional routing requires reversible value map');
       if (r.transform) {
         if (r.transform.kind === 'map') {
           if (!r.transform.values || typeof r.transform.values !== 'object' || Array.isArray(r.transform.values) ||
@@ -219,7 +220,11 @@ class RoutingStore {
   save(next) {
     const mqttDevices = next.mqttDevices === undefined ? this.mqttDevices : next.mqttDevices;
     this.validateAll(next.endpoints, next.routes, mqttDevices);
-    const data = JSON.stringify({ version: 2, endpoints: next.endpoints, mqttDevices, routes: next.routes }, null, 2) + '\n';
+    const explicitKnxWrites = next.explicitKnxWrites === undefined ? this.explicitKnxWrites : next.explicitKnxWrites;
+    if (typeof explicitKnxWrites !== 'boolean') throw Error('Invalid explicit routing mode');
+    const knxMqttBaseTopic = next.knxMqttBaseTopic === undefined ? this.knxMqttBaseTopic : next.knxMqttBaseTopic;
+    if (typeof knxMqttBaseTopic !== 'string' || !knxMqttBaseTopic || knxMqttBaseTopic.length > 180 || /[+#\\s]/.test(knxMqttBaseTopic) || knxMqttBaseTopic.startsWith('/') || knxMqttBaseTopic.endsWith('/')) throw Error('Invalid KNX MQTT base topic');
+    const data = JSON.stringify({ version: 2, endpoints: next.endpoints, mqttDevices, routes: next.routes, explicitKnxWrites, knxMqttBaseTopic }, null, 2) + '\n';
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     const tmp = this.file + '.' + crypto.randomUUID() + '.tmp';
     try { fs.writeFileSync(tmp, data, { mode: 0o600 }); fs.renameSync(tmp, this.file); }
@@ -227,6 +232,8 @@ class RoutingStore {
     this.mqttDevices = mqttDevices;
     this.endpoints = next.endpoints;
     this.routes = next.routes;
+    this.explicitKnxWrites = explicitKnxWrites;
+    this.knxMqttBaseTopic = knxMqttBaseTopic;
     return this.list();
   }
 }

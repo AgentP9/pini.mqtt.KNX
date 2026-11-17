@@ -64,8 +64,8 @@ function subscribeRouteTopics() {
 const routingStore = webServer.routingStore;
 function subscribeVisualRoutes() {
   for (const route of routingStore.routes) {
-    if (route.enabled && ['mqtt', 'mqttDevice'].includes(route.from.type)) {
-      try { const endpoint = routingStore.resolve(route.from, routingStore.endpoints); if (endpoint.topic) mqttHandler.subscribe(endpoint.topic); } catch (err) { console.warn('[ROUTING]', err.message); }
+    if (route.enabled && (['mqtt', 'mqttDevice'].includes(route.from.type) || route.bidirectional)) {
+      try { const ref = route.bidirectional && route.from.type === 'device' ? route.to : route.from; const endpoint = routingStore.resolve(ref, routingStore.endpoints); if (endpoint.topic) mqttHandler.subscribe(endpoint.topic); } catch (err) { console.warn('[ROUTING]', err.message); }
     }
   }
 }
@@ -97,35 +97,53 @@ function routePayload(value, type, toKnx, transform) {
   if (['0','false','off','aus'].includes(v)) return toKnx ? '0' : 'false';
   return null;
 }
+const recentVisualPublishes = new Map();
+function publishVisualRoute(topic, payload) {
+  const key = topic + '\\0' + String(payload);
+  recentVisualPublishes.set(key, Date.now());
+  for (const [k, timestamp] of recentVisualPublishes) if (Date.now() - timestamp > 1500) recentVisualPublishes.delete(k);
+  mqttHandler.publish(topic, payload);
+}
+function reverseRoutePayload(value, type, transform) {
+  if (!transform) return routePayload(value, type, true, null);
+  if (transform.kind !== 'map') return null;
+  // First declared matching value wins; ambiguity is resolved deterministically.
+  const match = Object.entries(transform.values).find(([, mapped]) => String(mapped) === String(value));
+  return match ? String(match[0]) : routePayload(value, type, true, null);
+}
 knxHandler.on('groupValueWrite', ({ address, value }) => {
   for (const route of routingStore.routes) {
-    if (!route.enabled || route.from.type !== 'device') continue;
+    if (!route.enabled || (route.from.type !== 'device' && !route.bidirectional)) continue;
     try {
-      const source = routingStore.resolve(route.from, routingStore.endpoints);
+      const reverse = route.bidirectional && route.from.type !== 'device';
+      const source = routingStore.resolve(reverse ? route.to : route.from, routingStore.endpoints);
       if (source.address !== address) continue;
-      const destination = routingStore.resolve(route.to, routingStore.endpoints);
-      const payload = routePayload(value, source.type, false, route.transform);
+      const destination = routingStore.resolve(reverse ? route.from : route.to, routingStore.endpoints);
+      const payload = reverse ? reverseRoutePayload(value, source.type, route.transform) : routePayload(value, source.type, false, route.transform);
       if (payload === null) continue;
-      if (route.to.type === 'device') {
+      if (!reverse && route.to.type === 'device') {
         if (!knxHandler.connected || source.address === destination.address) continue;
         const knxPayload = routePayload(value, source.type, true, route.transform);
         if (knxPayload === null || !knxHandler.write(destination.address, knxPayload)) continue;
         eventEmitter.emit('routing-traffic', { id: route.id, value: knxPayload, direction: 'KNX→KNX', timestamp: new Date().toISOString() });
       } else {
-        mqttHandler.publish(destination.topic, payload);
+        publishVisualRoute(destination.topic, payload);
         eventEmitter.emit('routing-traffic', { id: route.id, value: payload, direction: 'KNX→MQTT', timestamp: new Date().toISOString() });
       }
     } catch (err) { console.warn('[ROUTING] Invalid KNX route:', err.message); }
   }
 });
 mqttHandler.on('message', ({ topic, value }) => {
+  const echoKey = topic + '\\0' + String(value);
+  if (recentVisualPublishes.has(echoKey) && Date.now() - recentVisualPublishes.get(echoKey) < 1500) { recentVisualPublishes.delete(echoKey); return; }
   for (const route of routingStore.routes) {
-    if (!route.enabled || !['mqtt', 'mqttDevice'].includes(route.from.type)) continue;
+    if (!route.enabled || !(['mqtt', 'mqttDevice'].includes(route.from.type) || route.bidirectional)) continue;
     try {
-      const source = routingStore.resolve(route.from, routingStore.endpoints);
+      const reverse = route.bidirectional && route.from.type === 'device';
+      const source = routingStore.resolve(reverse ? route.to : route.from, routingStore.endpoints);
       if (source.topic !== topic) continue;
-      const destination = routingStore.resolve(route.to, routingStore.endpoints);
-      const payload = routePayload(value, source.type, true, route.transform);
+      const destination = routingStore.resolve(reverse ? route.from : route.to, routingStore.endpoints);
+      const payload = reverse ? reverseRoutePayload(value, destination.type, route.transform) : routePayload(value, source.type, true, route.transform);
       if (payload === null || !knxHandler.connected) continue;
       if (!knxHandler.write(destination.address, payload)) continue;
       eventEmitter.emit('routing-traffic', { id: route.id, value: payload, direction: 'MQTT→KNX', timestamp: new Date().toISOString() });
@@ -178,6 +196,8 @@ knxHandler.on('groupValueWrite', ({ address, src, value, name }) => {
 
 // ── MQTT → KNX ─────────────────────────────────────────────────────────────────
 mqttHandler.on('message', ({ topic, value }) => {
+  // Once migrated, only explicitly configured visual routes may write KNX.
+  if (routingStore.explicitKnxWrites) return;
   const prefix = config.topicPrefix + '/';
 
   // ── Default path: topic matches knx/<address> ──────────────────────────────

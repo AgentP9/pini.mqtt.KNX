@@ -105,9 +105,9 @@
   <div class="container-fluid">
     <span class="navbar-brand fw-bold">⚡ piniMqtt4KNX</span>
     <div class="d-flex gap-2 align-items-center">
-      <a class="btn btn-sm btn-outline-light" href="/routing.html"><i class="bi bi-diagram-3"></i> <span class="d-none d-sm-inline">Routing Designer</span></a>
       <span id="knx-badge"  class="badge bg-secondary badge-status">KNX: …</span>
       <span id="mqtt-badge" class="badge bg-secondary badge-status">MQTT: …</span>
+      <a class="btn btn-sm btn-outline-light" href="/routing.html"><i class="bi bi-diagram-3"></i> <span class="d-none d-sm-inline">Routing Designer</span></a>
       <button class="btn btn-sm btn-outline-light" type="button" data-bs-toggle="offcanvas" data-bs-target="#trafficDrawer" aria-controls="trafficDrawer" aria-label="Open live traffic logs" title="Live traffic logs"><i class="bi bi-terminal"></i> <span class="d-none d-sm-inline">Live Logs</span></button>
       <button class="btn btn-sm btn-outline-light" id="btn-restart-mqtt" title="Restart MQTT connection" aria-label="Restart MQTT connection">
         <i class="bi bi-arrow-repeat"></i>
@@ -173,6 +173,8 @@
     <div class="card-body">
       <p class="text-muted small mb-3">Devices group existing KNX group addresses. Individual addresses remain editable below.</p>
       <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+        <select id="room-filter" class="form-select" style="max-width:14rem" aria-label="Filter devices by room"><option value="all">Alle Räume</option><option value="unassigned">Ohne Raum</option></select>
+        <button type="button" class="btn btn-sm btn-outline-primary" id="btn-manage-rooms">Räume verwalten</button>
         <input type="search" id="device-search" class="form-control device-search" placeholder="Search devices or addresses…" aria-label="Search devices">
         <span class="small text-muted" id="device-count"></span>
       </div>
@@ -288,6 +290,21 @@
   </div></div>
 </div>
 
+<!-- Room management -->
+<div class="modal fade" id="roomsModal" tabindex="-1" aria-labelledby="roomsModalTitle" aria-hidden="true">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title" id="roomsModalTitle">Räume verwalten</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button></div>
+    <div class="modal-body">
+      <div id="rooms-error" class="alert alert-danger d-none" role="alert"></div>
+      <form id="room-create-form" class="d-flex gap-2 mb-3">
+        <input id="room-name" class="form-control" maxlength="120" required placeholder="Neuer Raum, z. B. Badezimmer" aria-label="Raumname">
+        <button class="btn btn-primary" type="submit">Anlegen</button>
+      </form>
+      <div id="rooms-list"></div>
+    </div>
+  </div></div>
+</div>
+
 <!-- Device editor -->
 <div class="modal fade" id="deviceModal" tabindex="-1" aria-labelledby="deviceModalTitle" aria-hidden="true">
   <div class="modal-dialog"><div class="modal-content">
@@ -296,10 +313,12 @@
       <div class="alert alert-danger d-none" id="device-error" role="alert"></div>
       <label class="form-label" for="device-name">Device name</label>
       <input class="form-control mb-3" id="device-name" maxlength="120" placeholder="e.g. Office heating">
+      <label class="form-label" for="device-room">Raum</label>
+      <select class="form-select mb-3" id="device-room"><option value="">Ohne Raum</option></select>
       <label class="form-label" for="device-template">Template</label>
       <select class="form-select mb-3" id="device-template"></select>
       <div id="device-objects"></div>
-      <p class="small text-muted mt-2 mb-0">Select existing group addresses explicitly. No sequential address assumptions or automatic changes to DPT/direction.</p>
+      <p class="small text-muted mt-2 mb-0">Select existing group addresses explicitly. No sequential address assumptions or automatic changes to DPT. Routing directions are configured in the Routing Designer.</p>
     </div>
     <div class="modal-footer justify-content-between">
       <button type="button" class="btn btn-outline-danger d-none" id="btn-delete-device-dialog"><i class="bi bi-trash me-1"></i>Delete device</button>
@@ -465,7 +484,7 @@
 
   // Conservative, read-only device suggestions. Never create or modify devices automatically.
   function gaBaseName(name) {
-    return String(name || '').replace(/(?:[\s_-]+(?:play\s*\/\s*stop|an\s*\/\s*aus|schaltbefehl|schalten|schaltstatus|status|rückmeldung|rueckmeldung|feedback|command|ein\s*\/\s*aus|on\s*\/\s*off))\s*$/i, '').trim();
+    return String(name || '').replace(/(?:[\s_-]+(?:play\s*\/\s*stop|auf\s*\/\s*ab|stopp|position|an\s*\/\s*aus|schaltbefehl|schalten|schaltstatus|dimmen\s+relativ|dimmwert|helligkeitswert|helligkeit|wert|status|rückmeldung|rueckmeldung|feedback|command|ein\s*\/\s*aus|on\s*\/\s*off))\s*$/i, '').trim();
   }
   function gaPosition(address) {
     const parts = String(address).split('/').map(Number);
@@ -476,16 +495,59 @@
     return !!(x && y && x[0] === y[0] && x[1] === y[1] && Math.abs(x[2] - y[2]) === 1);
   }
   function gaDirectionMatches(ga, obj) {
-    const dir = ga.direction || 'both';
-    return (!ga.dpt || ga.dpt === obj.dpt) &&
-      (obj.direction !== 'both' || dir === 'both') &&
-      (obj.direction !== 'knx2mqtt' || dir !== 'mqtt2knx');
+    return !ga.dpt || ga.dpt === obj.dpt;
   }
   function suggestDeviceForGA(ga) {
     if (assignedDevices(ga.address).length || !deviceTemplates.length) return null;
     const occupied = new Set(devices.flatMap(d => Object.values(d.addresses || {})));
     const base = gaBaseName(ga.name);
     if (!base || base === ga.name && !/\s/.test(base)) return null;
+    // BigAssFan uses two independent command/status pairs. Match by signal
+    // name and DPT, never by adjacency (the light status may skip an address).
+    const fanTemplate=deviceTemplates.find(t=>t.id==='bigassfan');
+    if(fanTemplate && /^bigassfan(?:\b|\s|$)/i.test(base)){
+      const group=configuredGAs.filter(g=>!occupied.has(g.address)&&/^bigassfan\b/i.test(g.name||''));
+      const signalPatterns={
+        fanCommand:/^bigassfan\s+power$/i,
+        fanStatus:/^bigassfan\s+power\s+status$/i,
+        lightCommand:/^bigassfan\s+light$/i,
+        lightStatus:/^bigassfan\s+light\s+status$/i
+      };
+      const matches={};
+      for(const obj of fanTemplate.objects){
+        const found=group.filter(g=>signalPatterns[obj.key].test((g.name||'').trim())&&gaDirectionMatches(g,obj));
+        if(found.length===1)matches[obj.key]=found[0].address;
+      }
+      if(Object.keys(matches).length===4&&new Set(Object.values(matches)).size===4)
+        return {templateId:'bigassfan',templateName:fanTemplate.name,name:'BigAssFan',addresses:matches,score:100};
+    }
+    const shutterTemplate=deviceTemplates.find(t=>t.id==='roller-shutter');
+    if(shutterTemplate){
+      const group=configuredGAs.filter(g=>!occupied.has(g.address)&&gaBaseName(g.name).toLowerCase()===base.toLowerCase());
+      const patterns={upDown:/auf.ab/i,stop:/stopp/i,position:/position/i};
+      const matches={};
+      for(const object of shutterTemplate.objects){
+        const found=group.filter(g=>patterns[object.key].test(g.name||'')&&gaDirectionMatches(g,object));
+        if(found.length===1)matches[object.key]=found[0].address;
+      }
+      if(Object.keys(matches).length===3&&new Set(Object.values(matches)).size===3)
+        return {templateId:'roller-shutter',templateName:shutterTemplate.name,name:base,addresses:matches,score:100};
+    }
+    // Prefer a complete four-address dimmer block over the generic switch
+    // and Sonos templates when all KNX datapoint types and names agree.
+    const dimmerTemplate=deviceTemplates.find(t=>t.id==='dimmer');
+    if(dimmerTemplate){
+      const matches={};
+      const pattern=/\b(dimm|helligkeit|wert)\b/i;
+      const group=configuredGAs.filter(g=>!occupied.has(g.address)&&gaBaseName(g.name).toLowerCase()===base.toLowerCase());
+      for(const object of dimmerTemplate.objects){
+        const candidates=group.filter(g=>gaDirectionMatches(g,object));
+        if(candidates.length===1)matches[object.key]=candidates[0].address;
+      }
+      const dimmingNamed=group.some(g=>/dimm/i.test(g.name||''));
+      if(dimmingNamed&&Object.keys(matches).length===4&&new Set(Object.values(matches)).size===4)
+        return {templateId:'dimmer',templateName:dimmerTemplate.name,name:base,addresses:matches,score:100};
+    }
     const candidates = [];
     for (const tpl of deviceTemplates) {
       const required = tpl.objects.filter(o => !o.optional);
@@ -525,6 +587,17 @@
   function sortedGAs() {
     if (!sortCol) return configuredGAs.slice();
     return configuredGAs.slice().sort((a, b) => {
+      if (sortCol === 'address') {
+        const aParts = gaPosition(a.address), bParts = gaPosition(b.address);
+        if (aParts && bParts) {
+          for (let i = 0; i < 3; i++) {
+            if (aParts[i] !== bParts[i]) return (aParts[i] - bParts[i]) * sortDir;
+          }
+          return 0;
+        }
+        if (aParts) return -sortDir;
+        if (bParts) return sortDir;
+      }
       const av = String(sortCol === 'device' ? assignedDevices(a.address).map(d => d.name).join(', ') : a[sortCol] || '').toLowerCase();
       const bv = String(sortCol === 'device' ? assignedDevices(b.address).map(d => d.name).join(', ') : b[sortCol] || '').toLowerCase();
       return av < bv ? -sortDir : av > bv ? sortDir : 0;
@@ -926,7 +999,7 @@ const route = { mqttTopic };
   })();
 
   // ── Hybrid device templates ──────────────────────────────────────────────────
-  let devices = [], deviceTemplates = [], editingDeviceId = null;
+  let devices = [], deviceTemplates = [], rooms = [], editingDeviceId = null;
   const deviceModal = new bootstrap.Modal(document.getElementById('deviceModal'));
   const setpointModal = new bootstrap.Modal(document.getElementById('setpointModal'));
   document.getElementById('setpointModal').addEventListener('shown.bs.modal', () => document.getElementById('setpoint-modal-input').focus());
@@ -938,7 +1011,8 @@ const route = { mqttTopic };
   function renderDevices() {
     const target = document.getElementById('device-list');
     const term = document.getElementById('device-search').value.trim().toLowerCase();
-    const visible = devices.filter(d => [d.name, d.templateId, ...Object.values(d.addresses || {})].some(v => String(v).toLowerCase().includes(term)));
+    const roomFilter=document.getElementById('room-filter').value;
+    const visible = devices.filter(d => (roomFilter==='all'||(roomFilter==='unassigned'?!d.roomId:d.roomId===roomFilter)) && [d.name, d.templateId, rooms.find(r=>r.id===d.roomId)?.name||'', ...Object.values(d.addresses || {})].some(v => String(v).toLowerCase().includes(term)));
     document.getElementById('device-count').textContent = visible.length + ' of ' + devices.length + ' devices';
     if (!visible.length) {
       target.innerHTML = '<div class="col-12 text-muted">' + (devices.length ? 'No matching devices.' : 'No devices yet. Create a device using existing group addresses; individual addresses stay active.') + '</div>';
@@ -957,7 +1031,23 @@ const route = { mqttTopic };
       const hint = !address ? 'Not assigned' : !ga ? 'Address missing' : pending ? address + ' · sent, not confirmed' : !Number.isFinite(numeric) ? 'No live value' : address;
       return `<div class="device-metric"><div class="metric-header"><div class="metric-label mb-0">${escHtml(label)}</div>${actions}</div><div class="metric-value">${escHtml(value)}</div><div class="small text-muted mt-2">${escHtml(hint)}</div>${editor}</div>`;
     };
-    target.innerHTML = visible.map(d => {
+    const sortedRooms=[...rooms].sort((a,b)=>a.name.localeCompare(b.name,'de',{sensitivity:'base'}));
+    const roomOrder=new Map(sortedRooms.map((room,index)=>[room.id,index]));
+    const roomColors=['#3b82f6','#10b981','#a855f7','#f59e0b','#ec4899','#06b6d4','#ef4444','#84cc16'];
+    const ordered=[...visible].sort((a,b)=>{
+      const ai=roomOrder.has(a.roomId)?roomOrder.get(a.roomId):Infinity;
+      const bi=roomOrder.has(b.roomId)?roomOrder.get(b.roomId):Infinity;
+      return ai-bi||a.name.localeCompare(b.name,'de',{sensitivity:'base'});
+    });
+    let previousRoom=null;
+    target.innerHTML = ordered.map(d => {
+      const room=rooms.find(r=>r.id===d.roomId);
+      const roomKey=room?.id||'unassigned';
+      const color=room?roomColors[roomOrder.get(room.id)%roomColors.length]:'#94a3b8';
+      const firstOfRoom=previousRoom!==roomKey;
+      previousRoom=roomKey;
+      const heading=firstOfRoom?'<div class="col-12 mt-4"><div class="d-flex align-items-center gap-2 pb-2 border-bottom" style="border-bottom-color:'+color+' !important"><span aria-hidden="true" style="width:5px;height:22px;border-radius:4px;background:'+color+'"></span><h3 class="h6 mb-0">'+escHtml(room?.name||'Ohne Raum')+'</h3><span class="small text-muted">'+ordered.filter(item=>(item.roomId||'unassigned')===roomKey).length+' Devices</span></div></div>':'';
+
       const tpl = deviceTemplate(d.templateId);
       const isHeating = d.templateId === 'room-heating';
       const isSwitch = d.templateId === 'switch';
@@ -991,11 +1081,11 @@ const route = { mqttTopic };
         </div>
         <div class="device-switch-message text-muted mt-2" data-id="${escHtml(d.id)}" role="status"></div>
       </div>` : '';
-      return `<div class="col-12 col-xl-6"><article class="card device-card h-100" data-routing-device="${escHtml(d.id)}" title="Routing Designer für dieses Device öffnen" tabindex="0" role="link">
+      return heading+`<div class="col-12 col-xl-6"><article class="card device-card h-100" style="border-left:3px solid ${color}" data-routing-device="${escHtml(d.id)}" title="Routing Designer für dieses Device öffnen" tabindex="0" role="link">
         <div class="card-body">
           <div class="d-flex align-items-start gap-3 mb-3">
             <div class="device-icon" aria-hidden="true"><i class="bi ${isHeating ? 'bi-thermometer-half' : 'bi-grid'}"></i></div>
-            <div class="flex-grow-1 min-w-0"><h3 class="h6 mb-1">${escHtml(d.name)}</h3><div class="small text-muted">${escHtml(tpl ? tpl.name : d.templateId)}</div></div>
+            <div class="flex-grow-1 min-w-0"><h3 class="h6 mb-1">${escHtml(d.name)}</h3><div class="small text-muted">${escHtml(tpl ? tpl.name : d.templateId)}${d.roomId ? ' · '+escHtml(rooms.find(r=>r.id===d.roomId)?.name||'Unbekannter Raum') : ''}</div></div>
             <div class="d-flex align-items-center gap-2">
               ${status}
               <button class="btn btn-sm btn-outline-secondary btn-edit-device" data-id="${escHtml(d.id)}" aria-label="Configure ${escHtml(d.name)}" title="Device settings"><i class="bi bi-gear"></i></button>
@@ -1024,7 +1114,7 @@ const route = { mqttTopic };
   function renderDeviceFields(mapping = {}) {
     const tpl = deviceTemplate(deviceTemplateSelect.value);
     deviceObjects.innerHTML = tpl ? tpl.objects.map(o => {
-      const candidates = configuredGAs.filter(g => (!g.dpt || g.dpt === o.dpt) && (o.direction !== 'both' || !g.direction || g.direction === 'both') && (o.direction !== 'knx2mqtt' || g.direction !== 'mqtt2knx'));
+      const candidates = configuredGAs.filter(g => !g.dpt || g.dpt === o.dpt).sort((a,b) => { const x=gaPosition(a.address),y=gaPosition(b.address); return x&&y ? (x[0]-y[0]||x[1]-y[1]||x[2]-y[2]) : String(a.address).localeCompare(String(b.address),undefined,{numeric:true}); });
       const options = candidates.map(g => `<option value="${escHtml(g.address)}" ${mapping[o.key] === g.address ? 'selected' : ''}>${escHtml(g.address + ' – ' + (g.name || 'Unnamed'))}</option>`).join('');
       return `<div class="mb-3"><label class="form-label" for="device-object-${escHtml(o.key)}">${escHtml(o.label)} <small class="text-muted">DPT ${escHtml(o.dpt)}${o.optional ? ' · optional' : ''}</small></label><select class="form-select device-object" id="device-object-${escHtml(o.key)}" data-key="${escHtml(o.key)}"><option value="">Select address…</option>${options}</select></div>`;
     }).join('') : '';
@@ -1036,6 +1126,8 @@ const route = { mqttTopic };
     document.getElementById('deviceModalTitle').textContent = device ? 'Edit Device' : 'Add Device';
     document.getElementById('device-name').value = device ? device.name : '';
     deviceTemplateSelect.innerHTML = deviceTemplates.map(t => `<option value="${escHtml(t.id)}">${escHtml(t.name)}</option>`).join('');
+    document.getElementById('device-room').innerHTML='<option value="">Ohne Raum</option>'+rooms.map(r=>'<option value="'+escHtml(r.id)+'">'+escHtml(r.name)+'</option>').join('');
+    document.getElementById('device-room').value=device?.roomId||'';
     if (device) deviceTemplateSelect.value = device.templateId;
     renderDeviceFields(device ? device.addresses : {});
     deviceModal.show();
@@ -1139,7 +1231,7 @@ const route = { mqttTopic };
   document.getElementById('btn-save-device').addEventListener('click', async () => {
     const addresses = {};
     deviceObjects.querySelectorAll('.device-object').forEach(el => { if (el.value) addresses[el.dataset.key] = el.value; });
-    const body = { name: document.getElementById('device-name').value.trim(), templateId: deviceTemplateSelect.value, addresses };
+    const body = { name: document.getElementById('device-name').value.trim(), templateId: deviceTemplateSelect.value, addresses, roomId: document.getElementById('device-room').value || null };
     try {
       const url = editingDeviceId ? '/api/devices/' + encodeURIComponent(editingDeviceId) : '/api/devices';
       const r = await fetch(url, { method: editingDeviceId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -1147,6 +1239,48 @@ const route = { mqttTopic };
       deviceModal.hide();
     } catch (err) { deviceError.textContent = err.message; deviceError.classList.remove('d-none'); }
   });
+  const roomsModal=new bootstrap.Modal(document.getElementById('roomsModal'));
+  const roomsError=document.getElementById('rooms-error');
+  function showRoomsError(message){roomsError.textContent=message;roomsError.classList.remove('d-none');}
+  function renderRooms(){
+    const filter=document.getElementById('room-filter');
+    const selected=filter.value;
+    filter.innerHTML='<option value="all">Alle Räume</option><option value="unassigned">Ohne Raum</option>'+rooms.map(r=>'<option value="'+escHtml(r.id)+'">'+escHtml(r.name)+'</option>').join('');
+    filter.value=selected==='unassigned'||selected==='all'||rooms.some(r=>r.id===selected)?selected:'all';
+    document.getElementById('rooms-list').innerHTML=rooms.length?rooms.map(r=>'<div class="d-flex justify-content-between align-items-center border-bottom py-2"><div><strong>'+escHtml(r.name)+'</strong><span class="text-muted small ms-2">'+devices.filter(d=>d.roomId===r.id).length+' Devices</span></div><div class="d-flex gap-1"><button class="btn btn-sm btn-outline-secondary room-rename" data-id="'+escHtml(r.id)+'">Umbenennen</button><button class="btn btn-sm btn-outline-danger room-delete" data-id="'+escHtml(r.id)+'" '+(devices.some(d=>d.roomId===r.id)?'disabled title="Raum enthält Devices"':'')+'>Löschen</button></div></div>').join(''):'<p class="text-muted small">Noch keine Räume angelegt.</p>';
+    renderDevices();
+  }
+  async function roomRequest(url,method,body){
+    const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
+    const data=await r.json();
+    if(!r.ok)throw Error(data.error||'Room request failed');
+    return data;
+  }
+  document.getElementById('btn-manage-rooms').addEventListener('click',()=>{roomsError.classList.add('d-none');renderRooms();roomsModal.show();});
+  document.getElementById('room-create-form').addEventListener('submit',async e=>{
+    e.preventDefault();roomsError.classList.add('d-none');
+    try{await roomRequest('/api/rooms','POST',{name:document.getElementById('room-name').value.trim()});document.getElementById('room-name').value='';}
+    catch(err){showRoomsError(err.message);}
+  });
+  document.getElementById('rooms-list').addEventListener('click',async e=>{
+    const rename=e.target.closest('.room-rename'),del=e.target.closest('.room-delete');
+    if(!rename&&!del)return;
+    const room=rooms.find(r=>r.id===(rename||del).dataset.id);if(!room)return;
+    try{
+      if(rename){
+        const name=prompt('Raum umbenennen',room.name);
+        if(name===null||name.trim()===room.name)return;
+        await roomRequest('/api/rooms/'+encodeURIComponent(room.id),'PUT',{name:name.trim()});
+      }else{
+        if(!confirm('Raum „'+room.name+'“ wirklich löschen?'))return;
+        await roomRequest('/api/rooms/'+encodeURIComponent(room.id),'DELETE');
+      }
+      roomsError.classList.add('d-none');
+    }catch(err){showRoomsError(err.message);}
+  });
+  fetch('/api/rooms').then(r=>r.json()).then(data=>{rooms=data;renderRooms();}).catch(err=>console.error('Rooms unavailable',err));
+  socket.on('rooms',data=>{rooms=data;renderRooms();});
+  document.getElementById('room-filter').addEventListener('change',renderDevices);
   fetch('/api/device-templates').then(r => r.json()).then(t => { deviceTemplates = t; renderDevices(); }).catch(err => console.error('Templates unavailable', err));
   refreshMigratedGALinks();
   fetch('/api/devices').then(r => r.json()).then(d => { devices = d; renderDevices(); renderGATable(configuredGAs); }).catch(err => console.error('Devices unavailable', err));
