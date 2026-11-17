@@ -16,11 +16,11 @@ test('exports every configured MQTT topic and graph-defined directions', () => {
     ]
   });
   assert.equal(data.topicCount, 3);
-  assert.match(data.files['knx-mqtt.things'], /stateTopic="knx\\/status"/);
-  assert.match(data.files['knx-mqtt.things'], /commandTopic="knx\\/set"/);
-  assert.doesNotMatch(data.files['knx-mqtt.things'], /stateTopic="knx\\/set"/);
+  assert.match(data.files['knx-mqtt.things'], /stateTopic="knx\/status"/);
+  assert.match(data.files['knx-mqtt.things'], /commandTopic="knx\/set"/);
+  assert.doesNotMatch(data.files['knx-mqtt.things'], /stateTopic="knx\/set"/);
   assert.match(data.files['knx-mqtt.items'], /Switch Living_Room_Status/);
-  assert.match(data.files['README.txt'], /free\\/topic/);
+  assert.match(data.files['README.txt'], /free\/topic/);
 });
 
 test('exports reversible route as state and command topic', () => {
