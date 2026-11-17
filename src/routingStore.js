@@ -127,7 +127,7 @@ class RoutingStore {
       const device = mqttDevices.find(d => d.id === ref.id);
       const signal = device?.signals.find(x => x.key === ref.signal);
       if (!signal) throw Error('MQTT device signal missing');
-      return { topic: signal.topic, type: signal.payloadType, direction: signal.direction };
+      return { topic: signal.topic, type: signal.payloadType, direction: signal.direction, enabled: signal.enabled !== false };
     }
     if (ref.type === 'mqtt') {
       const endpoint = endpoints.find(e => e.id === ref.id);
@@ -166,7 +166,7 @@ class RoutingStore {
             typeof signal.label !== 'string' || !signal.label.trim() || signal.label.length > 120 ||
             typeof signal.topic !== 'string' || !signal.topic || signal.topic.length > 240 || /[+#\s\u0000-\u001f]/.test(signal.topic) ||
             (signal.topic.startsWith('knx/') && !device.knxDeviceId) || mqttTopics.has(signal.topic) || !['boolean','number','text'].includes(signal.payloadType) ||
-            !['input','output','both'].includes(signal.direction)) throw Error('Invalid MQTT device signal');
+            !['input','output','both'].includes(signal.direction) || (signal.enabled !== undefined && typeof signal.enabled !== 'boolean')) throw Error('Invalid MQTT device signal');
         keys.add(signal.key);
         mqttTopics.add(signal.topic);
       }
@@ -187,6 +187,7 @@ class RoutingStore {
           throw Error('Invalid legacy migration reference');
         }
       }
+      if (r.enabled && [r.from,r.to].some(ref => ref.type === 'mqttDevice' && mqttDevices.find(d => d.id === ref.id)?.signals.find(signal => signal.key === ref.signal)?.enabled === false)) throw Error('Enabled route references a disabled MQTT channel');
       if (r.bidirectional !== undefined && typeof r.bidirectional !== 'boolean') throw Error('Invalid bidirectional flag');
       if (r.bidirectional && (r.legacyKey || r.from.type === 'device' && r.to.type === 'device')) throw Error('Bidirectional routing requires KNX and MQTT');
       const src = this.resolve(r.from, endpoints, mqttDevices), dst = this.resolve(r.to, endpoints, mqttDevices);
