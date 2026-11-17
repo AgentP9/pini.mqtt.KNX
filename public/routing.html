@@ -572,8 +572,17 @@ $('full-cleanup-open').onclick=async()=>{
  try{
   const response=await fetch('/api/routing/full-cleanup-preview');
   const data=await response.json();if(!response.ok)throw Error(data.error||'Cleanup-Vorschau fehlgeschlagen');
+  const items=data.connections||[];
+  const covered=items.filter(x=>x.status==='covered'),inactive=items.filter(x=>x.status==='inactive'),missing=items.filter(x=>x.status==='missing');
+  const line=x=>'<tr><td class="text-nowrap">'+esc(x.address)+'</td><td>'+esc(x.direction==='knx2mqtt'?'→':'←')+'</td><td style="overflow-wrap:anywhere">'+esc(x.topic)+'</td><td>'+esc(x.origin==='implicit'?'Automatisch':'GA-Route')+'</td></tr>';
+  const section=(title,rows,color)=>'<details class="mb-2"'+(rows.length&&color==='danger'?' open':'')+'><summary class="fw-semibold text-'+color+'">'+esc(title)+' ('+rows.length+')</summary>'+(rows.length?'<div style="max-height:220px;overflow:auto"><table class="table table-sm small mb-0"><thead><tr><th>KNX-GA</th><th>Richtung</th><th>MQTT-Topic</th><th>Herkunft</th></tr></thead><tbody>'+rows.map(line).join('')+'</tbody></table></div>':'<p class="small text-secondary mb-1">Keine</p>')+'</details>';
   $('full-cleanup-preview').innerHTML=data.alreadyCleaned?'<strong>Legacy-Routing wurde bereits entfernt.</strong>':
-   '<ul><li>'+data.legacyRoutes.length+' alte GA-Routen werden entfernt</li><li>'+data.legacyMarkers+' Migrationsmarkierungen werden entfernt</li><li>'+data.implicitKnxToMqtt.length+' bisher automatisch mögliche KNX→MQTT-Weiterleitungen werden abgeschaltet</li><li>'+data.implicitMqttToKnx.length+' bisher implizit mögliche MQTT→KNX-Schreibzugriffe werden abgeschaltet</li><li>'+data.activeRoutes+' aktive Designer-Routen bleiben erhalten</li></ul>';
+   '<p class="small mb-2">'+data.legacyRoutes.length+' alte GA-Routen und '+data.legacyMarkers+' Migrationsmarker werden entfernt. '+data.activeRoutes+' Designer-Routen sind aktiv.</p>'+
+   section('Bereits durch aktive explizite Routen abgedeckt',covered,'success')+
+   section('Explizite Route vorhanden, aber deaktiviert',inactive,'warning')+
+   section('Ohne entsprechende explizite Route – Datenfluss entfällt',missing,'danger')+
+   '<p class="small text-secondary mt-2">Abdeckung bedeutet: dieselbe Gruppenadresse, dasselbe Topic und dieselbe Richtung. Es werden beim Cleanup keine neuen Routen automatisch erzeugt.</p>';
+
   $('full-cleanup-confirm-text').value='';
   $('full-cleanup-confirm').disabled=true;
   $('full-cleanup-confirm-text').disabled=!!data.alreadyCleaned;
