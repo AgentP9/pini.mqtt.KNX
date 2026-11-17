@@ -109,10 +109,43 @@ class WebServer {
 
     // Destructive, opt-in cutover. Preserve backups and never remove GA/device definitions.
     this.app.get('/api/routing/full-cleanup-preview', (_req, res) => {
-      const legacyRoutes = this.groupAddresses.flatMap(ga => (ga.routes || []).filter(route => route.mqttTopic).map(route => ({ address: ga.address, topic: route.mqttTopic })));
-      const implicitKnxToMqtt = this.groupAddresses.filter(ga => ['both','knx2mqtt'].includes(ga.direction || 'both')).map(ga => ({ address: ga.address, topic: config.topicPrefix + '/' + ga.address }));
-      const implicitMqttToKnx = this.groupAddresses.filter(ga => ['both','mqtt2knx'].includes(ga.direction || 'both')).map(ga => ({ address: ga.address, topic: config.topicPrefix + '/' + ga.address }));
-      res.json({ alreadyCleaned: this.routingStore.legacyCleaned, legacyRoutes, implicitKnxToMqtt, implicitMqttToKnx, legacyMarkers: this.routingStore.routes.filter(route => route.legacyKey).length, activeRoutes: this.routingStore.routes.filter(route => route.enabled).length });
+      const store = this.routingStore;
+      const describe = (route, direction) => {
+        try {
+          const from = store.resolve(direction === 'forward' ? route.from : route.to, store.endpoints);
+          const to = store.resolve(direction === 'forward' ? route.to : route.from, store.endpoints);
+          return { address: from.address || to.address, topic: from.topic || to.topic };
+        } catch (_) { return null; }
+      };
+      // Compare both physical directions independently; a matching inactive route is NOT coverage.
+      const active = store.routes.flatMap(route => {
+        const forward = describe(route, 'forward');
+        const reverse = route.bidirectional ? describe(route, 'reverse') : null;
+        return [{ ...forward, direction: route.from.type === 'device' ? 'knx2mqtt' : 'mqtt2knx', routeId: route.id, enabled: route.enabled },
+          ...(reverse ? [{ ...reverse, direction: route.from.type === 'device' ? 'mqtt2knx' : 'knx2mqtt', routeId: route.id, enabled: route.enabled }] : [])].filter(x => x.address && x.topic);
+      });
+      const candidates = [];
+      for (const ga of this.groupAddresses) {
+        const directions = [];
+        if (['both','knx2mqtt'].includes(ga.direction || 'both')) directions.push('knx2mqtt');
+        if (['both','mqtt2knx'].includes(ga.direction || 'both')) directions.push('mqtt2knx');
+        for (const direction of directions) {
+          candidates.push({ address: ga.address, topic: config.topicPrefix + '/' + ga.address, direction, origin: 'implicit' });
+          for (const legacy of ga.routes || []) if (legacy.mqttTopic) candidates.push({ address: ga.address, topic: legacy.mqttTopic, direction, origin: 'legacy-route' });
+        }
+      }
+      const connections = candidates.map(item => {
+        const matches = active.filter(r => r.address === item.address && r.topic === item.topic && r.direction === item.direction);
+        const enabled = matches.filter(r => r.enabled);
+        return { ...item, status: enabled.length ? 'covered' : matches.length ? 'inactive' : 'missing', routeIds: matches.map(r => r.routeId) };
+      });
+      res.json({
+        alreadyCleaned: store.legacyCleaned,
+        connections,
+        legacyRoutes: this.groupAddresses.flatMap(ga => (ga.routes || []).filter(r => r.mqttTopic).map(r => ({ address: ga.address, topic: r.mqttTopic }))),
+        legacyMarkers: store.routes.filter(route => route.legacyKey).length,
+        activeRoutes: store.routes.filter(route => route.enabled).length
+      });
     });
     this.app.post('/api/routing/full-cleanup', (req, res) => {
       if (req.body?.confirm !== 'DELETE_LEGACY_ROUTING') return res.status(400).json({ error: 'Explicit confirmation required' });
