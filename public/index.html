@@ -502,6 +502,24 @@
     const occupied = new Set(devices.flatMap(d => Object.values(d.addresses || {})));
     const base = gaBaseName(ga.name);
     if (!base || base === ga.name && !/\s/.test(base)) return null;
+    // System telegrams have independent names: match the exact known GA
+    // functions and DPTs, never by adjacent address alone.
+    const systemTemplate=deviceTemplates.find(t=>t.id==='system');
+    if(systemTemplate){
+      const patterns={
+        date:/^datum$/i,
+        time:/^uhrzeit$/i,
+        dateTime:/^datum\s*\/\s*uhrzeit$/i,
+        dayNight:/^tag\s*\/\s*nacht$/i
+      };
+      const matches={};
+      for(const obj of systemTemplate.objects){
+        const found=configuredGAs.filter(g=>!occupied.has(g.address)&&patterns[obj.key].test((g.name||'').trim())&&gaDirectionMatches(g,obj));
+        if(found.length===1)matches[obj.key]=found[0].address;
+      }
+      if(Object.keys(matches).length===4&&new Set(Object.values(matches)).size===4)
+        return {templateId:'system',templateName:systemTemplate.name,name:'System',addresses:matches,score:100};
+    }
     // BigAssFan uses two independent command/status pairs. Match by signal
     // name and DPT, never by adjacency (the light status may skip an address).
     const fanTemplate=deviceTemplates.find(t=>t.id==='bigassfan');
