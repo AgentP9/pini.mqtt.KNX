@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-// A separate sidecar: legacy GA routes and devices remain untouched.
+// Group addresses define KNX objects; routing graph defines all data flows.
 class RoutingStore {
   constructor(deviceStore, groupAddresses, file) {
     this.deviceStore = deviceStore;
@@ -12,116 +12,11 @@ class RoutingStore {
     const raw = fs.existsSync(this.file) ? JSON.parse(fs.readFileSync(this.file, 'utf8')) : {};
     this.mqttDevices = raw.mqttDevices || [];
     this.endpoints = raw.endpoints || [];
-    this.routes = raw.routes || [];
-    this.explicitKnxWrites = raw.explicitKnxWrites === true;
-    this.legacyCleaned = raw.legacyCleaned === true;
+    this.routes = (raw.routes || []).map(({ legacyKey, ...route }) => route);
     this.knxMqttBaseTopic = raw.knxMqttBaseTopic || 'knx';
     this.validateAll(this.endpoints, this.routes, this.mqttDevices);
   }
-  list() { return { endpoints: this.endpoints, mqttDevices: this.mqttDevices, routes: this.routes, explicitKnxWrites: this.explicitKnxWrites, legacyCleaned: this.legacyCleaned, knxMqttBaseTopic: this.knxMqttBaseTopic }; }
-  legacyKey(address, topic, direction) { return JSON.stringify([address, topic, direction]); }
-  migrated(address, topic, direction) {
-    const key = this.legacyKey(address, topic, direction);
-    return this.routes.some(r => r.enabled && r.legacyKey === key);
-  }
-  migrationPreview() {
-    const candidates = [], skipped = [];
-    const planned = new Set(this.routes.map(r => r.legacyKey).filter(Boolean));
-    const used = new Set(this.endpoints.map(e => e.topic));
-    const dests = new Set(this.routes.map(r => {
-      try { const d = this.resolve(r.to, this.endpoints); return r.to.type === 'mqtt' ? 'topic:' + d.topic : 'ga:' + d.address; }
-      catch (_) { return ''; }
-    }));
-    for (const ga of this.groupAddresses) {
-      for (const legacy of ga.routes || []) {
-        const topic = legacy.mqttTopic;
-        if (!topic) continue;
-        const directions = ['both', 'knx2mqtt'].includes(ga.direction || 'both') ? ['knx2mqtt'] : [];
-        if (['both', 'mqtt2knx'].includes(ga.direction || 'both')) directions.push('mqtt2knx');
-        for (const direction of directions) {
-          const key = this.legacyKey(ga.address, topic, direction);
-          if (planned.has(key)) continue;
-          const info = { address: ga.address, topic, direction, key };
-          let reason = '';
-          if (direction === 'mqtt2knx' && legacy.valueMap && Object.keys(legacy.valueMap).length) reason = 'Reverse value mapping requires manual review';
-          else if (topic.startsWith('knx/')) reason = 'Reserved topic';
-          const matches = [];
-          for (const device of this.deviceStore.devices) {
-            const tpl = this.deviceStore.templates().find(t => t.id === device.templateId);
-            for (const obj of tpl?.objects || []) {
-              if (device.addresses?.[obj.key] !== ga.address) continue;
-              if (direction === 'mqtt2knx' && !['both','mqtt2knx'].includes(obj.direction || 'both')) continue;
-              if (direction === 'knx2mqtt' && !['both','knx2mqtt'].includes(obj.direction || 'both')) continue;
-              matches.push({ device, obj });
-            }
-          }
-          if (!reason && matches.length !== 1) reason = matches.length ? 'Ambiguous device mapping' : 'No matching device signal';
-          if (!reason && used.has(topic) && !this.endpoints.some(e => e.topic === topic) && !candidates.some(c => c.topic === topic)) reason = 'Topic collision';
-          const type = ga.dpt?.startsWith('1.') ? 'boolean' : 'number';
-          if (!reason && (!ga.dpt || (ga.dpt.startsWith('1.') === false && ga.dpt.startsWith('9.') === false))) reason = 'Unsupported DPT';
-          if (!reason && direction === 'knx2mqtt' && dests.has('topic:' + topic)) reason = 'MQTT destination already used';
-          if (!reason && direction === 'mqtt2knx' && dests.has('ga:' + ga.address)) reason = 'KNX destination already used';
-          if (reason) skipped.push({ ...info, reason });
-          else {
-            const { device, obj } = matches[0];
-            const mappedValues = legacy.valueMap && Object.values(legacy.valueMap);
-            const outputType = direction === 'knx2mqtt' && mappedValues?.length ?
-              (mappedValues.every(v => String(v).trim() !== '' && Number.isFinite(Number(v))) ? 'number' : 'text') : type;
-            candidates.push({ ...info, deviceId: device.id, deviceName: device.name, signal: obj.key, type, outputType, valueMap: legacy.valueMap || null,
-              suggestedDevice: /^sonos\/devices\/([^/]+)\//.test(topic) ? { templateId: 'sonos', name: topic.split('/')[2], baseTopic: topic.split('/').slice(0, 3).join('/') } : null });
-            if (direction === 'knx2mqtt') dests.add('topic:' + topic);
-            else dests.add('ga:' + ga.address);
-            used.add(topic);
-          }
-        }
-      }
-    }
-    return { candidates, skipped };
-  }
-  migrate(keys) {
-    if (!Array.isArray(keys) || !keys.every(k => typeof k === 'string')) throw Error('Invalid migration selection');
-    const preview = this.migrationPreview();
-    const requested = new Set(keys);
-    if (requested.size !== keys.length || preview.candidates.filter(c => requested.has(c.key)).length !== keys.length) throw Error('Migration preview is outdated; refresh first');
-    const endpoints = this.endpoints.map(e => ({ ...e }));
-    const mqttDevices = this.mqttDevices.map(d => ({ ...d, signals: d.signals.map(x => ({ ...x })) }));
-    const routes = this.routes.map(r => ({ ...r }));
-    for (const c of preview.candidates.filter(c => requested.has(c.key))) {
-      let mqttRef;
-      if (c.suggestedDevice) {
-        const name = c.suggestedDevice.name;
-        let md = mqttDevices.find(d => d.templateId === 'sonos' && d.baseTopic === c.suggestedDevice.baseTopic);
-        if (!md) {
-          md = { id: crypto.randomUUID(), name: 'Sonos ' + name, templateId: 'sonos', baseTopic: c.suggestedDevice.baseTopic, signals: [] };
-          mqttDevices.push(md);
-        }
-        let signal = md.signals.find(x => x.topic === c.topic);
-        if (!signal) {
-          const suffix = c.topic.slice(c.suggestedDevice.baseTopic.length);
-          const key = suffix === '/control' ? 'control' : suffix === '/set/volume' ? 'volume' : 'topic' + (md.signals.length + 1);
-          signal = { key, label: suffix === '/control' ? 'Wiedergabe' : suffix === '/set/volume' ? 'Lautstärke' : suffix,
-            topic: c.topic, payloadType: c.outputType, direction: c.direction === 'knx2mqtt' ? 'input' : 'output' };
-          md.signals.push(signal);
-        }
-        if (signal.payloadType !== c.outputType) throw Error('Incompatible Sonos signal type');
-        mqttRef = { type: 'mqttDevice', id: md.id, signal: signal.key };
-      } else {
-        let ep = endpoints.find(e => e.topic === c.topic);
-        if (!ep) {
-          ep = { id: crypto.randomUUID(), name: c.deviceName + ' · ' + c.signal, topic: c.topic, payloadType: c.outputType };
-          endpoints.push(ep);
-        }
-        if (ep.payloadType !== c.outputType) throw Error('Existing MQTT endpoint has incompatible type');
-        mqttRef = { type: 'mqtt', id: ep.id };
-      }
-      const deviceRef = { type: 'device', id: c.deviceId, signal: c.signal };
-      const transform = c.direction === 'knx2mqtt' && c.valueMap && Object.keys(c.valueMap).length ?
-        { kind: 'map', values: c.valueMap } : undefined;
-      routes.push({ id: crypto.randomUUID(), from: c.direction === 'knx2mqtt' ? deviceRef : mqttRef,
-        to: c.direction === 'knx2mqtt' ? mqttRef : deviceRef, enabled: true, legacyKey: c.key, ...(transform ? { transform } : {}) });
-    }
-    return this.save({ endpoints, mqttDevices, routes });
-  }
+  list() { return { endpoints: this.endpoints, mqttDevices: this.mqttDevices, routes: this.routes, knxMqttBaseTopic: this.knxMqttBaseTopic }; }
   resolve(ref, endpoints, mqttDevices = this.mqttDevices) {
     if (!ref || !['device', 'mqtt', 'mqttDevice'].includes(ref.type)) throw Error('Invalid endpoint type');
     if (ref.type === 'mqttDevice') {
@@ -178,21 +73,9 @@ class RoutingStore {
     for (const r of routes) {
       if (!r || typeof r.id !== 'string' || routeIds.has(r.id) || typeof r.enabled !== 'boolean') throw Error('Invalid route');
       routeIds.add(r.id);
-      if (r.legacyKey) {
-        const source = r.from.type === 'device' ? r.from : r.to;
-        const mqttRef = r.from.type === 'device' ? r.to : r.from;
-        const device = this.deviceStore.devices.find(d => d.id === source.id);
-        const endpoint = this.resolve(mqttRef, endpoints, mqttDevices);
-        const address = device?.addresses?.[source.signal];
-        const direction = r.from.type === 'device' ? 'knx2mqtt' : 'mqtt2knx';
-        if (!address || !endpoint || r.legacyKey !== this.legacyKey(address, endpoint.topic, direction) ||
-          !this.groupAddresses.some(g => g.address === address && (g.routes || []).some(legacy => legacy.mqttTopic === endpoint.topic))) {
-          throw Error('Invalid legacy migration reference');
-        }
-      }
       if (r.enabled && [r.from,r.to].some(ref => ref.type === 'mqttDevice' && mqttDevices.find(d => d.id === ref.id)?.signals.find(signal => signal.key === ref.signal)?.enabled === false)) throw Error('Enabled route references a disabled MQTT channel');
       if (r.bidirectional !== undefined && typeof r.bidirectional !== 'boolean') throw Error('Invalid bidirectional flag');
-      if (r.bidirectional && (r.legacyKey || r.from.type === 'device' && r.to.type === 'device')) throw Error('Bidirectional routing requires KNX and MQTT');
+      if (r.bidirectional && r.from.type === 'device' && r.to.type === 'device') throw Error('Bidirectional routing requires KNX and MQTT');
       const src = this.resolve(r.from, endpoints, mqttDevices), dst = this.resolve(r.to, endpoints, mqttDevices);
       if (r.from.type !== 'device' && r.to.type !== 'device') throw Error('One side must be a KNX device');
       if (r.from.type === 'device' && r.to.type === 'device' && src.address === dst.address) throw Error('KNX source and target must use different group addresses');
@@ -214,33 +97,22 @@ class RoutingStore {
       const pair = JSON.stringify([r.from, r.to]);
       if (routePairs.has(pair)) throw Error('Duplicate connection between the same source and target');
       routePairs.add(pair);
-      if (r.from.type !== 'device') {
-        if (this.groupAddresses.some(g => (g.routes || []).some(legacy => legacy.mqttTopic === src.topic)) && !r.legacyKey) throw Error('MQTT topic is already handled by a legacy route');
-      } else {
-        if (this.groupAddresses.some(g => (g.routes || []).some(legacy => legacy.mqttTopic === dst.topic)) && !r.legacyKey) throw Error('MQTT topic already used by a legacy route');
-      }
     }
   }
   save(next) {
     const mqttDevices = next.mqttDevices === undefined ? this.mqttDevices : next.mqttDevices;
-    this.validateAll(next.endpoints, next.routes, mqttDevices);
-    const explicitKnxWrites = next.explicitKnxWrites === undefined ? this.explicitKnxWrites : next.explicitKnxWrites;
-    if (typeof explicitKnxWrites !== 'boolean') throw Error('Invalid explicit routing mode');
-    const legacyCleaned = next.legacyCleaned === undefined ? this.legacyCleaned : next.legacyCleaned;
-    if (typeof legacyCleaned !== 'boolean' || (this.legacyCleaned && !legacyCleaned) || (legacyCleaned && !explicitKnxWrites)) throw Error('Invalid legacy cleanup state');
-    if (legacyCleaned && next.routes.some(route => route.legacyKey)) throw Error('Legacy migration markers must be removed before cleanup');
+    const routes = next.routes.map(({ legacyKey, ...route }) => route);
+    this.validateAll(next.endpoints, routes, mqttDevices);
     const knxMqttBaseTopic = next.knxMqttBaseTopic === undefined ? this.knxMqttBaseTopic : next.knxMqttBaseTopic;
     if (typeof knxMqttBaseTopic !== 'string' || !knxMqttBaseTopic || knxMqttBaseTopic.length > 180 || /[+#\\s]/.test(knxMqttBaseTopic) || knxMqttBaseTopic.startsWith('/') || knxMqttBaseTopic.endsWith('/')) throw Error('Invalid KNX MQTT base topic');
-    const data = JSON.stringify({ version: 2, endpoints: next.endpoints, mqttDevices, routes: next.routes, explicitKnxWrites, legacyCleaned, knxMqttBaseTopic }, null, 2) + '\n';
+    const data = JSON.stringify({ version: 3, endpoints: next.endpoints, mqttDevices, routes, knxMqttBaseTopic }, null, 2) + '\n';
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     const tmp = this.file + '.' + crypto.randomUUID() + '.tmp';
     try { fs.writeFileSync(tmp, data, { mode: 0o600 }); fs.renameSync(tmp, this.file); }
     finally { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); }
     this.mqttDevices = mqttDevices;
     this.endpoints = next.endpoints;
-    this.routes = next.routes;
-    this.explicitKnxWrites = explicitKnxWrites;
-    this.legacyCleaned = legacyCleaned;
+    this.routes = routes;
     this.knxMqttBaseTopic = knxMqttBaseTopic;
     return this.list();
   }

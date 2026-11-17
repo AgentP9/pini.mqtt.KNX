@@ -2,7 +2,7 @@
 
 Devices are **metadata groupings** of existing KNX group addresses. The original `config/groupaddresses.json` format, KNX/MQTT routing, custom MQTT routes, and manual GA editing remain unchanged.
 
-## Migration / deployment
+## Deployment
 
 - The first start with no `devices.json` results in an empty device list. Existing GAs continue to work.
 - Add a device in the dashboard by selecting the **Room heating** template and mapping its existing group addresses explicitly. No automatic inference from adjacent addresses.
@@ -10,8 +10,8 @@ Devices are **metadata groupings** of existing KNX group addresses. The original
 - **Back up the active Docker config volume** before deployment. A repository update does not overwrite the persistent volume.
 - Deleting a device only removes its grouping. It never deletes any group address.
 - If a GA is later deleted, the device remains visible with a missing-address warning; reassign the object in the editor.
-- Existing addresses are not auto-grouped on migration to avoid misidentifying KNX objects. The UI continues to support ungrouped addresses.
-- Template mapping requires matching DPTs and compatible direction settings. The optional setpoint shift uses DPT 1.007 and is not treated as a temperature.
+- Existing addresses are not automatically grouped to avoid misidentifying KNX objects. The UI continues to support ungrouped addresses.
+- Template mapping requires matching DPTs and matching KNX object types. The optional setpoint shift uses DPT 1.007 and is not treated as a temperature.
 
 ## API
 

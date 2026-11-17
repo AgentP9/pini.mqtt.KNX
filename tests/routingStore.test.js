@@ -8,8 +8,8 @@ const RoutingStore = require('../src/routingStore');
 function fixture() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'routing-'));
   const gas = [
-    { address: '9/1/0', dpt: '1.001', direction: 'both' },
-    { address: '9/1/1', dpt: '1.011', direction: 'knx2mqtt' },
+    { address: '9/1/0', dpt: '1.001' },
+    { address: '9/1/1', dpt: '1.011' },
   ];
   const devices = [{ id: 'd1', name: 'Dining', templateId: 'switch', addresses: { command: '9/1/0', status: '9/1/1' } }];
   const deviceStore = { file: path.join(dir, 'devices.json'), devices, templates: () => [{ id: 'switch', objects: [{ key: 'command', dpt: '1.001' }, { key: 'status', dpt: '1.011' }] }] };
@@ -17,87 +17,37 @@ function fixture() {
   const endpoint = { id: 'm1', name: 'Dining status', topic: 'home/dining/status', payloadType: 'boolean' };
   return { dir, gas, devices, store, endpoint, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
 }
-test('persists a validated device feedback to MQTT connection without changing legacy GA config', () => {
+test('persists a validated device feedback route without modifying group addresses', () => {
   const f = fixture();
   try {
     const old = JSON.stringify(f.gas);
     f.store.save({ endpoints: [f.endpoint], routes: [{ id: 'r1', from: { type: 'device', id: 'd1', signal: 'status' }, to: { type: 'mqtt', id: 'm1' }, enabled: true }] });
     assert.equal(f.store.routes.length, 1);
     assert.equal(JSON.stringify(f.gas), old);
-    assert.equal(JSON.parse(fs.readFileSync(f.store.file, 'utf8')).version, 2);
+    assert.equal(JSON.parse(fs.readFileSync(f.store.file, 'utf8')).version, 3);
   } finally { f.cleanup(); }
 });
-test('rejects writes to read-only status and duplicate destination', () => {
-  const f = fixture();
-  try {
-    const endpoint = f.endpoint;
-    const command = { type: 'device', id: 'd1', signal: 'command' };
-    const status = { type: 'device', id: 'd1', signal: 'status' };
-    const mqtt = { type: 'mqtt', id: 'm1' };
-    assert.throws(() => f.store.save({ endpoints: [endpoint], routes: [{ id: 'r1', from: mqtt, to: status, enabled: true }] }), /not writable/);
-    assert.throws(() => f.store.save({ endpoints: [endpoint], routes: [{ id: 'r1', from: command, to: mqtt, enabled: true }, { id: 'r2', from: status, to: mqtt, enabled: true }] }), /Multiple routes/);
-    assert.equal(f.store.routes.length, 0);
-  } finally { f.cleanup(); }
+test('accepts graph-defined direction independently of KNX object roles', () => {
+ const f=fixture();
+ try {
+  const mqtt={type:'mqtt',id:'m1'};
+  const status={type:'device',id:'d1',signal:'status'};
+  f.store.save({endpoints:[f.endpoint],routes:[{id:'r1',from:mqtt,to:status,enabled:true}]});
+  assert.equal(f.store.routes[0].from.type,'mqtt');
+ } finally {f.cleanup();}
 });
-test('rejects incompatible payload types and legacy route collisions', () => {
+test('rejects incompatible payload types but ignores obsolete GA routing metadata', () => {
   const f = fixture();
   try {
     const from = { type: 'device', id: 'd1', signal: 'status' };
     const to = { type: 'mqtt', id: 'm1' };
     assert.throws(() => f.store.save({ endpoints: [{ ...f.endpoint, payloadType: 'text' }], routes: [{ id: 'r1', from, to, enabled: true }] }), /Signal types/);
     f.gas[1].routes = [{ mqttTopic: f.endpoint.topic }];
-    assert.throws(() => f.store.save({ endpoints: [f.endpoint], routes: [{ id: 'r1', from, to, enabled: true }] }), /legacy/);
+    f.store.save({ endpoints: [f.endpoint], routes: [{ id: 'r1', from, to, enabled: true }] });
+    assert.equal(f.store.routes.length, 1);
   } finally { f.cleanup(); }
 });
 
-test('migration previews both directions, preserves legacy config and avoids duplicate migration', () => {
-  const f = fixture();
-  try {
-    f.gas[0].routes = [{ mqttTopic: 'home/dining/set' }];
-    f.gas[1].routes = [{ mqttTopic: 'home/dining/status' }];
-    const original = JSON.stringify(f.gas);
-    const preview = f.store.migrationPreview();
-    assert.equal(preview.candidates.length, 3);
-    assert.equal(preview.skipped.length, 0);
-    f.store.migrate(preview.candidates.map(c => c.key));
-    assert.equal(f.store.routes.length, 3);
-    assert.equal(JSON.stringify(f.gas), original);
-    assert.equal(f.store.migrationPreview().candidates.length, 0);
-    assert.equal(f.store.migrated('9/1/0', 'home/dining/set', 'mqtt2knx'), true);
-    assert.equal(f.store.migrated('9/1/1', 'home/dining/status', 'knx2mqtt'), true);
-    assert.throws(() => f.store.migrate(preview.candidates.map(c => c.key)), /outdated/);
-  } finally { f.cleanup(); }
-});
-test('migration imports forward maps and ignores deprecated repeat intervals', () => {
-  const f = fixture();
-  try {
-    f.gas[0].routes = [{ mqttTopic: 'home/dining/set', valueMap: { '1': 'ON' } }];
-    f.gas[1].routes = [{ mqttTopic: 'home/dining/status', repeatInterval: 60 }];
-    const preview = f.store.migrationPreview();
-    assert.equal(preview.candidates.length, 2);
-    assert.equal(preview.skipped.length, 1);
-  } finally { f.cleanup(); }
-});
-
-test('migration groups Sonos topics as one MQTT device with independent mapped signals', () => {
- const f=fixture();
- try {
-  f.gas[0].routes=[
-   {mqttTopic:'sonos/devices/Esszimmer/control',valueMap:{ON:'PLAY',OFF:'PAUSE'}},
-   {mqttTopic:'sonos/devices/Esszimmer/set/volume',valueMap:{ON:'20',OFF:'20'}}
-  ];
-  const preview=f.store.migrationPreview();
-  const selected=preview.candidates.filter(c=>c.direction==='knx2mqtt');
-  assert.equal(selected.length,2);
-  assert.equal(selected[0].suggestedDevice.name,'Esszimmer');
-  f.store.migrate(selected.map(c=>c.key));
-  assert.equal(f.store.mqttDevices.length,1);
-  assert.equal(f.store.mqttDevices[0].signals.length,2);
-  assert.equal(f.store.routes.length,2);
-  assert.equal(f.store.routes[0].transform.values.ON,'PLAY');
-  assert.equal(f.store.migrated('9/1/0','sonos/devices/Esszimmer/control','knx2mqtt'),true);
- } finally {f.cleanup();}
-});
 test('validates standalone MQTT device signals and transformed routes',()=>{
  const f=fixture();
  try {
@@ -107,8 +57,9 @@ test('validates standalone MQTT device signals and transformed routes',()=>{
    id:'r1',from:{type:'device',id:'d1',signal:'command'},to:{type:'mqttDevice',id:'sonos1',signal:'control'},
    enabled:true,transform:{kind:'map',values:{ON:'PLAY',OFF:'PAUSE'}}}]});
   assert.equal(f.store.routes.length,1);
-  assert.throws(()=>f.store.save({endpoints:[],mqttDevices:[md],routes:[{
-   id:'r2',from:{type:'mqttDevice',id:'sonos1',signal:'control'},to:{type:'device',id:'d1',signal:'command'},enabled:true}]}),/not readable/);
+  f.store.save({endpoints:[],mqttDevices:[md],routes:[{
+   id:'r2',from:{type:'mqttDevice',id:'sonos1',signal:'control'},to:{type:'device',id:'d1',signal:'command'},enabled:true,transform:{kind:'map',values:{PLAY:'ON'}}}]});
+  assert.equal(f.store.routes[0].from.type,'mqttDevice');
  } finally {f.cleanup();}
 });
 
@@ -121,15 +72,6 @@ test('rejects duplicate topics across MQTT devices and standalone endpoints', ()
   assert.throws(()=>f.store.save({endpoints:[],mqttDevices:[md,{...md,id:'sonos2',name:'Sonos Two'}],routes:[]}),/Invalid MQTT device signal/);
  } finally { f.cleanup(); }
 });
-test('rejects forged legacy migration marker', () => {
- const f=fixture();
- try {
-  f.gas[0].routes=[{mqttTopic:'sonos/devices/Esszimmer/control'}];
-  const md={id:'sonos1',name:'Sonos Esszimmer',templateId:'sonos',signals:[{key:'control',label:'Control',topic:'sonos/devices/Esszimmer/control',payloadType:'text',direction:'input'}]};
-  assert.throws(()=>f.store.save({endpoints:[],mqttDevices:[md],routes:[{id:'r1',from:{type:'device',id:'d1',signal:'command'},to:{type:'mqttDevice',id:'sonos1',signal:'control'},enabled:true,transform:{kind:'map',values:{ON:'PLAY'}},legacyKey:'not-real'}]}),/Invalid legacy migration reference/);
- } finally { f.cleanup(); }
-});
-
 test('supports Sonos state feedback with default OFF mapping', () => {
  const f=fixture();
  try {
@@ -139,22 +81,6 @@ test('supports Sonos state feedback with default OFF mapping', () => {
   assert.equal(f.store.routes[0].transform.defaultValue,'OFF');
  } finally {f.cleanup()}
 });
-test('detaching legacy fallback preserves a migrated route after legacy cleanup', () => {
- const f=fixture();
- try {
-  f.gas[0].routes=[{mqttTopic:'home/dining/set'}];
-  const candidate=f.store.migrationPreview().candidates.find(c=>c.direction==='knx2mqtt');
-  assert.ok(candidate);
-  f.store.migrate([candidate.key]);
-  const migrated=f.store.routes[0];
-  f.gas[0].routes=[];
-  const {legacyKey,...detached}=migrated;
-  f.store.save({...f.store.list(),routes:[detached]});
-  assert.equal(f.store.routes.length,1);
-  assert.equal(f.store.routes[0].legacyKey,undefined);
- } finally {f.cleanup()}
-});
-
 test('disabled MQTT channels persist while their routes remain present but inactive', () => {
  const f=fixture();
  try {
@@ -175,18 +101,15 @@ test('disabled MQTT channels persist while their routes remain present but inact
  } finally {f.cleanup()}
 });
 
-test('full legacy cutover persists explicit-only mode and cannot be undone via ordinary saves', () => {
+
+test('routing direction is defined by graph, not group-address metadata', () => {
  const f=fixture();
  try {
-  const route={id:'r1',from:{type:'device',id:'d1',signal:'status'},to:{type:'mqtt',id:'m1'},enabled:true};
-  const result=f.store.save({endpoints:[f.endpoint],routes:[route],explicitKnxWrites:true,legacyCleaned:true});
-  assert.equal(result.legacyCleaned,true);
-  assert.equal(result.explicitKnxWrites,true);
-  assert.equal(result.routes.length,1);
-  const reloaded=new RoutingStore(f.store.deviceStore,f.gas,f.store.file);
-  assert.equal(reloaded.legacyCleaned,true);
-  assert.throws(()=>reloaded.save({...reloaded.list(),legacyCleaned:false}),/Invalid legacy cleanup state/);
-  assert.throws(()=>reloaded.save({...reloaded.list(),explicitKnxWrites:false}),/Invalid legacy cleanup state/);
-  assert.throws(()=>reloaded.save({...reloaded.list(),routes:[{...route,legacyKey:'obsolete'}]}),/Legacy migration markers/);
+  f.gas[0].direction='knx2mqtt';
+  const route={id:'r1',from:{type:'mqtt',id:'m1'},to:{type:'device',id:'d1',signal:'command'},enabled:true};
+  f.store.save({endpoints:[f.endpoint],routes:[route]});
+  assert.equal(f.store.routes[0].to.type,'device');
+  assert.equal(f.store.list().explicitKnxWrites,undefined);
+  assert.equal(f.store.list().legacyCleaned,undefined);
  } finally {f.cleanup();}
 });

@@ -4,74 +4,74 @@ const path = require('path');
 const crypto = require('crypto');
 
 // Devices are metadata referencing existing KNX addresses, never replacements for them.
-// The sidecar file keeps legacy groupaddresses.json byte-for-byte compatible.
+// KNX group addresses remain independent of routing.
 const TEMPLATES = Object.freeze({
   'switch': {
     id: 'switch', name: 'Switch',
     objects: [
-      { key: 'command', label: 'Switch command', dpt: '1.001', direction: 'both' },
-      { key: 'status', label: 'Switch status', dpt: '1.011', direction: 'knx2mqtt', optional: true },
+      { key: 'command', label: 'Switch command', dpt: '1.001' },
+      { key: 'status', label: 'Switch status', dpt: '1.011', optional: true },
     ],
   },
   'dimmer': {
     id: 'dimmer', name: 'Dimmer',
     objects: [
-      { key: 'command', label: 'Switch command', dpt: '1.001', direction: 'both' },
-      { key: 'dimRelative', label: 'Relative dimming', dpt: '3.007', direction: 'both' },
-      { key: 'status', label: 'Switch status', dpt: '1.011', direction: 'knx2mqtt' },
-      { key: 'brightness', label: 'Brightness value', dpt: '5.001', direction: 'knx2mqtt' },
+      { key: 'command', label: 'Switch command', dpt: '1.001' },
+      { key: 'dimRelative', label: 'Relative dimming', dpt: '3.007' },
+      { key: 'status', label: 'Switch status', dpt: '1.011' },
+      { key: 'brightness', label: 'Brightness value', dpt: '5.001' },
     ],
   },
   'dimmer-absolute': {
     id: 'dimmer-absolute', name: 'Dimmer (absolut)',
     objects: [
-      { key: 'command', label: 'An/Aus', dpt: '1.001', direction: 'both' },
-      { key: 'dimAbsolute', label: 'Dimmen absolut', dpt: '5.001', direction: 'both' },
-      { key: 'status', label: 'Schaltstatus', dpt: '1.001', direction: 'knx2mqtt' },
-      { key: 'brightness', label: 'Helligkeitswert', dpt: '5.001', direction: 'knx2mqtt' },
+      { key: 'command', label: 'An/Aus', dpt: '1.001' },
+      { key: 'dimAbsolute', label: 'Dimmen absolut', dpt: '5.001' },
+      { key: 'status', label: 'Schaltstatus', dpt: '1.001' },
+      { key: 'brightness', label: 'Helligkeitswert', dpt: '5.001' },
     ],
   },
   'system': {
     id: 'system', name: 'System (Zeit & Tag/Nacht)',
     objects: [
-      { key: 'date', label: 'Datum', dpt: '11.001', direction: 'knx2mqtt' },
-      { key: 'time', label: 'Uhrzeit', dpt: '10.001', direction: 'knx2mqtt' },
-      { key: 'dateTime', label: 'Datum / Uhrzeit', dpt: '19.001', direction: 'knx2mqtt' },
-      { key: 'dayNight', label: 'Tag / Nacht', dpt: '1.002', direction: 'both' },
+      { key: 'date', label: 'Datum', dpt: '11.001' },
+      { key: 'time', label: 'Uhrzeit', dpt: '10.001' },
+      { key: 'dateTime', label: 'Datum / Uhrzeit', dpt: '19.001' },
+      { key: 'dayNight', label: 'Tag / Nacht', dpt: '1.002' },
     ],
   },
   'roller-shutter': {
     id: 'roller-shutter', name: 'Rollladen',
     objects: [
-      { key: 'upDown', label: 'Auf/Ab', dpt: '1.008', direction: 'both' },
-      { key: 'stop', label: 'Stopp/Schritt', dpt: '1.007', direction: 'both' },
-      { key: 'position', label: 'Position', dpt: '5.001', direction: 'knx2mqtt' },
+      { key: 'upDown', label: 'Auf/Ab', dpt: '1.008' },
+      { key: 'stop', label: 'Stopp/Schritt', dpt: '1.007' },
+      { key: 'position', label: 'Position', dpt: '5.001' },
     ],
   },
   'bigassfan': {
     id: 'bigassfan', name: 'BigAssFan',
     objects: [
-      { key: 'fanCommand', label: 'Fan power', dpt: '1.001', direction: 'mqtt2knx' },
-      { key: 'fanStatus', label: 'Fan power status', dpt: '1.011', direction: 'knx2mqtt' },
-      { key: 'lightCommand', label: 'Light', dpt: '1.001', direction: 'mqtt2knx' },
-      { key: 'lightStatus', label: 'Light status', dpt: '1.011', direction: 'knx2mqtt' },
+      { key: 'fanCommand', label: 'Fan power', dpt: '1.001' },
+      { key: 'fanStatus', label: 'Fan power status', dpt: '1.011' },
+      { key: 'lightCommand', label: 'Light', dpt: '1.001' },
+      { key: 'lightStatus', label: 'Light status', dpt: '1.011' },
     ],
   },
   'sonos': {
     id: 'sonos', name: 'Sonos',
     objects: [
-      { key: 'command', label: 'Switch command', dpt: '1.001', direction: 'both' },
-      { key: 'status', label: 'Switch status', dpt: '1.011', direction: 'knx2mqtt' },
-      { key: 'volume', label: 'Volume', dpt: '3.007', direction: 'knx2mqtt', optional: true },
-      { key: 'volumeStatus', label: 'Volume status', dpt: '5.001', direction: 'knx2mqtt', optional: true },
+      { key: 'command', label: 'Switch command', dpt: '1.001' },
+      { key: 'status', label: 'Switch status', dpt: '1.011' },
+      { key: 'volume', label: 'Volume', dpt: '3.007', optional: true },
+      { key: 'volumeStatus', label: 'Volume status', dpt: '5.001', optional: true },
     ],
   },
   'room-heating': {
     id: 'room-heating', name: 'Room heating',
     objects: [
-      { key: 'temperature', label: 'Current temperature', dpt: '9.001', direction: 'knx2mqtt' },
-      { key: 'setpoint', label: 'Current setpoint', dpt: '9.001', direction: 'both' },
-      { key: 'offset', label: 'Setpoint shift', dpt: '1.007', direction: 'both', optional: true },
+      { key: 'temperature', label: 'Current temperature', dpt: '9.001' },
+      { key: 'setpoint', label: 'Current setpoint', dpt: '9.001' },
+      { key: 'offset', label: 'Setpoint shift', dpt: '1.007', optional: true },
     ],
   },
 });

@@ -9,12 +9,10 @@ const RECONNECT_MAX_DELAY = 60000;  // 60 s
 class MqttHandler extends EventEmitter {
   /**
    * @param {{ host: string, port: number, username?: string, password?: string }} config
-   * @param {string} topicPrefix  e.g. "knx"
    */
-  constructor(config, topicPrefix) {
+  constructor(config) {
     super();
     this.config = config;
-    this.topicPrefix = topicPrefix;
     this.client = null;
     this.connected = false;
     this._manualReconnectRequested = false;
@@ -38,11 +36,6 @@ class MqttHandler extends EventEmitter {
       this.connected = true;
       this._reconnectDelay = RECONNECT_MIN_DELAY; // reset backoff on success
       console.log('[MQTT] Connected');
-      const sub = `${this.topicPrefix}/#`;
-      this.client.subscribe(sub, (err) => {
-        if (err) console.error('[MQTT] Subscribe error:', err.message);
-        else console.log(`[MQTT] Subscribed to ${sub}`);
-      });
       this.emit('connected');
     });
 
