@@ -97,3 +97,18 @@ test('roller shutter accepts ETS stop/step DPT 1.007', () => {
     assert.deepEqual(device.missing, []);
   } finally { f.cleanup(); }
 });
+
+test('roller shutter supports KNX stop DPT 1.009 without changing existing 1.007 mappings', () => {
+ const f=fixture();
+ try {
+  f.gas.push(
+   {address:'0/1/6',name:'Küche Auf/Ab',dpt:'1.008',direction:'both'},
+   {address:'0/1/7',name:'Küche Stopp',dpt:'1.009',direction:'both'},
+   {address:'0/1/8',name:'Küche Position',dpt:'5.001',direction:'knx2mqtt'}
+  );
+  const store=new DeviceStore(f.gas,f.gaPath);
+  const device=store.save({name:'Küche',templateId:'roller-shutter',addresses:{upDown:'0/1/6',stop:'0/1/7',position:'0/1/8'}});
+  assert.equal(device.addresses.stop,'0/1/7');
+  assert.deepEqual(device.missing,[]);
+ } finally {f.cleanup();}
+});
