@@ -12,7 +12,7 @@ class RoutingStore {
     const raw = fs.existsSync(this.file) ? JSON.parse(fs.readFileSync(this.file, 'utf8')) : {};
     this.mqttDevices = raw.mqttDevices || [];
     this.endpoints = raw.endpoints || [];
-    this.routes = raw.routes || [];
+    this.routes = (raw.routes || []).map(({ legacyKey, ...route }) => route);
     this.knxMqttBaseTopic = raw.knxMqttBaseTopic || 'knx';
     this.validateAll(this.endpoints, this.routes, this.mqttDevices);
   }
@@ -99,21 +99,20 @@ class RoutingStore {
       routePairs.add(pair);
     }
   }
-  save(next) {    }
-  }
   save(next) {
     const mqttDevices = next.mqttDevices === undefined ? this.mqttDevices : next.mqttDevices;
-    this.validateAll(next.endpoints, next.routes, mqttDevices);
+    const routes = next.routes.map(({ legacyKey, ...route }) => route);
+    this.validateAll(next.endpoints, routes, mqttDevices);
     const knxMqttBaseTopic = next.knxMqttBaseTopic === undefined ? this.knxMqttBaseTopic : next.knxMqttBaseTopic;
     if (typeof knxMqttBaseTopic !== 'string' || !knxMqttBaseTopic || knxMqttBaseTopic.length > 180 || /[+#\\s]/.test(knxMqttBaseTopic) || knxMqttBaseTopic.startsWith('/') || knxMqttBaseTopic.endsWith('/')) throw Error('Invalid KNX MQTT base topic');
-    const data = JSON.stringify({ version: 3, endpoints: next.endpoints, mqttDevices, routes: next.routes, knxMqttBaseTopic }, null, 2) + '\n';
+    const data = JSON.stringify({ version: 3, endpoints: next.endpoints, mqttDevices, routes, knxMqttBaseTopic }, null, 2) + '\n';
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     const tmp = this.file + '.' + crypto.randomUUID() + '.tmp';
     try { fs.writeFileSync(tmp, data, { mode: 0o600 }); fs.renameSync(tmp, this.file); }
     finally { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); }
     this.mqttDevices = mqttDevices;
     this.endpoints = next.endpoints;
-    this.routes = next.routes;
+    this.routes = routes;
     this.knxMqttBaseTopic = knxMqttBaseTopic;
     return this.list();
   }
