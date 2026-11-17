@@ -42,7 +42,7 @@ body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:42
 <label class="form-label" for="payload-type">Payload-Typ</label><select class="form-select mb-3" id="payload-type"><option value="boolean">Boolean</option><option value="number">Zahl</option><option value="text">Text</option></select>
 <button class="btn btn-outline-primary w-100" type="submit"><i class="bi bi-plus-lg"></i> MQTT hinzufügen</button></form></div>
 
-<p class="small muted mt-3">Bestehende GA-Routen bleiben aktiv. Neue Verbindungen werden separat gespeichert. Vor dem Aktivieren werden Signaltypen und Schreibrichtungen geprüft.</p>
+<p class="small muted mt-3">Nach dem vollständigen Cleanup sind ausschließlich explizite Verbindungen des Routing Designers aktiv. Vor dem Aktivieren werden Signaltypen und Schreibrichtungen geprüft.</p>
 </aside></div></main><dialog id="mqtt-device-dialog" aria-labelledby="mqtt-device-dialog-title" style="width:min(95vw,680px);max-height:90vh;overflow:auto;border:1px solid var(--bs-border-color,#ccc);border-radius:12px;padding:0"><div class="d-flex justify-content-between align-items-center px-3 pt-3"><h3 class="h5 m-0" id="mqtt-device-dialog-title">MQTT-Device anlegen</h3><button type="button" id="close-mqtt-device" class="btn-close" aria-label="Schließen"></button></div><form class="p-3" id="mqtt-device-form">
 <label class="form-label" for="mqtt-device-name">Device-Name</label><input class="form-control mb-2" id="mqtt-device-name" required maxlength="120" placeholder="Sonos Esszimmer">
 <label class="form-label" for="mqtt-device-template">Template</label><select class="form-select mb-2" id="mqtt-device-template"><option value="sonos">Sonos Player</option><option value="shelly-plug-s">Shelly Plug S</option><option value="generic">Generisches MQTT-Device</option><option value="custom">Benutzerdefiniert</option></select>
@@ -543,6 +543,8 @@ function renderExplicitWritesState(){
  $('full-cleanup-open').disabled=!!graph.legacyCleaned;
  $('full-cleanup-open').title=graph.legacyCleaned?'Legacy-Routing bereits entfernt':'Legacy-Routing vollständig ablösen';
  $('migration-preview').disabled=!!graph.legacyCleaned;
+ if(graph.legacyCleaned){$('migration-panel').hidden=true;$('explicit-writes-migration').disabled=true;}
+
  $('explicit-writes-migration').textContent=graph.explicitKnxWrites?'Migration abgeschlossen':'Implizite Schreibzugriffe migrieren';
 }
 $('explicit-writes-migration').onclick=async()=>{
