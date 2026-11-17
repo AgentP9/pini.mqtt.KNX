@@ -154,3 +154,23 @@ test('detaching legacy fallback preserves a migrated route after legacy cleanup'
   assert.equal(f.store.routes[0].legacyKey,undefined);
  } finally {f.cleanup()}
 });
+
+test('disabled MQTT channels persist while their routes remain present but inactive', () => {
+ const f=fixture();
+ try {
+  const md={id:'mqtt1',name:'Dining',templateId:'custom',signals:[
+   {key:'power',label:'Power',topic:'home/dining/power',payloadType:'boolean',direction:'input',enabled:true},
+   {key:'dimming',label:'Dimming',topic:'home/dining/dimming',payloadType:'boolean',direction:'input',enabled:false}
+  ]};
+  const from={type:'device',id:'d1',signal:'command'};
+  const route={id:'r1',from,to:{type:'mqttDevice',id:'mqtt1',signal:'dimming'},enabled:false,suspendedByChannel:true};
+  f.store.save({endpoints:[],mqttDevices:[md],routes:[route]});
+  assert.equal(f.store.resolve(route.to,[]).enabled,false);
+  assert.equal(f.store.routes[0].enabled,false);
+  assert.equal(JSON.parse(fs.readFileSync(f.store.file,'utf8')).mqttDevices[0].signals[1].enabled,false);
+  assert.throws(()=>f.store.save({endpoints:[],mqttDevices:[md],routes:[{...route,enabled:true}]}),/disabled MQTT channel/);
+  assert.throws(()=>f.store.save({endpoints:[],mqttDevices:[{...md,signals:[{...md.signals[0],enabled:'false'},md.signals[1]]}],routes:[]}),/Invalid MQTT device signal/);
+  f.store.save({endpoints:[],mqttDevices:[{...md,signals:md.signals.map(x=>({...x,enabled:true}))}],routes:[{...route,enabled:true,suspendedByChannel:undefined}]});
+  assert.equal(f.store.routes[0].enabled,true);
+ } finally {f.cleanup()}
+});
