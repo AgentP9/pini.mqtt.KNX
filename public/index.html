@@ -213,7 +213,6 @@
                 <col class="col-name">
                 <col class="col-dpt">
                 <col class="col-comment">
-                <col class="col-dir">
                 <col class="col-routes">
                 <col class="col-device">
                 <col class="col-lastval">
@@ -225,7 +224,7 @@
                   <th data-sort="name"   >Name</th>
                   <th data-sort="dpt"    >DPT</th>
                   <th data-sort="comment">Comment</th>
-                  <th title="Custom MQTT route topics">Routes</th>
+                  <th title="Im Routing Designer konfigurieren">Routing</th>
                   <th data-sort="device" title="Assigned device">Device</th>
                   <th>Last Value</th>
                   <th></th>
@@ -661,7 +660,7 @@
       i = end;
     }
     gaBody.innerHTML = sorted.map((ga, rowIndex) => {
-      const routesBadge = `<a class="badge bg-info text-dark text-decoration-none" href="/routing.html?ga=${encodeURIComponent(ga.address)}" title="Im Routing Designer anzeigen">Routing</a>`;
+      const routesBadge = `<a class="badge bg-info text-dark text-decoration-none" href="/routing.html?ga=${encodeURIComponent(ga.address)}" title="Im Routing Designer anzeigen">Designer</a>`;
       const repeatBadge = '';
       const assignments = assignedDevices(ga.address);
       const suggestion = assignments.length ? null : suggestDeviceForGA(ga);
