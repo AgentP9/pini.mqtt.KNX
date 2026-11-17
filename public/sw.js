@@ -1,38 +1,15 @@
-/* Service worker – network-first, with offline fallback for the app shell */
-const CACHE = 'piniMqtt4KNX-v1';
-const SHELL = ['/', '/manifest.json', '/favicon.svg'];
-
-self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
-  self.skipWaiting();
-});
-
-self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
-    )
-  );
-  self.clients.claim();
-});
-
-self.addEventListener('fetch', (e) => {
-  /* Skip non-GET, WebSocket upgrades, socket.io polling, and API calls */
-  if (
-    e.request.method !== 'GET' ||
-    e.request.url.includes('/socket.io/') ||
-    e.request.url.includes('/api/')
-  ) return;
-
-  e.respondWith(
-    fetch(e.request)
-      .then((res) => {
-        if (res && res.status === 200 && res.type === 'basic') {
-          const clone = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, clone));
-        }
-        return res;
-      })
-      .catch(() => caches.match(e.request))
-  );
+/* Offline-safe PWA: never cache live state, APIs, or editable pages. */
+'use strict';
+const VERSION='pini-knx-static-v2';
+const STATIC=['/app-shell.css','/app-shell.js','/favicon.svg','/manifest.json','/offline.html'];
+const ALLOWED=new Set(STATIC);
+self.addEventListener('install',event=>{event.waitUntil(caches.open(VERSION).then(cache=>cache.addAll(STATIC)));self.skipWaiting();});
+self.addEventListener('activate',event=>{event.waitUntil(Promise.all([caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('pini')&&key!==VERSION).map(key=>caches.delete(key)))),self.clients.claim()]));});
+self.addEventListener('fetch',event=>{
+ const req=event.request;if(req.method!=='GET')return;
+ const url=new URL(req.url);if(url.origin!==self.location.origin)return;
+ if(url.pathname.startsWith('/api/')||url.pathname.startsWith('/socket.io/')||url.pathname==='/sw.js')return;
+ if(req.mode==='navigate'){event.respondWith(fetch(req,{cache:'no-store'}).catch(()=>caches.match('/offline.html')));return;}
+ if(!ALLOWED.has(url.pathname))return;
+ event.respondWith(fetch(req).then(res=>{if(res.ok){const copy=res.clone();event.waitUntil(caches.open(VERSION).then(cache=>cache.put(req,copy)));}return res;}).catch(()=>caches.match(req)));
 });
