@@ -26,7 +26,7 @@ const TEMPLATES = Object.freeze({
     id: 'roller-shutter', name: 'Rollladen',
     objects: [
       { key: 'upDown', label: 'Auf/Ab', dpt: '1.008', direction: 'both' },
-      { key: 'stop', label: 'Stopp/Schritt', dpt: '1.017', direction: 'both' },
+      { key: 'stop', label: 'Stopp/Schritt', dpt: '1.007', direction: 'both' },
       { key: 'position', label: 'Position', dpt: '5.001', direction: 'knx2mqtt' },
     ],
   },
