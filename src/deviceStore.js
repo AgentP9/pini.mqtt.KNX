@@ -37,7 +37,7 @@ const TEMPLATES = Object.freeze({
       { key: 'date', label: 'Datum', dpt: '11.001', direction: 'knx2mqtt' },
       { key: 'time', label: 'Uhrzeit', dpt: '10.001', direction: 'knx2mqtt' },
       { key: 'dateTime', label: 'Datum / Uhrzeit', dpt: '19.001', direction: 'knx2mqtt' },
-      { key: 'dayNight', label: 'Tag / Nacht', dpt: '1.002', direction: 'knx2mqtt' },
+      { key: 'dayNight', label: 'Tag / Nacht', dpt: '1.002', direction: 'both' },
     ],
   },
   'roller-shutter': {
