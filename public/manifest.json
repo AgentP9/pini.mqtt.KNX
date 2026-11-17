@@ -1,16 +1,42 @@
 {
-  "name": "piniMqtt4KNX – Dashboard",
-  "short_name": "piniMqtt4KNX",
-  "description": "KNX ↔ MQTT bridge dashboard",
+  "id": "/",
+  "name": "pini.mqtt.KNX",
+  "short_name": "KNX MQTT",
+  "description": "KNX-Geräte, Gruppenadressen und MQTT-Verbindungen verwalten",
+  "lang": "de",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#212529",
+  "background_color": "#f8f9fa",
   "theme_color": "#212529",
   "icons": [
     {
       "src": "/favicon.svg",
       "sizes": "any",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Verbindungen",
+      "short_name": "Routing",
+      "url": "/routing.html",
+      "icons": [
+        {
+          "src": "/favicon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
+      "name": "KNX-Devices",
+      "url": "/#view-devices"
+    },
+    {
+      "name": "Gruppenadressen",
+      "url": "/#view-addresses"
     }
   ]
 }
