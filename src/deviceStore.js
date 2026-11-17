@@ -22,6 +22,24 @@ const TEMPLATES = Object.freeze({
       { key: 'brightness', label: 'Brightness value', dpt: '5.001', direction: 'knx2mqtt' },
     ],
   },
+  'dimmer-absolute': {
+    id: 'dimmer-absolute', name: 'Dimmer (absolut)',
+    objects: [
+      { key: 'command', label: 'An/Aus', dpt: '1.001', direction: 'both' },
+      { key: 'dimAbsolute', label: 'Dimmen absolut', dpt: '5.001', direction: 'both' },
+      { key: 'status', label: 'Schaltstatus', dpt: '1.001', direction: 'knx2mqtt' },
+      { key: 'brightness', label: 'Helligkeitswert', dpt: '5.001', direction: 'knx2mqtt' },
+    ],
+  },
+  'system': {
+    id: 'system', name: 'System (Zeit & Tag/Nacht)',
+    objects: [
+      { key: 'date', label: 'Datum', dpt: '11.001', direction: 'knx2mqtt' },
+      { key: 'time', label: 'Uhrzeit', dpt: '10.001', direction: 'knx2mqtt' },
+      { key: 'dateTime', label: 'Datum / Uhrzeit', dpt: '19.001', direction: 'knx2mqtt' },
+      { key: 'dayNight', label: 'Tag / Nacht', dpt: '1.002', direction: 'both' },
+    ],
+  },
   'roller-shutter': {
     id: 'roller-shutter', name: 'Rollladen',
     objects: [
@@ -115,7 +133,7 @@ class DeviceStore {
       if (Object.values(addresses).includes(addr)) throw new Error('Duplicate address in device: ' + addr);
       const ga = this.groupAddresses.find(g => g.address === addr);
       if (!ga) throw new Error('Group address not configured: ' + addr);
-      if (ga.dpt && ga.dpt !== obj.dpt && !(tpl.id === 'roller-shutter' && obj.key === 'stop' && ga.dpt === '1.017')) throw new Error('DPT mismatch for ' + addr + ': expected ' + obj.dpt);
+      if (ga.dpt && ga.dpt !== obj.dpt && !(tpl.id === 'roller-shutter' && obj.key === 'stop' && ['1.017', '1.009'].includes(ga.dpt))) throw new Error('DPT mismatch for ' + addr + ': expected ' + obj.dpt);
       addresses[obj.key] = addr;
     }
     for (const d of this.devices) {

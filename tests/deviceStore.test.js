@@ -97,3 +97,50 @@ test('roller shutter accepts ETS stop/step DPT 1.007', () => {
     assert.deepEqual(device.missing, []);
   } finally { f.cleanup(); }
 });
+
+test('roller shutter supports KNX stop DPT 1.009 without changing existing 1.007 mappings', () => {
+ const f=fixture();
+ try {
+  f.gas.push(
+   {address:'0/1/6',name:'Küche Auf/Ab',dpt:'1.008',direction:'both'},
+   {address:'0/1/7',name:'Küche Stopp',dpt:'1.009',direction:'both'},
+   {address:'0/1/8',name:'Küche Position',dpt:'5.001',direction:'knx2mqtt'}
+  );
+  const store=new DeviceStore(f.gas,f.gaPath);
+  const device=store.save({name:'Küche',templateId:'roller-shutter',addresses:{upDown:'0/1/6',stop:'0/1/7',position:'0/1/8'}});
+  assert.equal(device.addresses.stop,'0/1/7');
+  assert.deepEqual(device.missing,[]);
+ } finally {f.cleanup();}
+});
+
+test('absolute dimmer maps distinct 1.001 and 5.001 command/status addresses', () => {
+ const f=fixture();
+ try {
+  f.gas.push(
+   {address:'2/0/2',name:'Flur An/Aus',dpt:'1.001',direction:'both'},
+   {address:'2/0/3',name:'Flur Dimmen absolut',dpt:'5.001',direction:'both'},
+   {address:'2/0/4',name:'Flur Status',dpt:'1.001',direction:'knx2mqtt'},
+   {address:'2/0/5',name:'Flur Wert',dpt:'5.001',direction:'knx2mqtt'}
+  );
+  const store=new DeviceStore(f.gas,f.gaPath);
+  const device=store.save({name:'Flur',templateId:'dimmer-absolute',addresses:{command:'2/0/2',dimAbsolute:'2/0/3',status:'2/0/4',brightness:'2/0/5'}});
+  assert.equal(device.templateId,'dimmer-absolute');
+  assert.deepEqual(device.missing,[]);
+ } finally {f.cleanup();}
+});
+
+test('system template maps KNX date, time, datetime and day/night addresses', () => {
+ const f=fixture();
+ try {
+  f.gas.push(
+   {address:'9/0/0',name:'Datum',dpt:'11.001',direction:'knx2mqtt'},
+   {address:'9/0/1',name:'Uhrzeit',dpt:'10.001',direction:'knx2mqtt'},
+   {address:'9/0/2',name:'Datum / Uhrzeit',dpt:'19.001',direction:'knx2mqtt'},
+   {address:'9/0/3',name:'Tag / Nacht',dpt:'1.002',direction:'knx2mqtt'}
+  );
+  const store=new DeviceStore(f.gas,f.gaPath);
+  const device=store.save({name:'System',templateId:'system',addresses:{date:'9/0/0',time:'9/0/1',dateTime:'9/0/2',dayNight:'9/0/3'}});
+  assert.equal(device.templateId,'system');
+  assert.deepEqual(device.missing,[]);
+ } finally {f.cleanup();}
+});

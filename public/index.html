@@ -475,7 +475,7 @@
   // ── Group addresses table ─────────────────────────────────────────────────────
   let configuredGAs = [];
   const pendingGAValues = new Map();
-  let sortCol = null;
+  let sortCol = 'address';
   let sortDir = 1; // 1 = asc, -1 = desc
 
   function assignedDevices(address) {
@@ -484,7 +484,7 @@
 
   // Conservative, read-only device suggestions. Never create or modify devices automatically.
   function gaBaseName(name) {
-    return String(name || '').replace(/(?:[\s_-]+(?:play\s*\/\s*stop|auf\s*\/\s*ab|stopp\s*\/\s*schritt|stopp|position|an\s*\/\s*aus|schaltbefehl|schalten|schaltstatus|dimmen\s+relativ|dimmwert|helligkeitswert|helligkeit|wert|status|rückmeldung|rueckmeldung|feedback|command|ein\s*\/\s*aus|on\s*\/\s*off))\s*$/i, '').trim();
+    return String(name || '').replace(/(?:[\s_-]+(?:play\s*\/\s*stop|auf\s*\/\s*ab|stopp\s*\/\s*schritt|stopp|position|an\s*\/\s*aus|schaltbefehl|schalten|schaltstatus|dimmen\s+(?:relativ|absolut)|dimmwert|helligkeitswert|helligkeit|wert|status|rückmeldung|rueckmeldung|feedback|command|ein\s*\/\s*aus|on\s*\/\s*off))\s*$/i, '').trim();
   }
   function gaPosition(address) {
     const parts = String(address).split('/').map(Number);
@@ -495,12 +495,30 @@
     return !!(x && y && x[0] === y[0] && x[1] === y[1] && Math.abs(x[2] - y[2]) === 1);
   }
   function gaDirectionMatches(ga, obj) {
-    return !ga.dpt || ga.dpt === obj.dpt || (obj.key === 'stop' && ga.dpt === '1.017');
+    return !ga.dpt || ga.dpt === obj.dpt || (obj.key === 'stop' && ['1.017', '1.009'].includes(ga.dpt));
   }
   function suggestDeviceForGA(ga) {
     if (assignedDevices(ga.address).length || !deviceTemplates.length) return null;
     const occupied = new Set(devices.flatMap(d => Object.values(d.addresses || {})));
     const base = gaBaseName(ga.name);
+    // System telegrams have independent names: match the exact known GA
+    // functions and DPTs, never by adjacent address alone.
+    const systemTemplate=deviceTemplates.find(t=>t.id==='system');
+    if(systemTemplate){
+      const patterns={
+        date:/^datum$/i,
+        time:/^uhrzeit$/i,
+        dateTime:/^datum\s*\/\s*uhrzeit$/i,
+        dayNight:/^tag\s*\/\s*nacht$/i
+      };
+      const matches={};
+      for(const obj of systemTemplate.objects){
+        const found=configuredGAs.filter(g=>!occupied.has(g.address)&&patterns[obj.key].test((g.name||'').trim())&&gaDirectionMatches(g,obj));
+        if(found.length===1)matches[obj.key]=found[0].address;
+      }
+      if(Object.keys(matches).length===4&&new Set(Object.values(matches)).size===4)
+        return {templateId:'system',templateName:systemTemplate.name,name:'System',addresses:matches,score:100};
+    }
     if (!base || base === ga.name && !/\s/.test(base)) return null;
     // BigAssFan uses two independent command/status pairs. Match by signal
     // name and DPT, never by adjacency (the light status may skip an address).
@@ -532,6 +550,24 @@
       }
       if(Object.keys(matches).length===3&&new Set(Object.values(matches)).size===3)
         return {templateId:'roller-shutter',templateName:shutterTemplate.name,name:base,addresses:matches,score:100};
+    }
+    // Absolute dimmers share DPTs across command and status; names disambiguate.
+    const absoluteTemplate=deviceTemplates.find(t=>t.id==='dimmer-absolute');
+    if(absoluteTemplate){
+      const group=configuredGAs.filter(g=>!occupied.has(g.address)&&gaBaseName(g.name).toLowerCase()===base.toLowerCase());
+      const patterns={
+        command:/(?:^|\s)(?:an\s*\/\s*aus|schalten|schaltbefehl)$/i,
+        dimAbsolute:/(?:^|\s)(?:dimmen\s+absolut|dimmwert)$/i,
+        status:/(?:^|\s)(?:status|schaltstatus)$/i,
+        brightness:/(?:^|\s)(?:wert|helligkeitswert|helligkeit)$/i
+      };
+      const matches={};
+      for(const obj of absoluteTemplate.objects){
+        const found=group.filter(g=>patterns[obj.key].test((g.name||'').trim())&&gaDirectionMatches(g,obj));
+        if(found.length===1)matches[obj.key]=found[0].address;
+      }
+      if(Object.keys(matches).length===4&&new Set(Object.values(matches)).size===4)
+        return {templateId:'dimmer-absolute',templateName:absoluteTemplate.name,name:base,addresses:matches,score:100};
     }
     // Prefer a complete four-address dimmer block over the generic switch
     // and Sonos templates when all KNX datapoint types and names agree.
@@ -725,6 +761,8 @@
       renderGATable(configuredGAs);
     });
   });
+
+  updateSortIndicators();
 
   /** Update the Last Value cell for a GA row without re-rendering the whole table. */
   function updateGALastValue(entry) {
@@ -1114,9 +1152,9 @@ const route = { mqttTopic };
   function renderDeviceFields(mapping = {}) {
     const tpl = deviceTemplate(deviceTemplateSelect.value);
     deviceObjects.innerHTML = tpl ? tpl.objects.map(o => {
-      const candidates = configuredGAs.filter(g => !g.dpt || g.dpt === o.dpt).sort((a,b) => { const x=gaPosition(a.address),y=gaPosition(b.address); return x&&y ? (x[0]-y[0]||x[1]-y[1]||x[2]-y[2]) : String(a.address).localeCompare(String(b.address),undefined,{numeric:true}); });
+      const candidates = configuredGAs.filter(g => gaDirectionMatches(g, o) && (tpl.id !== 'roller-shutter' || o.key !== 'stop' || !g.dpt || ['1.007','1.009','1.017'].includes(g.dpt))).sort((a,b) => { const x=gaPosition(a.address),y=gaPosition(b.address); return x&&y ? (x[0]-y[0]||x[1]-y[1]||x[2]-y[2]) : String(a.address).localeCompare(String(b.address),undefined,{numeric:true}); });
       const options = candidates.map(g => `<option value="${escHtml(g.address)}" ${mapping[o.key] === g.address ? 'selected' : ''}>${escHtml(g.address + ' – ' + (g.name || 'Unnamed'))}</option>`).join('');
-      return `<div class="mb-3"><label class="form-label" for="device-object-${escHtml(o.key)}">${escHtml(o.label)} <small class="text-muted">DPT ${escHtml(o.dpt)}${o.optional ? ' · optional' : ''}</small></label><select class="form-select device-object" id="device-object-${escHtml(o.key)}" data-key="${escHtml(o.key)}"><option value="">Select address…</option>${options}</select></div>`;
+      return `<div class="mb-3"><label class="form-label" for="device-object-${escHtml(o.key)}">${escHtml(o.label)} <small class="text-muted">DPT ${escHtml(tpl.id === 'roller-shutter' && o.key === 'stop' ? '1.007 / 1.009 / 1.017' : o.dpt)}${o.optional ? ' · optional' : ''}</small></label><select class="form-select device-object" id="device-object-${escHtml(o.key)}" data-key="${escHtml(o.key)}"><option value="">Select address…</option>${options}</select></div>`;
     }).join('') : '';
   }
   function openDeviceEditor(device) {
@@ -1281,7 +1319,7 @@ const route = { mqttTopic };
   fetch('/api/rooms').then(r=>r.json()).then(data=>{rooms=data;renderRooms();}).catch(err=>console.error('Rooms unavailable',err));
   socket.on('rooms',data=>{rooms=data;renderRooms();});
   document.getElementById('room-filter').addEventListener('change',renderDevices);
-  fetch('/api/device-templates').then(r => r.json()).then(t => { deviceTemplates = t; renderDevices(); }).catch(err => console.error('Templates unavailable', err));
+  fetch('/api/device-templates').then(r => { if (!r.ok) throw Error('Template HTTP '+r.status); return r.json(); }).then(t => { deviceTemplates = t; renderGATable(configuredGAs); }).catch(err => console.error('Templates unavailable', err));
   refreshMigratedGALinks();
   fetch('/api/devices').then(r => r.json()).then(d => { devices = d; renderDevices(); renderGATable(configuredGAs); }).catch(err => console.error('Devices unavailable', err));
   socket.on('devices', d => { devices = d; renderDevices(); renderGATable(configuredGAs); });

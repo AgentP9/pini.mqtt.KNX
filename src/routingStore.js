@@ -141,10 +141,10 @@ class RoutingStore {
     const object = template && template.objects.find(o => o.key === ref.signal);
     const address = device.addresses[ref.signal];
     const ga = this.groupAddresses.find(g => g.address === address);
-    if (!object || !ga || (ga.dpt !== object.dpt && !(device.templateId === 'roller-shutter' && ref.signal === 'stop' && ga.dpt === '1.017'))) {
+    if (!object || !ga || (ga.dpt !== object.dpt && !(device.templateId === 'roller-shutter' && ref.signal === 'stop' && ['1.017', '1.009'].includes(ga.dpt)))) {
       throw Error('Device signal not configured: device=' + (device.name || device.id) + ', signal=' + ref.signal + ', GA=' + (address || 'missing') + ', actualDPT=' + (ga?.dpt || 'missing') + ', expectedDPT=' + (object?.dpt || 'missing'));
     }
-    return { address, ga, type: ga.dpt.startsWith('1.') ? 'boolean' : 'number' };
+    return { address, ga, type: ga.dpt.startsWith('1.') ? 'boolean' : ['10.001','11.001','19.001'].includes(ga.dpt) ? 'text' : 'number' };
   }
   validateAll(endpoints, routes, mqttDevices = this.mqttDevices) {
     if (!Array.isArray(endpoints) || !Array.isArray(routes) || endpoints.length > 300 || routes.length > 500) throw Error('Invalid routing configuration');
