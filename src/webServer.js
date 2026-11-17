@@ -7,6 +7,7 @@ const { Server } = require('socket.io');
 const path = require('path');
 const DeviceStore = require('./deviceStore');
 const RoutingStore = require('./routingStore');
+const { buildOpenHabExport, zip } = require('./openhabExport');
 const config = require('./config');
 
 class WebServer {
@@ -85,6 +86,20 @@ class WebServer {
         this.eventEmitter.emit('routing-changed', data);
         res.json({ knxMqttBaseTopic: data.knxMqttBaseTopic });
       } catch (err) { res.status(400).json({ error: err.message }); }
+    });
+    // Snapshot export: openHAB MQTT Generic Thing and Items bundled into a ZIP.
+    this.app.get('/api/export/openhab', (_req, res) => {
+      try {
+        const exportData = buildOpenHabExport(this.routingStore.list(), this.deviceStore.devices);
+        const archive = zip(exportData.files);
+        res.set('Content-Type', 'application/zip');
+        res.set('Content-Disposition', 'attachment; filename="pini-mqtt-knx-openhab.zip"');
+        res.set('Cache-Control', 'no-store');
+        res.set('X-Content-Type-Options', 'nosniff');
+        res.send(archive);
+      } catch (err) {
+        res.status(500).json({ error: 'openHAB export failed: ' + err.message });
+      }
     });
     this.app.get('/api/routing', (_req, res) => res.json(this.routingStore.list()));
     this.app.put('/api/routing', (req, res) => {
