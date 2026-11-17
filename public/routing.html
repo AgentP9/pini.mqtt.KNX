@@ -135,7 +135,7 @@ function alignNodes(routes){
 }
 function drawLinks(routes=graph.routes.filter(isFocused)){
  const root=$('workspace'),svg=$('links');
- root.querySelectorAll('.route-transform').forEach(x=>x.remove());
+ root.querySelectorAll('.route-transform,.route-listen').forEach(x=>x.remove());
  const rect=root.getBoundingClientRect(),width=root.scrollWidth,height=root.scrollHeight;
  svg.setAttribute('viewBox','0 0 '+width+' '+height);svg.setAttribute('width',width);svg.setAttribute('height',height);
  svg.innerHTML='';
@@ -167,6 +167,16 @@ function drawLinks(routes=graph.routes.filter(isFocused)){
   const chip=document.createElement('button');chip.type='button';chip.className='btn btn-sm btn-light border route-transform edit-transform'+(r.enabled?'':' inactive');
   chip.dataset.id=r.id;chip.textContent=transformLabel(r);chip.title='Wertumwandlung bearbeiten';
   chip.style.left=(knxToKnx?loopX:mid)+'px';chip.style.top=((y1+y2)/2)+'px';root.appendChild(chip);
+  const listen=document.createElement('button');
+  listen.type='button';listen.className='btn btn-sm btn-outline-primary route-listen';
+  listen.dataset.id=r.id;listen.title='Diese Verbindung live belauschen';
+  listen.setAttribute('aria-label','Verbindung live belauschen');
+  listen.innerHTML='<i class="bi bi-broadcast" aria-hidden="true"></i>';
+  listen.style.position='absolute';listen.style.zIndex='5';
+  listen.style.left=((knxToKnx?loopX:mid)+chip.offsetWidth/2+23)+'px';
+  listen.style.top=((y1+y2)/2)+'px';
+  listen.style.transform='translateY(-50%)';
+  root.appendChild(listen);
   
  }
 }
@@ -330,6 +340,7 @@ document.addEventListener('click',e=>{
 
  const editMqtt=e.target.closest('.edit-mqtt-device');
  if(editMqtt){openMqttEditor(editMqtt.dataset.id);return;}
+ const listen=e.target.closest('.route-listen');if(listen){listenToRoute(listen.dataset.id);return;}
  const edit=e.target.closest('.edit-transform');if(edit){openRouteDialog(edit.dataset.id);return}
  const upgrade=e.target.closest('.upgrade-mqtt-device');
  if(upgrade){
