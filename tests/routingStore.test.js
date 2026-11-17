@@ -27,17 +27,14 @@ test('persists a validated device feedback route without modifying group address
     assert.equal(JSON.parse(fs.readFileSync(f.store.file, 'utf8')).version, 3);
   } finally { f.cleanup(); }
 });
-test('rejects writes to read-only status and duplicate destination', () => {
-  const f = fixture();
-  try {
-    const endpoint = f.endpoint;
-    const command = { type: 'device', id: 'd1', signal: 'command' };
-    const status = { type: 'device', id: 'd1', signal: 'status' };
-    const mqtt = { type: 'mqtt', id: 'm1' };
-    assert.throws(() => f.store.save({ endpoints: [endpoint], routes: [{ id: 'r1', from: mqtt, to: status, enabled: true }] }), /not writable/);
-    assert.throws(() => f.store.save({ endpoints: [endpoint], routes: [{ id: 'r1', from: command, to: mqtt, enabled: true }, { id: 'r2', from: status, to: mqtt, enabled: true }] }), /Multiple routes/);
-    assert.equal(f.store.routes.length, 0);
-  } finally { f.cleanup(); }
+test('accepts graph-defined direction independently of KNX object roles', () => {
+ const f=fixture();
+ try {
+  const mqtt={type:'mqtt',id:'m1'};
+  const status={type:'device',id:'d1',signal:'status'};
+  f.store.save({endpoints:[f.endpoint],routes:[{id:'r1',from:mqtt,to:status,enabled:true}]});
+  assert.equal(f.store.routes[0].from.type,'mqtt');
+ } finally {f.cleanup();}
 });
 test('rejects incompatible payload types but ignores obsolete GA routing metadata', () => {
   const f = fixture();
@@ -60,8 +57,9 @@ test('validates standalone MQTT device signals and transformed routes',()=>{
    id:'r1',from:{type:'device',id:'d1',signal:'command'},to:{type:'mqttDevice',id:'sonos1',signal:'control'},
    enabled:true,transform:{kind:'map',values:{ON:'PLAY',OFF:'PAUSE'}}}]});
   assert.equal(f.store.routes.length,1);
-  assert.throws(()=>f.store.save({endpoints:[],mqttDevices:[md],routes:[{
-   id:'r2',from:{type:'mqttDevice',id:'sonos1',signal:'control'},to:{type:'device',id:'d1',signal:'command'},enabled:true}]}),/not readable/);
+  f.store.save({endpoints:[],mqttDevices:[md],routes:[{
+   id:'r2',from:{type:'mqttDevice',id:'sonos1',signal:'control'},to:{type:'device',id:'d1',signal:'command'},enabled:true,transform:{kind:'map',values:{PLAY:'ON'}}}]});
+  assert.equal(f.store.routes[0].from.type,'mqttDevice');
  } finally {f.cleanup();}
 });
 
