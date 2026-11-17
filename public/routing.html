@@ -314,7 +314,10 @@ $('route-dialog-form').addEventListener('submit',e=>{
   }
   if(direction==='both')r.bidirectional=true;else delete r.bidirectional;
   if(transform)r.transform=transform;else delete r.transform;
-  r.enabled=$('route-dialog-enabled').checked;
+  const requestedEnabled=$('route-dialog-enabled').checked;
+  if(requestedEnabled&&[r.from,r.to].some(ref=>ref.type==='mqttDevice'&&graph.mqttDevices.find(device=>device.id===ref.id)?.signals.find(signal=>signal.key===ref.signal)?.enabled===false))throw Error('Verbindung kann nicht aktiviert werden, solange ein beteiligter MQTT-Kanal deaktiviert ist.');
+  r.enabled=requestedEnabled;
+  if(requestedEnabled||!r.suspendedByChannel)delete r.suspendedByChannel;
   dirty=true;$('route-dialog').close();editingRouteId=null;render();notice('Verbindung aktualisiert. Bitte Änderungen aktivieren.');
  }catch(err){notice('Verbindung konnte nicht geändert werden: '+err.message,true);$('route-dialog-map').focus()}
 });
