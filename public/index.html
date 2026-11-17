@@ -233,7 +233,7 @@
                 </tr>
               </thead>
               <tbody id="ga-body">
-                <tr><td colspan="9" class="text-center empty-msg p-3">Loading…</td></tr>
+                <tr><td colspan="8" class="text-center empty-msg p-3">Loading…</td></tr>
               </tbody>
             </table>
           </div>
@@ -353,25 +353,8 @@
           <label for="ga-comment" class="form-label">Comment</label>
           <input type="text" class="form-control" id="ga-comment" placeholder="Optional note">
         </div>
-        <div class="mb-3">
-          <label for="ga-direction" class="form-label">Direction</label>
-          <select class="form-select" id="ga-direction">
-            <option value="both">Bidirectional KNX ↔ MQTT (default)</option>
-            <option value="knx2mqtt">KNX → MQTT only</option>
-            <option value="mqtt2knx">MQTT → KNX only</option>
-          </select>
-        </div>
-        <!-- Routes section -->
-        <hr>
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <label class="form-label mb-0 fw-semibold">
-            Custom MQTT Routes
-            <small class="text-muted fw-normal ms-1" title="Forward this group address to/from additional MQTT topics, with optional value mapping">ℹ</small>
-          </label>
-          <button type="button" class="btn btn-sm btn-outline-primary" id="btn-add-route">+ Add Route</button>
-        </div>
-        <div id="ga-routes-list"></div>
       </div>
+      <div class="modal-footer">      </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
         <button type="button" class="btn btn-primary" id="btn-save-ga">Save</button>
@@ -640,8 +623,7 @@
     });
   }
 
-  let migratedGALinks = {};
-  function refreshMigratedGALinks(){fetch('/api/routing/group-address-links').then(r=>r.ok?r.json():{}).then(data=>{migratedGALinks=data;renderGATable(configuredGAs)}).catch(()=>{});}
+  
   function renderGATable(addresses) {
     configuredGAs = addresses;
     renderDevices();
@@ -680,32 +662,17 @@
       i = end;
     }
     gaBody.innerHTML = sorted.map((ga, rowIndex) => {
-      const routeCount = Array.isArray(ga.routes) ? ga.routes.filter((r) => r.mqttTopic).length : 0;
-      const migrated = migratedGALinks[ga.address] || [];
-      const activeMigrated = migrated.filter(r => r.enabled);
-      const migratedTopics = new Set(activeMigrated.map(r => { try { return JSON.parse(r.legacyKey)[1]; } catch (_) { return r.id; } }));
-      const legacyCount = Math.max(0, routeCount - migratedTopics.size);
-      const totalRoutes = legacyCount + activeMigrated.length;
-      const routesBadge = migrated.length
-        ? `<a class="badge bg-info text-dark text-decoration-none" href="/routing.html?ga=${encodeURIComponent(ga.address)}" title="${totalRoutes} Routings – im Routing Designer anzeigen">${totalRoutes}</a>`
-        : routeCount > 0
-          ? `<span class="badge bg-info text-dark" title="${escHtml(ga.routes.filter(r=>r.mqttTopic).map(r=>r.mqttTopic).join(', '))}">${routeCount}</span>`
-          : '<span class="text-muted">–</span>';
+      const routesBadge = `<a class="badge bg-info text-dark text-decoration-none" href="/routing.html?ga=${encodeURIComponent(ga.address)}" title="Im Routing Designer anzeigen">Routing</a>`;
       const repeatBadge = '';
       const assignments = assignedDevices(ga.address);
       const suggestion = assignments.length ? null : suggestDeviceForGA(ga);
       const deviceCell = assignments.length ? assignments.map(d => `<div><span class="fw-semibold">${escHtml(d.name)}</span><span class="small text-muted ms-1">(${escHtml(d.role)})</span></div>`).join('') : suggestion ? `<button type="button" class="btn btn-sm btn-primary btn-suggest-device" data-address="${escHtml(ga.address)}" title="Review suggested device mapping"><i class="bi bi-lightbulb me-1"></i>${escHtml(suggestion.templateName)}</button>` : '<span class="text-muted">–</span>';
-      const dir = ga.direction || 'both';
-      const dirIcon = dir === 'knx2mqtt' ? '<i class="bi bi-arrow-right" title="KNX → MQTT only"></i>'
-                    : dir === 'mqtt2knx' ? '<i class="bi bi-arrow-left"  title="MQTT → KNX only"></i>'
-                    :                      '<i class="bi bi-arrow-left-right text-muted" title="Bidirectional"></i>';
       return `
       <tr>
         <td><code>${escHtml(ga.address)}</code></td>
         <td>${escHtml(ga.name || '')}</td>
         <td><small>${escHtml(ga.dpt || '')}</small></td>
         <td><small class="text-muted">${escHtml(ga.comment || '')}</small></td>
-        <td class="text-center">${dirIcon}</td>
         <td>${routesBadge}${repeatBadge}</td>
         ${spans[rowIndex] ? `<td rowspan="${spans[rowIndex]}" class="align-middle text-center ga-device-cell">${deviceCell}</td>` : ''}
         <td class="ga-last-value"><strong>${escHtml(ga.lastValue !== undefined && ga.lastValue !== null ? formatValue(ga.lastValue, ga.dpt) : '–')}</strong></td>
@@ -815,52 +782,10 @@
   const nameInput    = document.getElementById('ga-name');
   const dptInput     = document.getElementById('ga-dpt');
   const commentInput = document.getElementById('ga-comment');
-  const dirSelect    = document.getElementById('ga-direction');
   const formError    = document.getElementById('ga-form-error');
-  const routesList   = document.getElementById('ga-routes-list');
-
-  /** Render one route row in the modal. */
-  function addRouteRow(topic, valueMapStr, repeatInterval) {
-    const row = document.createElement('div');
-    row.className = 'route-row';
-    row.innerHTML = `
-      <button type="button" class="btn btn-sm btn-outline-danger btn-remove-route" aria-label="Remove route"><i class="bi bi-x-lg"></i></button>
-      <div class="mb-2">
-        <label class="form-label form-label-sm mb-1">MQTT Topic <span class="text-danger">*</span></label>
-        <input type="text" class="form-control form-control-sm route-topic" placeholder="e.g. Sonos/Living/control" value="${escHtml(topic || '')}">
-      </div>
-      <div class="mb-2">
-        <label class="form-label form-label-sm mb-1">Value Map <small class="text-muted">(JSON, optional – e.g. {"ON":"PLAY","OFF":"STOP"})</small></label>
-        <input type="text" class="form-control form-control-sm route-valuemap" placeholder='{"ON":"PLAY","OFF":"STOP"}' value="${escHtml(valueMapStr || '')}">
-      </div>
-    `;
-    row.querySelector('.btn-remove-route').addEventListener('click', () => row.remove());
-    routesList.appendChild(row);
-  }
-
-  /** Collect route rows from the modal into an array (or undefined if empty). */
-  function collectRoutes() {
-    const rows = routesList.querySelectorAll('.route-row');
-    if (!rows.length) return undefined;
-    const routes = [];
-    for (const row of rows) {
-      const mqttTopic = row.querySelector('.route-topic').value.trim();
-      if (!mqttTopic) continue;
-      const vmRaw = row.querySelector('.route-valuemap').value.trim();
-      let valueMap;
-      if (vmRaw) {
-        try { valueMap = JSON.parse(vmRaw); } catch (_) { valueMap = undefined; }
-      }
-const route = { mqttTopic };
-      if (valueMap && typeof valueMap === 'object') route.valueMap = valueMap;
-      routes.push(route);
-    }
-    return routes.length ? routes : undefined;
-  }
 
   function openModal(prefillAddress, editMode) {
     formError.classList.add('d-none');
-    routesList.innerHTML = '';
     const ga = editMode ? configuredGAs.find((g) => g.address === prefillAddress) : null;
     document.getElementById('gaModalTitle').textContent = ga ? 'Edit Group Address' : 'Add Group Address';
     addrInput.value    = prefillAddress || '';
@@ -868,19 +793,10 @@ const route = { mqttTopic };
     nameInput.value    = ga ? (ga.name    || '') : '';
     dptInput.value     = ga ? (ga.dpt     || '') : '';
     commentInput.value = ga ? (ga.comment || '') : '';
-    dirSelect.value    = ga ? (ga.direction || 'both') : 'both';
-    // Populate existing routes
-    if (ga && Array.isArray(ga.routes)) {
-      ga.routes.forEach((r) => {
-        const vmStr = r.valueMap ? JSON.stringify(r.valueMap) : '';
-        addRouteRow(r.mqttTopic || '', vmStr, r.repeatInterval || 0);
-      });
-    }
     gaModal.show();
     if (!addrInput.readOnly) addrInput.focus();
   }
 
-  document.getElementById('btn-add-route').addEventListener('click', () => addRouteRow('', ''));
 
   document.getElementById('btn-add-ga').addEventListener('click', () => openModal(''));
 
@@ -957,15 +873,12 @@ const route = { mqttTopic };
       formError.classList.remove('d-none');
       return;
     }
-    const routes = collectRoutes();
     const body = {
       address,
       name:      nameInput.value.trim(),
       dpt:       dptInput.value.trim(),
       comment:   commentInput.value.trim(),
-      direction: dirSelect.value || 'both',
     };
-    if (routes) body.routes = routes;
     fetch('/api/groupaddresses', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -992,7 +905,7 @@ const route = { mqttTopic };
 
   socket.on('status', ({ service, connected }) => updateBadge(service, connected));
 
-  socket.on('groupaddresses', addresses => { renderGATable(addresses); refreshMigratedGALinks(); });
+  socket.on('groupaddresses', addresses => { renderGATable(addresses);  });
   socket.on('ga-value', ({ address, value, confirmed }) => {
     if (confirmed) {
       pendingGAValues.delete(address);
@@ -1320,7 +1233,7 @@ const route = { mqttTopic };
   socket.on('rooms',data=>{rooms=data;renderRooms();});
   document.getElementById('room-filter').addEventListener('change',renderDevices);
   fetch('/api/device-templates').then(r => { if (!r.ok) throw Error('Template HTTP '+r.status); return r.json(); }).then(t => { deviceTemplates = t; renderGATable(configuredGAs); }).catch(err => console.error('Templates unavailable', err));
-  refreshMigratedGALinks();
+  
   fetch('/api/devices').then(r => r.json()).then(d => { devices = d; renderDevices(); renderGATable(configuredGAs); }).catch(err => console.error('Devices unavailable', err));
   socket.on('devices', d => { devices = d; renderDevices(); renderGATable(configuredGAs); });
   document.getElementById('device-search').addEventListener('input', renderDevices);
