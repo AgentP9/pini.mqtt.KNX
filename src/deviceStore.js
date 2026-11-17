@@ -115,7 +115,7 @@ class DeviceStore {
       if (Object.values(addresses).includes(addr)) throw new Error('Duplicate address in device: ' + addr);
       const ga = this.groupAddresses.find(g => g.address === addr);
       if (!ga) throw new Error('Group address not configured: ' + addr);
-      if (ga.dpt && ga.dpt !== obj.dpt && !(tpl.id === 'roller-shutter' && obj.key === 'stop' && ga.dpt === '1.017')) throw new Error('DPT mismatch for ' + addr + ': expected ' + obj.dpt);
+      if (ga.dpt && ga.dpt !== obj.dpt && !(tpl.id === 'roller-shutter' && obj.key === 'stop' && ['1.017', '1.009'].includes(ga.dpt))) throw new Error('DPT mismatch for ' + addr + ': expected ' + obj.dpt);
       addresses[obj.key] = addr;
     }
     for (const d of this.devices) {
