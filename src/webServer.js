@@ -32,6 +32,8 @@ class WebServer {
     // Serve static frontend
     this.app.use(express.static(path.join(__dirname, '../public')));
 
+    this.app.get('/api/routing/diagnostics', (_req, res) => res.json({ issues: this.routingStore.diagnostics() }));
+
     // Device templates only reference existing group addresses. Existing GA routes stay untouched.
     this.app.get('/api/rooms', (_req, res) => res.json(this.deviceStore.listRooms()));
     const publishRooms = () => this.io.emit('rooms', this.deviceStore.listRooms());
@@ -229,6 +231,7 @@ class WebServer {
       this.groupAddresses = next;
       if (this._saveGroupAddresses()) {
         this.io.emit('groupaddresses', this._enrichGAs());
+        this.io.emit('routing-diagnostics', { issues: this.routingStore.diagnostics() });
         return res.json({ ok: true, added, updated });
       }
       this.groupAddresses = previous;
