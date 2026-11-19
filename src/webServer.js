@@ -227,14 +227,14 @@ class WebServer {
         }
       }
       if (!added && !updated) return res.json({ ok: true, added, updated });
-      const previous = this.groupAddresses;
-      this.groupAddresses = next;
+      const previous = this.groupAddresses.map(g => ({ ...g }));
+      this.groupAddresses.splice(0, this.groupAddresses.length, ...next);
       if (this._saveGroupAddresses()) {
         this.io.emit('groupaddresses', this._enrichGAs());
         this.io.emit('routing-diagnostics', { issues: this.routingStore.diagnostics() });
         return res.json({ ok: true, added, updated });
       }
-      this.groupAddresses = previous;
+      this.groupAddresses.splice(0, this.groupAddresses.length, ...previous);
       return res.status(500).json({ error: 'Failed to persist configuration' });
     });
 
