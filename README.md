@@ -55,3 +55,7 @@ Open **Live-Monitor** in the navigation or directly at `/monitor.html`. This is 
 - **Live-Log**: Last 200 incoming KNX/bridge events with address/topic/value search, pause and clear.
 
 The monitor uses the existing Socket.IO connection; no page reloads, commands or configuration writes are performed. It also appears as a PWA shortcut. The bridge does not retain KNX value history across restarts, so the initial device status is the last value observed by the current process, **not** a fresh read of the KNX bus.
+
+### Device-aware PWA start view
+
+The PWA retains a single manifest (`id: /`, `start_url: /`) and a single service worker. When launched **standalone** on a narrow touch-screen phone (viewport under 768px with coarse pointer), its root URL redirects to `/monitor.html`. Desktop launches continue to open the dashboard. Explicit navigation to the dashboard (`/?dashboard=1`) and dashboard deep links (`/#view-devices`, `/#view-addresses`) bypass the redirect. This avoids creating a second PWA or changing the installed app identity.
