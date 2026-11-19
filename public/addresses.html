@@ -1,0 +1,1408 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#212529" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="piniMqtt4KNX" />
+  <title>piniMqtt4KNX – addresses</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/favicon.svg" />
+  <link rel="manifest" href="/manifest.json" />
+  <!-- Same PWA start_url on every device; choose the initial view on launch. -->
+  <script>
+    (function () {
+      const phone = window.matchMedia('(max-width: 767.98px) and (pointer: coarse)').matches;
+      const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+      const explicitDashboard = new URLSearchParams(location.search).has('dashboard') || Boolean(location.hash);
+      if (phone && standalone && !explicitDashboard && (location.pathname === '/' || location.pathname === '/index.html')) {
+        location.replace('/monitor.html');
+      }
+    })();
+  </script>
+  <!-- Restore theme before first paint to avoid flash -->
+  <script>
+    (function () {
+      const t = localStorage.getItem('theme');
+      if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.setAttribute('data-bs-theme', 'dark');
+      }
+    })();
+  </script>
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+    integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
+    crossorigin="anonymous"
+  />
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+    crossorigin="anonymous"
+  />
+  <link rel="stylesheet" href="/app-shell.css" />
+  <script src="/app-shell.js" defer></script>
+  <style>
+    .device-card { border: 1px solid var(--bs-border-color); border-radius: 1rem; overflow: hidden; transition: box-shadow .15s ease; }
+    .device-card:hover { box-shadow: 0 .35rem 1.2rem rgba(0,0,0,.08); }
+    .device-card .device-icon { display: inline-flex; width: 2.6rem; height: 2.6rem; border-radius: .8rem; align-items: center; justify-content: center; background: var(--bs-tertiary-bg); color: var(--bs-primary); font-size: 1.3rem; }
+    .device-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+    .device-metric { padding: 1rem; border-radius: .8rem; background: var(--bs-tertiary-bg); min-width: 0; }
+    .device-metric .metric-value { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 650; line-height: 1.2; font-variant-numeric: tabular-nums; }
+    .device-metric .metric-label { font-size: .78rem; color: var(--bs-secondary-color); margin-bottom: .4rem; }
+    .device-card details { border-top: 1px solid var(--bs-border-color); }
+    .device-card summary { cursor: pointer; padding: .7rem 1rem; color: var(--bs-secondary-color); font-size: .85rem; }
+    .device-card summary:hover { background: var(--bs-tertiary-bg); }
+    .device-switch-panel { border: 1px solid var(--bs-border-color); border-radius: .75rem; padding: 1rem; }
+    .device-switch-feedback { font-size: .9rem; }
+    .device-switch-message { min-height: 1.1rem; font-size: .78rem; }
+    .device-metric .metric-header { display: flex; align-items: center; justify-content: space-between; gap: .4rem; min-height: 1.8rem; }
+    .device-setpoint-edit { padding: .2rem .4rem; line-height: 1; }
+    .device-setpoint-form[hidden] { display: none !important; }
+    .device-setpoint-form { margin-top: .65rem; }
+    .device-setpoint-form .form-control { min-width: 0; }
+    .device-write-status { font-size: .75rem; min-height: 1rem; overflow-wrap: anywhere; }
+    .device-setpoint-actions { display: flex; gap: .4rem; flex-wrap: wrap; align-items: center; }
+    .device-card .device-detail { display: flex; gap: .5rem; align-items: center; justify-content: space-between; padding: .45rem 1rem; border-top: 1px solid var(--bs-border-color-translucent); font-size: .82rem; }
+    .device-card .device-detail code { font-size: .8rem; }
+    .view-tabs .nav-link { cursor: pointer; }
+    .view-panel[hidden] { display: none !important; }
+    .device-search { max-width: 22rem; }
+    .badge-status { font-size: 0.85rem; padding: 0.4em 0.75em; }
+    #traffic-body tr td:first-child {
+      font-family: monospace; white-space: nowrap; font-size: 0.8rem;
+    }
+    .direction-knx  { color: #0d6efd; font-weight: 600; }
+    .direction-mqtt { color: #198754; font-weight: 600; }
+    #log-wrapper { height: calc(100dvh - 8rem); overflow-y: auto; }
+    #trafficDrawer { --bs-offcanvas-width: min(960px, 100vw); }
+    #trafficDrawer .offcanvas-body { min-height: 0; }
+    #trafficDrawer table { min-width: 680px; }
+    @media (max-width: 575.98px) { #trafficDrawer { --bs-offcanvas-width: 100vw; } }
+    .table-sm td, .table-sm th { vertical-align: middle; }
+    #ga-table td { font-size: 0.9rem; }
+    .empty-msg { color: #6c757d; font-style: italic; }
+    tr.unconfigured td { color: #6c757d; }
+    tr.known-ga { background-color: rgba(13, 110, 253, 0.13); }
+    tr.known-ga td:first-child { border-left: 3px solid rgba(13, 110, 253, 0.5); }
+    /* Sort indicators via pseudo-element – prevents column-width shifts */
+    th[data-sort] { cursor: pointer; user-select: none; white-space: nowrap; }
+    th[data-sort]::after { content: '\00a0\00a0'; }
+    th[data-sort][data-dir="asc"]::after  { content: ' \2191'; }
+    th[data-sort][data-dir="desc"]::after { content: ' \2193'; }
+    th[data-sort]:hover { --bs-table-accent-bg: rgba(255,255,255,0.2); }
+    /* Fixed column widths for GA table */
+    #ga-table { table-layout: fixed; }
+    #ga-table col.col-addr    { width: 7rem; }
+    #ga-table col.col-name    { width: 22%; }
+    #ga-table col.col-dpt     { width: 4.5rem; }
+    #ga-table col.col-comment { }
+    #ga-table col.col-dir     { width: 3rem; }
+    #ga-table col.col-routes  { width: 5rem; }
+    #ga-table col.col-lastval { width: 7rem; }
+    #ga-table col.col-actions { width: 5.5rem; }
+    #ga-table td, #ga-table th { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* Routes list inside the modal */
+    .route-row { border: 1px solid var(--bs-border-color); border-radius: 0.375rem; padding: 0.5rem; margin-bottom: 0.5rem; position: relative; }
+    .route-row .btn-remove-route { position: absolute; top: 0.25rem; right: 0.25rem; }
+    .repeat-icon { font-size: 0.75rem; }
+
+    /* Dashboard: brand + connection controls above, navigation on its own second row. */
+    .dashboard-shell .app-shell-inner { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .5rem 1rem; align-items: center; }
+    .dashboard-shell .app-brand { grid-column: 1; grid-row: 1; justify-self: start; }
+    .dashboard-shell .app-shell-actions { grid-column: 2; grid-row: 1; margin-left: 0; justify-self: end; }
+    .dashboard-shell .app-nav { grid-column: 1 / -1; grid-row: 2; width: 100%; min-width: 0; }
+    @media(max-width:650px) { .dashboard-shell .app-shell-inner { grid-template-columns: 1fr; } .dashboard-shell .app-brand { grid-column: 1; grid-row: 1; } .dashboard-shell .app-shell-actions { grid-column: 1; grid-row: 2; justify-self: start; } .dashboard-shell .app-nav { grid-column: 1; grid-row: 3; overflow-x: auto; flex-wrap: nowrap; } }
+  </style>
+<style>#view-devices{display:none!important}</style></head>
+<body>
+
+<header class="app-shell dashboard-shell"><div class="app-shell-inner">
+  <a class="app-brand" href="/"><i class="bi bi-lightning-charge-fill text-primary me-1"></i> pini.mqtt.KNX</a>
+  <nav class="app-nav" aria-label="Hauptnavigation">
+    <a href="/"><i class="bi bi-speedometer2"></i> Übersicht</a>
+    <a href="/devices.html"><i class="bi bi-grid"></i> KNX-Devices</a>
+    <a href="/addresses.html" aria-current="page"><i class="bi bi-list-ul"></i> Gruppenadressen</a>
+    <a href="/routing.html"><i class="bi bi-diagram-3"></i> Verbindungen</a>
+    <a href="/settings.html"><i class="bi bi-gear"></i> Einstellungen</a>
+  </nav>
+  <div class="app-shell-actions">
+    <span id="knx-badge" class="badge rounded-pill text-bg-warning badge-status" title="KNX-Verbindung wird geprüft" aria-label="KNX: Status unbekannt">KNX <i class="bi bi-circle-fill ms-1" aria-hidden="true"></i></span>
+    <button type="button" id="mqtt-badge" class="badge rounded-pill text-bg-warning badge-status border-0" style="cursor:pointer" title="MQTT neu verbinden" aria-label="MQTT neu verbinden">MQTT <i class="bi bi-circle-fill ms-1" aria-hidden="true"></i></button>
+    <button class="btn btn-sm" type="button" data-bs-toggle="offcanvas" data-bs-target="#trafficDrawer" aria-controls="trafficDrawer" aria-label="Live Logs" title="Live Logs"><i class="bi bi-terminal"></i></button>
+    <button class="btn btn-sm" id="btn-dark-mode" title="Darstellung wechseln" aria-label="Darstellung wechseln"><i class="bi bi-moon-fill" id="dark-mode-icon"></i></button>
+  </div>
+</div></header>
+
+<div class="container-fluid px-4">
+
+<div class="app-page-head"><div><div class="app-eyebrow">Konfiguration · Schritt 1 von 3</div><h1 class="app-page-title h3">Gruppenadressen</h1></div></div>
+  <div hidden><!-- Stats retained for shared script -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-sm-3">
+      <div class="card shadow-sm text-center py-3">
+        <div class="card-body">
+          <h2 class="display-5 fw-bold text-primary" id="cnt-total">0</h2>
+          <p class="mb-0 text-muted">Total telegrams</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-sm-3">
+      <div class="card shadow-sm text-center py-3">
+        <div class="card-body">
+          <h2 class="display-5 fw-bold text-success" id="cnt-knx2mqtt">0</h2>
+          <p class="mb-0 text-muted">KNX → MQTT</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-sm-3">
+      <div class="card shadow-sm text-center py-3">
+        <div class="card-body">
+          <h2 class="display-5 fw-bold text-info" id="cnt-mqtt2knx">0</h2>
+          <p class="mb-0 text-muted">MQTT → KNX</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-sm-3">
+      <div class="card shadow-sm text-center py-3">
+        <div class="card-body">
+          <h2 class="display-5 fw-bold text-warning" id="cnt-last-val">–</h2>
+          <p class="mb-0 text-muted">Last value</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+  <nav aria-label="Dashboard views" class="mb-3" hidden>
+    <ul class="nav nav-pills view-tabs gap-2" role="tablist">
+      <li class="nav-item" role="presentation"><button class="nav-link active" id="tab-devices" type="button" role="tab" aria-selected="true" aria-controls="view-devices"><i class="bi bi-grid me-1"></i> Devices</button></li>
+      <li class="nav-item" role="presentation"><button class="nav-link" id="tab-addresses" type="button" role="tab" aria-selected="false" aria-controls="view-addresses"><i class="bi bi-list-ul me-1"></i> Group Addresses <span class="badge bg-secondary" id="ga-count">0</span></button></li>
+    </ul>
+  </nav>
+  <section id="view-devices" class="view-panel" role="tabpanel" aria-labelledby="tab-devices">
+  <!-- Device view: grouping only, never replaces individual KNX addresses -->
+  <section class="card shadow-sm mb-4" aria-labelledby="devices-title">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span class="fw-semibold" id="devices-title"><i class="bi bi-grid me-2"></i>Devices</span>
+      <button class="btn btn-sm btn-success" id="btn-add-device">+ Add Device</button>
+    </div>
+    <div class="card-body">
+      <p class="text-muted small mb-3">Devices group existing KNX group addresses. Individual addresses remain editable below.</p>
+      <div class="d-flex flex-wrap gap-2 mb-3 align-items-center">
+        <select id="room-filter" class="form-select" style="max-width:14rem" aria-label="Filter devices by room"><option value="all">Alle Räume</option><option value="unassigned">Ohne Raum</option></select>
+        <button type="button" class="btn btn-sm btn-outline-primary" id="btn-manage-rooms">Räume verwalten</button>
+        <input type="search" id="device-search" class="form-control device-search" placeholder="Search devices or addresses…" aria-label="Search devices">
+        <span class="small text-muted" id="device-count"></span>
+      </div>
+      <div id="device-list" class="row g-3"><div class="col-12 text-muted">Loading devices…</div></div>
+    </div>
+  </section>
+
+  </section>
+  <section id="view-addresses" class="view-panel" role="tabpanel" aria-labelledby="tab-addresses" hidden>
+    <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+      <input type="search" id="ga-search" class="form-control device-search" placeholder="Search address, name, DPT…" aria-label="Search group addresses">
+      <select id="ga-filter" class="form-select" style="max-width: 14rem" aria-label="Filter group addresses">
+        <option value="all">All addresses</option>
+        <option value="assigned">Assigned to devices</option>
+        <option value="unassigned">Unassigned</option>
+      </select>
+      <span class="small text-muted" id="ga-filter-count"></span>
+    </div>
+  <!-- Group Addresses card -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card shadow-sm h-100">
+        <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
+          Configured Group Addresses
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-success" id="btn-import-ga">⬆ Import</button>
+            <input type="file" id="ga-import-file" accept=".xml" class="d-none">
+            <button class="btn btn-sm btn-success" id="btn-add-ga">+ Add</button>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm table-striped mb-0" id="ga-table">
+              <colgroup>
+                <col class="col-addr">
+                <col class="col-name">
+                <col class="col-dpt">
+                <col class="col-comment">
+                <col class="col-routes">
+                <col class="col-device">
+                <col class="col-lastval">
+                <col class="col-actions">
+              </colgroup>
+              <thead class="table-dark">
+                <tr>
+                  <th data-sort="address">Address</th>
+                  <th data-sort="name"   >Name</th>
+                  <th data-sort="dpt"    >DPT</th>
+                  <th data-sort="comment">Comment</th>
+                  <th title="Im Routing Designer konfigurieren">Routing</th>
+                  <th data-sort="device" title="Assigned device">Device</th>
+                  <th>Last Value</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="ga-body">
+                <tr><td colspan="8" class="text-center empty-msg p-3">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+  </section>
+
+  <!-- Live traffic drawer -->
+  <div class="offcanvas offcanvas-end" tabindex="-1" id="trafficDrawer" aria-labelledby="trafficDrawerTitle">
+    <div class="offcanvas-header border-bottom">
+      <h5 class="offcanvas-title" id="trafficDrawerTitle"><i class="bi bi-terminal me-2"></i>Live Traffic Log</h5>
+      <div class="d-flex align-items-center gap-2"><button class="btn btn-sm btn-outline-secondary" id="btn-clear">Clear</button><button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button></div>
+    </div>
+    <div class="offcanvas-body p-0">
+      <div id="log-wrapper">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-dark sticky-top">
+            <tr>
+              <th>Timestamp</th>
+              <th>Direction</th>
+              <th>Name / Address</th>
+              <th>MQTT Topic</th>
+              <th>Value</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="traffic-body">
+            <tr><td colspan="6" class="text-center empty-msg p-3">Waiting for traffic…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+
+<!-- ETS import review: no existing GA is changed without explicit approval. -->
+<div class="modal fade" id="gaImportReviewModal" tabindex="-1" aria-labelledby="gaImportReviewTitle" aria-hidden="true">
+ <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title" id="gaImportReviewTitle">ETS-Import prüfen</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button></div>
+  <div class="modal-body"><p class="text-muted small">Bestehende Gruppenadressen werden nur geändert, wenn du die jeweiligen Änderungen auswählst. Neue Adressen können separat übernommen werden. Nicht ausgewählte Änderungen bleiben unverändert.</p>
+   <div id="ga-import-summary" class="fw-semibold mb-3"></div>
+   <div class="d-flex gap-2 flex-wrap mb-3"><button type="button" class="btn btn-sm btn-outline-primary" id="ga-import-select-all">Alle Änderungen auswählen</button><button type="button" class="btn btn-sm btn-outline-primary" id="ga-import-select-new">Nur neue Gruppenadressen</button><button type="button" class="btn btn-sm btn-outline-secondary" id="ga-import-select-none">Alle abwählen</button></div>
+   <div id="ga-import-review-list"></div><div id="ga-import-review-error" class="alert alert-danger d-none mt-3" role="alert"></div>
+  </div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Abbrechen</button><button type="button" class="btn btn-primary" id="ga-import-apply">Ausgewählte Änderungen übernehmen</button></div>
+ </div></div>
+</div>
+
+<!-- Setpoint write dialog -->
+<div class="modal fade" id="setpointModal" tabindex="-1" aria-labelledby="setpointModalTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <form id="setpoint-write-form">
+      <div class="modal-header"><h5 class="modal-title" id="setpointModalTitle">Setpoint</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+      <div class="modal-body">
+        <label class="form-label" for="setpoint-modal-input">New setpoint</label>
+        <div class="input-group"><input type="number" class="form-control" id="setpoint-modal-input" min="5" max="35" step="0.1" required><span class="input-group-text">°C</span></div>
+        <div class="small text-muted mt-2" id="setpoint-modal-address"></div>
+        <div class="small mt-2" id="setpoint-modal-status" role="status">KNX write will be sent; device confirmation is separate.</div>
+      </div>
+      <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary" id="setpoint-modal-send"><i class="bi bi-send me-1"></i>Send to KNX</button></div>
+    </form>
+  </div></div>
+</div>
+
+<!-- Room management -->
+<div class="modal fade" id="roomsModal" tabindex="-1" aria-labelledby="roomsModalTitle" aria-hidden="true">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title" id="roomsModalTitle">Räume verwalten</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button></div>
+    <div class="modal-body">
+      <div id="rooms-error" class="alert alert-danger d-none" role="alert"></div>
+      <form id="room-create-form" class="d-flex gap-2 mb-3">
+        <input id="room-name" class="form-control" maxlength="120" required placeholder="Neuer Raum, z. B. Badezimmer" aria-label="Raumname">
+        <button class="btn btn-primary" type="submit">Anlegen</button>
+      </form>
+      <div id="rooms-list"></div>
+    </div>
+  </div></div>
+</div>
+
+<!-- Device editor -->
+<div class="modal fade" id="deviceModal" tabindex="-1" aria-labelledby="deviceModalTitle" aria-hidden="true">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title" id="deviceModalTitle">Add Device</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+    <div class="modal-body">
+      <div class="alert alert-danger d-none" id="device-error" role="alert"></div>
+      <label class="form-label" for="device-name">Device name</label>
+      <input class="form-control mb-3" id="device-name" maxlength="120" placeholder="e.g. Office heating">
+      <label class="form-label" for="device-room">Raum</label>
+      <select class="form-select mb-3" id="device-room"><option value="">Ohne Raum</option></select>
+      <label class="form-label" for="device-template">Template</label>
+      <select class="form-select mb-3" id="device-template"></select>
+      <div id="device-objects"></div>
+      <p class="small text-muted mt-2 mb-0">Select existing group addresses explicitly. No sequential address assumptions or automatic changes to DPT. Routing directions are configured in the Routing Designer.</p>
+    </div>
+    <div class="modal-footer justify-content-between">
+      <button type="button" class="btn btn-outline-danger d-none" id="btn-delete-device-dialog"><i class="bi bi-trash me-1"></i>Delete device</button>
+      <div class="d-flex gap-2 ms-auto"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-primary" id="btn-save-device">Save Device</button></div>
+    </div>
+  </div></div>
+</div>
+
+<!-- Add / Edit Group Address Modal -->
+<div class="modal fade" id="gaModal" tabindex="-1" aria-labelledby="gaModalTitle" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="gaModalTitle">Add Group Address</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="ga-form-error" class="alert alert-danger d-none"></div>
+        <div class="mb-3">
+          <label for="ga-address" class="form-label">Address <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="ga-address" placeholder="e.g. 9/0/1">
+        </div>
+        <div class="mb-3">
+          <label for="ga-name" class="form-label">Name</label>
+          <input type="text" class="form-control" id="ga-name" placeholder="e.g. Living Room Light">
+        </div>
+        <div class="mb-3">
+          <label for="ga-dpt" class="form-label">DPT</label>
+          <input type="text" class="form-control" id="ga-dpt" placeholder="e.g. 1.001">
+        </div>
+        <div class="mb-3">
+          <label for="ga-comment" class="form-label">Comment</label>
+          <input type="text" class="form-control" id="ga-comment" placeholder="Optional note">
+        </div>
+      </div>
+      <div class="modal-footer">      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btn-save-ga">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script
+  src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+  integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+  crossorigin="anonymous"
+></script>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  /** Format a decoded value for display, adding units based on DPT. */
+  function formatValue(value, dpt) {
+    if (!dpt) return String(value);
+    const [major, minor] = String(dpt).split('.');
+    if (major === '1') return value; // semantic label already assigned by server
+    if (major === '9') {
+      const unit = minor === '001' ? ' °C'
+                 : minor === '002' ? ' K'
+                 : minor === '003' ? ' °C/h'
+                 : minor === '004' ? ' lux'
+                 : minor === '005' ? ' m/s'
+                 : minor === '006' ? ' Pa'
+                 : minor === '007' ? ' %'
+                 : minor === '008' ? ' ppm'
+                 : '';
+      return value + unit;
+    }
+    return String(value);
+  }
+
+  // ── Counters ─────────────────────────────────────────────────────────────────
+  let total = 0, knx2mqtt = 0, mqtt2knx = 0;
+
+  function updateCounters(entry) {
+    total++;
+    if (entry.direction === 'KNX→MQTT') knx2mqtt++;
+    if (entry.direction === 'MQTT→KNX') mqtt2knx++;
+    document.getElementById('cnt-total').textContent    = total;
+    document.getElementById('cnt-knx2mqtt').textContent = knx2mqtt;
+    document.getElementById('cnt-mqtt2knx').textContent = mqtt2knx;
+    document.getElementById('cnt-last-val').textContent = formatValue(entry.value, entry.dpt);
+  }
+
+  // ── Traffic rows ──────────────────────────────────────────────────────────────
+  const tbody = document.getElementById('traffic-body');
+  let hasRows = false;
+
+  function appendRow(entry) {
+    if (!hasRows) { tbody.innerHTML = ''; hasRows = true; }
+    const ts       = new Date(entry.timestamp).toLocaleTimeString();
+    const dirClass = entry.direction === 'KNX→MQTT' ? 'direction-knx' : 'direction-mqtt';
+    const isConf   = entry.configured !== false;
+    const tr       = document.createElement('tr');
+    if (!isConf) tr.classList.add('unconfigured');
+    else         tr.classList.add('known-ga');
+    tr.innerHTML = `
+      <td>${escHtml(ts)}</td>
+      <td><span class="${dirClass}">${escHtml(entry.direction)}</span></td>
+      <td>
+        ${isConf ? escHtml(entry.name || entry.address) : '<em>' + escHtml(entry.address) + '</em>'}
+        <br><small class="text-muted">${escHtml(entry.address)}</small>
+      </td>
+      <td><code>${escHtml(entry.topic)}</code></td>
+      <td><strong>${escHtml(formatValue(String(entry.value), entry.dpt))}</strong></td>
+      <td>${!isConf ? '<button class="btn btn-sm btn-outline-primary btn-add-from-traffic" data-address="' + escHtml(entry.address) + '">+ Add</button>' : ''}</td>
+    `;
+    tbody.prepend(tr);
+    while (tbody.rows.length > 200) tbody.deleteRow(tbody.rows.length - 1);
+  }
+
+  // Delegate "Add to config" clicks from the traffic log
+  tbody.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-add-from-traffic');
+    if (btn) openModal(btn.dataset.address);
+  });
+
+  // ── Status badges ─────────────────────────────────────────────────────────────
+  function updateBadge(service, connected) {
+    const el = document.getElementById(service.toLowerCase() + '-badge');
+    if (!el) return;
+    el.innerHTML = `${service} <i class="bi bi-circle-fill ms-1" aria-hidden="true"></i>`;
+    el.className = `badge rounded-pill badge-status ${connected ? 'text-bg-success' : 'text-bg-danger'} ${service === 'MQTT' ? 'border-0' : ''}`;
+    el.title = service === 'MQTT' ? `MQTT: ${connected ? 'Verbunden' : 'Getrennt'} – klicken zum Neuverbinden` : `${service}: ${connected ? 'Verbunden' : 'Getrennt'}`;
+    el.setAttribute('aria-label', el.title);
+  }
+
+  // ── Group addresses table ─────────────────────────────────────────────────────
+  let configuredGAs = [];
+  const pendingGAValues = new Map();
+  let sortCol = 'address';
+  let sortDir = 1; // 1 = asc, -1 = desc
+
+  function assignedDevices(address) {
+    return devices.flatMap(d => Object.entries(d.addresses || {}).filter(([, ga]) => ga === address).map(([key]) => ({ id: d.id, name: d.name, role: (deviceTemplates.find(t => t.id === d.templateId)?.objects || []).find(o => o.key === key)?.label || key })));
+  }
+
+  // Conservative, read-only device suggestions. Never create or modify devices automatically.
+  function gaBaseName(name) {
+    return String(name || '').replace(/(?:[\s_-]+(?:play\s*\/\s*stop|auf\s*\/\s*ab|stopp\s*\/\s*schritt|stopp|position|an\s*\/\s*aus|schaltbefehl|schalten|schaltstatus|dimmen\s+(?:relativ|absolut)|dimmwert|helligkeitswert|helligkeit|wert|status|rückmeldung|rueckmeldung|feedback|command|ein\s*\/\s*aus|on\s*\/\s*off))\s*$/i, '').trim();
+  }
+  function gaPosition(address) {
+    const parts = String(address).split('/').map(Number);
+    return parts.length === 3 && parts.every(Number.isInteger) ? parts : null;
+  }
+  function gaNeighbor(a, b) {
+    const x = gaPosition(a), y = gaPosition(b);
+    return !!(x && y && x[0] === y[0] && x[1] === y[1] && Math.abs(x[2] - y[2]) === 1);
+  }
+  function gaDirectionMatches(ga, obj) {
+    return !ga.dpt || ga.dpt === obj.dpt || (obj.key === 'stop' && ['1.017', '1.009'].includes(ga.dpt));
+  }
+  function suggestDeviceForGA(ga) {
+    if (assignedDevices(ga.address).length || !deviceTemplates.length) return null;
+    const occupied = new Set(devices.flatMap(d => Object.values(d.addresses || {})));
+    const base = gaBaseName(ga.name);
+    // System telegrams have independent names: match the exact known GA
+    // functions and DPTs, never by adjacent address alone.
+    const systemTemplate=deviceTemplates.find(t=>t.id==='system');
+    if(systemTemplate){
+      const patterns={
+        date:/^datum$/i,
+        time:/^uhrzeit$/i,
+        dateTime:/^datum\s*\/\s*uhrzeit$/i,
+        dayNight:/^tag\s*\/\s*nacht$/i
+      };
+      const matches={};
+      for(const obj of systemTemplate.objects){
+        const found=configuredGAs.filter(g=>!occupied.has(g.address)&&patterns[obj.key].test((g.name||'').trim())&&gaDirectionMatches(g,obj));
+        if(found.length===1)matches[obj.key]=found[0].address;
+      }
+      if(Object.keys(matches).length===4&&new Set(Object.values(matches)).size===4)
+        return {templateId:'system',templateName:systemTemplate.name,name:'System',addresses:matches,score:100};
+    }
+    if (!base || base === ga.name && !/\s/.test(base)) return null;
+    // BigAssFan uses two independent command/status pairs. Match by signal
+    // name and DPT, never by adjacency (the light status may skip an address).
+    const fanTemplate=deviceTemplates.find(t=>t.id==='bigassfan');
+    if(fanTemplate && /^bigassfan(?:\b|\s|$)/i.test(base)){
+      const group=configuredGAs.filter(g=>!occupied.has(g.address)&&/^bigassfan\b/i.test(g.name||''));
+      const signalPatterns={
+        fanCommand:/^bigassfan\s+power$/i,
+        fanStatus:/^bigassfan\s+power\s+status$/i,
+        lightCommand:/^bigassfan\s+light$/i,
+        lightStatus:/^bigassfan\s+light\s+status$/i
+      };
+      const matches={};
+      for(const obj of fanTemplate.objects){
+        const found=group.filter(g=>signalPatterns[obj.key].test((g.name||'').trim())&&gaDirectionMatches(g,obj));
+        if(found.length===1)matches[obj.key]=found[0].address;
+      }
+      if(Object.keys(matches).length===4&&new Set(Object.values(matches)).size===4)
+        return {templateId:'bigassfan',templateName:fanTemplate.name,name:'BigAssFan',addresses:matches,score:100};
+    }
+    const shutterTemplate=deviceTemplates.find(t=>t.id==='roller-shutter');
+    if(shutterTemplate){
+      const group=configuredGAs.filter(g=>!occupied.has(g.address)&&gaBaseName(g.name).toLowerCase()===base.toLowerCase());
+      const patterns={upDown:/auf.ab/i,stop:/stopp/i,position:/position/i};
+      const matches={};
+      for(const object of shutterTemplate.objects){
+        const found=group.filter(g=>patterns[object.key].test(g.name||'')&&gaDirectionMatches(g,object));
+        if(found.length===1)matches[object.key]=found[0].address;
+      }
+      if(Object.keys(matches).length===3&&new Set(Object.values(matches)).size===3)
+        return {templateId:'roller-shutter',templateName:shutterTemplate.name,name:base,addresses:matches,score:100};
+    }
+    // Absolute dimmers share DPTs across command and status; names disambiguate.
+    const absoluteTemplate=deviceTemplates.find(t=>t.id==='dimmer-absolute');
+    if(absoluteTemplate){
+      const group=configuredGAs.filter(g=>!occupied.has(g.address)&&gaBaseName(g.name).toLowerCase()===base.toLowerCase());
+      const patterns={
+        command:/(?:^|\s)(?:an\s*\/\s*aus|schalten|schaltbefehl)$/i,
+        dimAbsolute:/(?:^|\s)(?:dimmen\s+absolut|dimmwert)$/i,
+        status:/(?:^|\s)(?:status|schaltstatus)$/i,
+        brightness:/(?:^|\s)(?:wert|helligkeitswert|helligkeit)$/i
+      };
+      const matches={};
+      for(const obj of absoluteTemplate.objects){
+        const found=group.filter(g=>patterns[obj.key].test((g.name||'').trim())&&gaDirectionMatches(g,obj));
+        if(found.length===1)matches[obj.key]=found[0].address;
+      }
+      if(Object.keys(matches).length===4&&new Set(Object.values(matches)).size===4)
+        return {templateId:'dimmer-absolute',templateName:absoluteTemplate.name,name:base,addresses:matches,score:100};
+    }
+    // Prefer a complete four-address dimmer block over the generic switch
+    // and Sonos templates when all KNX datapoint types and names agree.
+    const dimmerTemplate=deviceTemplates.find(t=>t.id==='dimmer');
+    if(dimmerTemplate){
+      const matches={};
+      const pattern=/\b(dimm|helligkeit|wert)\b/i;
+      const group=configuredGAs.filter(g=>!occupied.has(g.address)&&gaBaseName(g.name).toLowerCase()===base.toLowerCase());
+      for(const object of dimmerTemplate.objects){
+        const candidates=group.filter(g=>gaDirectionMatches(g,object));
+        if(candidates.length===1)matches[object.key]=candidates[0].address;
+      }
+      const dimmingNamed=group.some(g=>/dimm/i.test(g.name||''));
+      if(dimmingNamed&&Object.keys(matches).length===4&&new Set(Object.values(matches)).size===4)
+        return {templateId:'dimmer',templateName:dimmerTemplate.name,name:base,addresses:matches,score:100};
+    }
+    const candidates = [];
+    for (const tpl of deviceTemplates) {
+      const required = tpl.objects.filter(o => !o.optional);
+      if (required.length < 2) continue;
+      for (const object of required) {
+        if (!gaDirectionMatches(ga, object)) continue;
+        const matches = { [object.key]: ga.address };
+        let score = 0;
+        let valid = true;
+        for (const other of required.filter(o => o.key !== object.key)) {
+          const possibilities = configuredGAs.filter(g => g.address !== ga.address && !occupied.has(g.address) && gaDirectionMatches(g, other))
+            .map(g => {
+              const otherBase = gaBaseName(g.name);
+              const sameName = otherBase && otherBase.toLowerCase() === base.toLowerCase();
+              const adjacent = gaNeighbor(ga.address, g.address);
+              return { ga: g, sameName, adjacent, points: (sameName ? 5 : 0) + (adjacent ? 2 : 0) };
+            }).filter(m => m.sameName && m.points >= 5).sort((a, b) => b.points - a.points);
+          if (!possibilities.length) { valid = false; break; }
+          matches[other.key] = possibilities[0].ga.address;
+          score += possibilities[0].points;
+        }
+        if (valid && new Set(Object.values(matches)).size === required.length) candidates.push({ templateId: tpl.id, templateName: tpl.name, name: base, addresses: matches, score });
+      }
+    }
+    candidates.sort((a, b) => b.score - a.score);
+    // Sonos extends Switch with optional volume signals. Both templates can
+    // match the same command/status pair; prefer Sonos only for Sonos-like names
+    // or when the corresponding volume addresses exist.
+    const isSonos=/sonos/i.test(base)||configuredGAs.some(g=>/volume|lautstärke/i.test(g.name||'')&&gaBaseName(g.name).toLowerCase()===base.toLowerCase());
+    for(const candidate of candidates){
+      if(candidate.templateId===(isSonos?'sonos':'switch'))candidate.score+=1;
+    }
+    candidates.sort((a,b)=>b.score-a.score);
+    return candidates.length && (candidates.length===1||candidates[0].score>candidates[1].score)?candidates[0]:null;
+  }
+
+  function sortedGAs() {
+    if (!sortCol) return configuredGAs.slice();
+    return configuredGAs.slice().sort((a, b) => {
+      if (sortCol === 'address') {
+        const aParts = gaPosition(a.address), bParts = gaPosition(b.address);
+        if (aParts && bParts) {
+          for (let i = 0; i < 3; i++) {
+            if (aParts[i] !== bParts[i]) return (aParts[i] - bParts[i]) * sortDir;
+          }
+          return 0;
+        }
+        if (aParts) return -sortDir;
+        if (bParts) return sortDir;
+      }
+      const av = String(sortCol === 'device' ? assignedDevices(a.address).map(d => d.name).join(', ') : a[sortCol] || '').toLowerCase();
+      const bv = String(sortCol === 'device' ? assignedDevices(b.address).map(d => d.name).join(', ') : b[sortCol] || '').toLowerCase();
+      return av < bv ? -sortDir : av > bv ? sortDir : 0;
+    });
+  }
+
+  
+  function renderGATable(addresses) {
+    configuredGAs = addresses;
+    renderDevices();
+    const gaBody = document.getElementById('ga-body');
+    const search = document.getElementById('ga-search').value.trim().toLowerCase();
+    const filter = document.getElementById('ga-filter').value;
+    const assigned = new Set(devices.flatMap(d => Object.values(d.addresses || {})));
+    const sorted = sortedGAs().filter(ga => {
+      if (filter === 'assigned' && !assigned.has(ga.address)) return false;
+      if (filter === 'unassigned' && assigned.has(ga.address)) return false;
+      return [ga.address, ga.name, ga.dpt, ga.comment, ...assignedDevices(ga.address).flatMap(d => [d.name, d.role])].some(v => String(v || '').toLowerCase().includes(search));
+    });
+    document.getElementById('ga-count').textContent = configuredGAs.length;
+    document.getElementById('ga-filter-count').textContent = sorted.length + ' of ' + configuredGAs.length;
+    if (!sorted.length) {
+      gaBody.innerHTML = '<tr><td colspan="9" class="text-center empty-msg p-3">No group addresses configured.</td></tr>';
+      return;
+    }
+    // Use real rowspan for contiguous visible rows. Recreate the per-row zebra
+    // background inside each spanning cell after layout.
+    const deviceGroups = sorted.map(ga => {
+      const assigned = assignedDevices(ga.address);
+      // Configured mappings must stay visible on every row: each GA has a distinct object role.
+      if (assigned.length) return null;
+      const suggestion = suggestDeviceForGA(ga);
+      return suggestion ? { key: 'suggested:' + suggestion.templateId + ':' + suggestion.name.toLowerCase() + ':' + Object.entries(suggestion.addresses).sort().map(([k, v]) => k + '=' + v).join('|'), kind: 'suggested' } : null;
+    });
+    const spans = sorted.map(() => 1);
+    for (let i = 0; i < sorted.length;) {
+      const group = deviceGroups[i];
+      if (!group) { i++; continue; }
+      let end = i + 1;
+      while (end < sorted.length && deviceGroups[end] && deviceGroups[end].key === group.key) end++;
+      spans[i] = end - i;
+      for (let j = i + 1; j < end; j++) spans[j] = 0;
+      i = end;
+    }
+    gaBody.innerHTML = sorted.map((ga, rowIndex) => {
+      const routesBadge = `<a class="badge bg-info text-dark text-decoration-none" href="/routing.html?ga=${encodeURIComponent(ga.address)}" title="Im Routing Designer anzeigen">Designer</a>`;
+      const repeatBadge = '';
+      const assignments = assignedDevices(ga.address);
+      const suggestion = assignments.length ? null : suggestDeviceForGA(ga);
+      const deviceCell = assignments.length ? assignments.map(d => `<div><span class="fw-semibold">${escHtml(d.name)}</span><span class="small text-muted ms-1">(${escHtml(d.role)})</span></div>`).join('') : suggestion ? `<button type="button" class="btn btn-sm btn-primary btn-suggest-device" data-address="${escHtml(ga.address)}" title="Review suggested device mapping"><i class="bi bi-lightbulb me-1"></i>${escHtml(suggestion.templateName)}</button>` : '<span class="text-muted">–</span>';
+      return `
+      <tr>
+        <td><code>${escHtml(ga.address)}</code></td>
+        <td>${escHtml(ga.name || '')}</td>
+        <td><small>${escHtml(ga.dpt || '')}</small></td>
+        <td><small class="text-muted">${escHtml(ga.comment || '')}</small></td>
+        <td>${routesBadge}${repeatBadge}</td>
+        ${spans[rowIndex] ? `<td rowspan="${spans[rowIndex]}" class="align-middle text-center ga-device-cell">${deviceCell}</td>` : ''}
+        <td class="ga-last-value"><strong>${escHtml(ga.lastValue !== undefined && ga.lastValue !== null ? formatValue(ga.lastValue, ga.dpt) : '–')}</strong></td>
+        <td class="text-end text-nowrap">
+          <button class="btn btn-sm btn-outline-secondary btn-edit-ga me-1" data-address="${escHtml(ga.address)}" aria-label="Edit"><i class="bi bi-pencil-fill"></i></button>
+          <button class="btn btn-sm btn-outline-danger btn-delete-ga"       data-address="${escHtml(ga.address)}" aria-label="Delete"><i class="bi bi-trash-fill"></i></button>
+        </td>
+      </tr>
+    `;
+    }).join('');
+    // Bootstrap stripes are painted on individual cells; a rowspan would otherwise
+    // inherit only the first row's stripe. Build matching stripe bands using actual
+    // rendered row heights, including when filtering or sorting changes the order.
+    for (const cell of gaBody.querySelectorAll('td.ga-device-cell[rowspan]')) {
+      const count = Number(cell.rowSpan);
+      if (count < 2) continue;
+      const rows = Array.from(gaBody.rows);
+      const first = rows.indexOf(cell.parentElement);
+      if (first < 0) continue;
+      let offset = 0;
+      const stops = [];
+      for (let i = first; i < Math.min(first + count, rows.length); i++) {
+        const height = rows[i].getBoundingClientRect().height;
+        const stripe = i % 2 === 0 ? 'var(--bs-table-striped-bg)' : 'transparent';
+        stops.push(stripe + ' ' + offset + 'px', stripe + ' ' + (offset + height) + 'px');
+        offset += height;
+      }
+      // Bootstrap table stripes are drawn with an inset box-shadow, which otherwise
+      // paints over our gradient. Override it with !important for rowspan cells only.
+      cell.style.setProperty('box-shadow', 'none', 'important');
+      cell.style.setProperty('background-color', 'var(--bs-table-bg)', 'important');
+      cell.style.backgroundImage = 'linear-gradient(to bottom, ' + stops.join(', ') + ')';
+    }
+  }
+
+  // ── GA table column sorting ───────────────────────────────────────────────────
+  function updateSortIndicators() {
+    document.querySelectorAll('#ga-table thead th[data-sort]').forEach((th) => {
+      if (th.dataset.sort === sortCol) {
+        th.dataset.dir = sortDir === 1 ? 'asc' : 'desc';
+      } else {
+        delete th.dataset.dir;
+      }
+    });
+  }
+
+  document.querySelectorAll('#ga-table thead th[data-sort]').forEach((th) => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.sort;
+      if (sortCol === col) { sortDir *= -1; }
+      else { sortCol = col; sortDir = 1; }
+      updateSortIndicators();
+      renderGATable(configuredGAs);
+    });
+  });
+
+  updateSortIndicators();
+
+  /** Update the Last Value cell for a GA row without re-rendering the whole table. */
+  function updateGALastValue(entry) {
+    const ga = configuredGAs.find(g => g.address === entry.address);
+    if (ga) ga.lastValue = entry.value;
+    // Find the row whose first cell contains the matching address
+    const rows = document.getElementById('ga-body').rows;
+    for (const row of rows) {
+      const codeEl = row.cells[0] && row.cells[0].querySelector('code');
+      if (codeEl && codeEl.textContent === entry.address) {
+        // Update the in-memory GA object so modal edits reflect current DPT
+        // Rowspans change cell indexes; select by class instead.
+        const cell = row.querySelector('.ga-last-value');
+        if (cell) cell.innerHTML = `<strong>${escHtml(formatValue(entry.value, entry.dpt))}</strong>`;
+        break;
+      }
+    }
+    renderDevices();
+  }
+
+  document.getElementById('ga-body').addEventListener('click', e => {
+    const button = e.target.closest('.btn-suggest-device');
+    if (!button) return;
+    const ga = configuredGAs.find(g => g.address === button.dataset.address);
+    const suggestion = ga && suggestDeviceForGA(ga);
+    if (!suggestion) return;
+    openDeviceEditor();
+    document.getElementById('device-name').value = suggestion.name;
+    deviceTemplateSelect.value = suggestion.templateId;
+    renderDeviceFields(suggestion.addresses);
+  });
+
+  // Delegate edit / delete clicks in the GA table
+  document.getElementById('ga-body').addEventListener('click', (e) => {
+    const editBtn   = e.target.closest('.btn-edit-ga');
+    const deleteBtn = e.target.closest('.btn-delete-ga');
+    if (editBtn)   openModal(editBtn.dataset.address, true);
+    if (deleteBtn) deleteGA(deleteBtn.dataset.address);
+  });
+
+  function deleteGA(address) {
+    if (!confirm(`Remove group address ${address} from the configuration?`)) return;
+    fetch('/api/groupaddresses/' + encodeURIComponent(address), { method: 'DELETE' })
+      .catch((err) => console.error('Delete GA failed:', err));
+  }
+
+  // ── Add / Edit modal ──────────────────────────────────────────────────────────
+  const gaModal      = new bootstrap.Modal(document.getElementById('gaModal'));
+  const addrInput    = document.getElementById('ga-address');
+  const nameInput    = document.getElementById('ga-name');
+  const dptInput     = document.getElementById('ga-dpt');
+  const commentInput = document.getElementById('ga-comment');
+  const formError    = document.getElementById('ga-form-error');
+
+  function openModal(prefillAddress, editMode) {
+    formError.classList.add('d-none');
+    const ga = editMode ? configuredGAs.find((g) => g.address === prefillAddress) : null;
+    document.getElementById('gaModalTitle').textContent = ga ? 'Edit Group Address' : 'Add Group Address';
+    addrInput.value    = prefillAddress || '';
+    addrInput.readOnly = Boolean(ga);
+    nameInput.value    = ga ? (ga.name    || '') : '';
+    dptInput.value     = ga ? (ga.dpt     || '') : '';
+    commentInput.value = ga ? (ga.comment || '') : '';
+    gaModal.show();
+    if (!addrInput.readOnly) addrInput.focus();
+  }
+
+
+  document.getElementById('btn-add-ga').addEventListener('click', () => openModal(''));
+
+  // ── ETS XML Import ────────────────────────────────────────────────────────────
+  /**
+   * Convert an ETS DPT string such as "DPST-1-8" or "DPT-1" to the internal
+   * dotted format used by this app ("1.008" or "1.001").
+   */
+  function etsDptToDotted(raw) {
+    if (!raw) return '';
+    const dpst = raw.match(/^DPST-(\d+)-(\d+)$/i);
+    if (dpst) return `${dpst[1]}.${dpst[2].padStart(3, '0')}`;
+    const dpt  = raw.match(/^DPT-(\d+)$/i);
+    if (dpt)  return `${dpt[1]}.001`;
+    return raw; // already in another format – pass through
+  }
+
+  /** Parse an ETS GroupAddress-Export XML string and return an array of GA objects. */
+  function parseETSXml(xmlText) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xmlText, 'text/xml');
+    const parseErr = doc.querySelector('parsererror');
+    if (parseErr) throw new Error('Invalid XML: ' + (parseErr.textContent.trim().split('\n')[0] || 'parse error'));
+    const results = [];
+    doc.querySelectorAll('GroupAddress').forEach((el) => {
+      const address = el.getAttribute('Address') || '';
+      if (!address) return;
+      results.push({
+        address,
+        name:    el.getAttribute('Name')    || '',
+        dpt:     etsDptToDotted(el.getAttribute('DPTs') || ''),
+        comment: '',
+      });
+    });
+    return results;
+  }
+
+  const importFileInput = document.getElementById('ga-import-file');
+  const gaImportModal = new bootstrap.Modal(document.getElementById('gaImportReviewModal'));
+  let importCandidates = [];
+  let importSnapshot = [];
+  let importSelection = new Set();
+
+  document.getElementById('btn-import-ga').addEventListener('click', () => {
+    importFileInput.value = '';
+    importFileInput.click();
+  });
+
+  async function reviewImport(addresses) {
+    // Compare against authoritative server state, not a possibly stale socket snapshot.
+    const currentResponse = await fetch('/api/groupaddresses', {cache:'no-store'});
+    if (!currentResponse.ok) throw new Error('Aktuelle Gruppenadressen konnten nicht geladen werden (HTTP '+currentResponse.status+')');
+    configuredGAs = await currentResponse.json();
+    const existing = new Map(configuredGAs.map(ga => [ga.address, ga]));
+    const unique = new Set();
+    if (addresses.some(ga => { if (unique.has(ga.address)) return true; unique.add(ga.address); return false; })) {
+      throw new Error('Die ETS-Datei enthält doppelte Gruppenadressen.');
+    }
+    importCandidates = [];
+    importSnapshot = [];
+    for (const ga of addresses) {
+      const old = existing.get(ga.address);
+      const changes = [];
+      if (old) {
+        for (const field of ['name', 'dpt']) {
+          // Empty/missing ETS attributes are not a request to erase existing data.
+          if (ga[field] && ga[field] !== (old[field] || '')) {
+            changes.push({ field, before: old[field] || '', after: ga[field] });
+          }
+        }
+      }
+      if (!old || changes.length) {
+        importCandidates.push({ address: ga.address, name: ga.name, dpt: ga.dpt, old, changes });
+        importSnapshot.push(old ? { address: ga.address, name: old.name || '', dpt: old.dpt || '', comment: old.comment || '' } : { address: ga.address });
+      }
+    }
+    importSelection = new Set(importCandidates.map((_, i) => i));
+    const newCount = importCandidates.filter(c => !c.old).length;
+    const changedCount = importCandidates.length - newCount;
+    document.getElementById('ga-import-summary').textContent =
+      addresses.length + ' importierte Adressen · ' + newCount + ' neu · ' + changedCount + ' mit Änderungen · ' + (addresses.length - importCandidates.length) + ' unverändert';
+    document.getElementById('ga-import-review-error').classList.add('d-none');
+    renderImportReview();
+    gaImportModal.show();
+  }
+
+  function renderImportReview() {
+    const list = document.getElementById('ga-import-review-list');
+    list.innerHTML = importCandidates.length ? importCandidates.map((candidate, i) => {
+      const checked = importSelection.has(i) ? 'checked' : '';
+      const description = candidate.old
+        ? candidate.changes.map(change => '<div class="small mt-1"><strong>' + escHtml(change.field === 'dpt' ? 'DPT' : 'Name') + ':</strong> <del class="text-muted">' + escHtml(change.before || '(leer)') + '</del> → <strong>' + escHtml(change.after) + '</strong></div>').join('')
+        : '<div class="small text-success">Neue Gruppenadresse · Name: ' + escHtml(candidate.name || '(leer)') + '</div>';
+      return '<label class="d-flex gap-3 align-items-start border rounded p-3 mb-2" style="cursor:pointer"><input type="checkbox" class="form-check-input mt-1" data-import-index="' + i + '" ' + checked + '><span><strong>' + escHtml(candidate.address) + '</strong> <span class="badge ' + (candidate.old ? 'text-bg-warning' : 'text-bg-success') + '">' + (candidate.old ? 'Änderung' : 'Neu') + '</span>' + description + '</span></label>';
+    }).join('') : '<p class="text-muted">Keine Änderungen erkannt. Bestehende Gruppenadressen bleiben unverändert.</p>';
+    document.getElementById('ga-import-apply').disabled = !importSelection.size;
+  }
+  document.getElementById('ga-import-review-list').addEventListener('change', event => {
+    const checkbox = event.target.closest('[data-import-index]');
+    if (!checkbox) return;
+    const i = Number(checkbox.dataset.importIndex);
+    if (checkbox.checked) importSelection.add(i); else importSelection.delete(i);
+    document.getElementById('ga-import-apply').disabled = !importSelection.size;
+  });
+  document.getElementById('ga-import-select-all').addEventListener('click', () => { importSelection = new Set(importCandidates.map((_, i) => i)); renderImportReview(); });
+  document.getElementById('ga-import-select-new').addEventListener('click', () => { importSelection = new Set(importCandidates.flatMap((candidate, i) => candidate.old ? [] : [i])); renderImportReview(); });
+  document.getElementById('ga-import-select-none').addEventListener('click', () => { importSelection.clear(); renderImportReview(); });
+
+  importFileInput.addEventListener('change', () => {
+    const file = importFileInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async event => {
+      try {
+        const addresses = parseETSXml(event.target.result);
+        if (!addresses.length) throw new Error('Keine Gruppenadressen in der Datei gefunden.');
+        await reviewImport(addresses);
+      } catch (err) { alert('Import fehlgeschlagen: ' + err.message); }
+    };
+    reader.onerror = () => alert('ETS-Datei konnte nicht gelesen werden.');
+    reader.readAsText(file);
+  });
+
+  document.getElementById('ga-import-apply').addEventListener('click', async () => {
+    const button = document.getElementById('ga-import-apply');
+    const error = document.getElementById('ga-import-review-error');
+    const chosen = importCandidates.filter((_, i) => importSelection.has(i));
+    if (!chosen.length) return;
+    const addresses = chosen.map(candidate => {
+      if (!candidate.old) return { address: candidate.address, name: candidate.name || '', dpt: candidate.dpt || '' };
+      const patch = { address: candidate.address };
+      candidate.changes.forEach(change => { patch[change.field] = change.after; });
+      return patch;
+    });
+    const expected = chosen.map(candidate => candidate.old
+      ? { address: candidate.address, name: candidate.old.name || '', dpt: candidate.old.dpt || '', comment: candidate.old.comment || '' }
+      : { address: candidate.address });
+    button.disabled = true;
+    error.classList.add('d-none');
+    try {
+      const response = await fetch('/api/groupaddresses/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ addresses, expected }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'HTTP ' + response.status);
+      gaImportModal.hide();
+      alert('ETS-Import abgeschlossen: ' + result.added + ' neu, ' + result.updated + ' geändert.');
+    } catch (err) {
+      error.textContent = 'Import nicht durchgeführt: ' + err.message;
+      error.classList.remove('d-none');
+    } finally { button.disabled = !importSelection.size; }
+  });
+
+  document.getElementById('btn-save-ga').addEventListener('click', () => {
+    const address = addrInput.value.trim();
+    if (!address) {
+      formError.textContent = 'Address is required.';
+      formError.classList.remove('d-none');
+      return;
+    }
+    const body = {
+      address,
+      name:      nameInput.value.trim(),
+      dpt:       dptInput.value.trim(),
+      comment:   commentInput.value.trim(),
+    };
+    fetch('/api/groupaddresses', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+    })
+      .then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
+      .then(() => gaModal.hide())
+      .catch((err) => {
+        formError.textContent = 'Save failed: ' + err.message;
+        formError.classList.remove('d-none');
+      });
+  });
+
+  // ── Socket events ─────────────────────────────────────────────────────────────
+  socket.on('init', (log) => {
+    log.forEach((entry) => { appendRow(entry); updateCounters(entry); });
+  });
+
+  socket.on('traffic', (entry) => {
+    appendRow(entry);
+    updateCounters(entry);
+    // Value updates arrive separately via ga-value; traffic remains log-only.
+  });
+
+  socket.on('status', ({ service, connected }) => updateBadge(service, connected));
+
+  socket.on('groupaddresses', addresses => { renderGATable(addresses);  });
+  socket.on('ga-value', ({ address, value, confirmed }) => {
+    if (confirmed) {
+      pendingGAValues.delete(address);
+      updateGALastValue({ address, value });
+    } else {
+      pendingGAValues.set(address, value);
+      renderDevices();
+    }
+  });
+  socket.on('value-snapshot', ({ values, pending }) => {
+    pendingGAValues.clear();
+    Object.entries(pending || {}).forEach(([address, value]) => pendingGAValues.set(address, value));
+    Object.entries(values || {}).forEach(([address, value]) => {
+      const ga = configuredGAs.find(g => g.address === address);
+      if (ga) ga.lastValue = value;
+    });
+    renderDevices();
+  });
+
+  document.getElementById('mqtt-badge').addEventListener('click', () => {
+    socket.emit('mqtt-restart');
+  });
+
+  // ── Dark mode toggle ──────────────────────────────────────────────────────────
+  (function initDarkModeButton() {
+    const html     = document.documentElement;
+    const btn      = document.getElementById('btn-dark-mode');
+    const icon     = document.getElementById('dark-mode-icon');
+
+    function applyTheme(theme) {
+      html.setAttribute('data-bs-theme', theme);
+      icon.className = theme === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-fill';
+      localStorage.setItem('theme', theme);
+    }
+
+    // Sync icon with the already-applied theme (set by the inline script)
+    applyTheme(html.getAttribute('data-bs-theme') || 'light');
+
+    btn.addEventListener('click', () => {
+      applyTheme(html.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark');
+    });
+  })();
+
+  // ── Hybrid device templates ──────────────────────────────────────────────────
+  let devices = [], deviceTemplates = [], rooms = [], editingDeviceId = null;
+  const deviceModal = new bootstrap.Modal(document.getElementById('deviceModal'));
+  const setpointModal = new bootstrap.Modal(document.getElementById('setpointModal'));
+  document.getElementById('setpointModal').addEventListener('shown.bs.modal', () => document.getElementById('setpoint-modal-input').focus());
+  let setpointDeviceId = null;
+  const deviceError = document.getElementById('device-error');
+  const deviceObjects = document.getElementById('device-objects');
+  const deviceTemplateSelect = document.getElementById('device-template');
+  function deviceTemplate(id) { return deviceTemplates.find(t => t.id === id); }
+  function renderDevices() {
+    const target = document.getElementById('device-list');
+    const term = document.getElementById('device-search').value.trim().toLowerCase();
+    const roomFilter=document.getElementById('room-filter').value;
+    const visible = devices.filter(d => (roomFilter==='all'||(roomFilter==='unassigned'?!d.roomId:d.roomId===roomFilter)) && [d.name, d.templateId, rooms.find(r=>r.id===d.roomId)?.name||'', ...Object.values(d.addresses || {})].some(v => String(v).toLowerCase().includes(term)));
+    document.getElementById('device-count').textContent = visible.length + ' of ' + devices.length + ' devices';
+    if (!visible.length) {
+      target.innerHTML = '<div class="col-12 text-muted">' + (devices.length ? 'No matching devices.' : 'No devices yet. Create a device using existing group addresses; individual addresses stay active.') + '</div>';
+      return;
+    }
+    // Preserve expanded technical details across live value refreshes.
+    const expanded = new Set([...target.querySelectorAll('details[open][data-device-id]')].map(el => el.dataset.deviceId));
+    const gaByAddress = new Map(configuredGAs.map(ga => [ga.address, ga]));
+    const metric = (d, key, label, actions = '', editor = '') => {
+      const address = d.addresses && d.addresses[key];
+      const ga = address ? gaByAddress.get(address) : null;
+      const pending = address && pendingGAValues.has(address);
+      const raw = pending ? pendingGAValues.get(address) : ga && ga.lastValue;
+      const numeric = raw !== undefined && raw !== null && raw !== '' ? Number(raw) : NaN;
+      const value = Number.isFinite(numeric) ? numeric.toLocaleString(undefined, { maximumFractionDigits: 1 }) + ' °C' : '–';
+      const hint = !address ? 'Not assigned' : !ga ? 'Address missing' : pending ? address + ' · sent, not confirmed' : !Number.isFinite(numeric) ? 'No live value' : address;
+      return `<div class="device-metric"><div class="metric-header"><div class="metric-label mb-0">${escHtml(label)}</div>${actions}</div><div class="metric-value">${escHtml(value)}</div><div class="small text-muted mt-2">${escHtml(hint)}</div>${editor}</div>`;
+    };
+    const sortedRooms=[...rooms].sort((a,b)=>a.name.localeCompare(b.name,'de',{sensitivity:'base'}));
+    const roomOrder=new Map(sortedRooms.map((room,index)=>[room.id,index]));
+    const roomColors=['#3b82f6','#10b981','#a855f7','#f59e0b','#ec4899','#06b6d4','#ef4444','#84cc16'];
+    const ordered=[...visible].sort((a,b)=>{
+      const ai=roomOrder.has(a.roomId)?roomOrder.get(a.roomId):Infinity;
+      const bi=roomOrder.has(b.roomId)?roomOrder.get(b.roomId):Infinity;
+      return ai-bi||a.name.localeCompare(b.name,'de',{sensitivity:'base'});
+    });
+    let previousRoom=null;
+    target.innerHTML = ordered.map(d => {
+      const room=rooms.find(r=>r.id===d.roomId);
+      const roomKey=room?.id||'unassigned';
+      const color=room?roomColors[roomOrder.get(room.id)%roomColors.length]:'#94a3b8';
+      const firstOfRoom=previousRoom!==roomKey;
+      previousRoom=roomKey;
+      const heading=firstOfRoom?'<div class="col-12 mt-4"><div class="d-flex align-items-center gap-2 pb-2 border-bottom" style="border-bottom-color:'+color+' !important"><span aria-hidden="true" style="width:5px;height:22px;border-radius:4px;background:'+color+'"></span><h3 class="h6 mb-0">'+escHtml(room?.name||'Ohne Raum')+'</h3><span class="small text-muted">'+ordered.filter(item=>(item.roomId||'unassigned')===roomKey).length+' Devices</span></div></div>':'';
+
+      const tpl = deviceTemplate(d.templateId);
+      const isHeating = d.templateId === 'room-heating';
+      const isSwitch = d.templateId === 'switch';
+      const missing = Object.values(d.addresses || {}).filter(address => !gaByAddress.has(address));
+      const detailRows = (tpl ? tpl.objects : []).filter(o => d.addresses && d.addresses[o.key]).map(o => {
+        const address = d.addresses[o.key];
+        const ga = gaByAddress.get(address);
+        const value = ga && ga.lastValue != null ? formatValue(ga.lastValue, ga.dpt) : '–';
+        return `<div class="device-detail"><span>${escHtml(o.label)} <code class="ms-1">${escHtml(address)}</code></span><span class="text-end">${escHtml(value)}</span></div>`;
+      }).join('');
+      const status = missing.length ? '<span class="badge text-bg-warning">Mapping incomplete</span>' : '';
+      const setpointGA = d.addresses && gaByAddress.get(d.addresses.setpoint);
+      const writable = isHeating && setpointGA && setpointGA.dpt === '9.001';
+      const setpointRaw = d.addresses && pendingGAValues.has(d.addresses.setpoint) ? pendingGAValues.get(d.addresses.setpoint) : setpointGA && setpointGA.lastValue;
+      const defaultSetpoint = Number.isFinite(Number(setpointRaw)) && setpointRaw !== undefined && setpointRaw !== null && setpointRaw !== '' ? Number(setpointRaw).toFixed(1) : '21.0';
+      const editButton = writable ? `<button type="button" class="btn btn-sm btn-outline-secondary device-setpoint-edit" data-id="${escHtml(d.id)}" aria-label="Edit setpoint for ${escHtml(d.name)}" title="Write new setpoint to KNX"><i class="bi bi-pencil"></i></button>` : '';
+      const metrics = isHeating ? `<div class="device-metrics">${metric(d, 'temperature', 'Current temperature')}${metric(d, 'setpoint', 'Setpoint', editButton)}</div>` : '';
+      const switchStatusAddress = isSwitch && d.addresses && d.addresses.status;
+      const switchStatusGA = switchStatusAddress && gaByAddress.get(switchStatusAddress);
+      const switchRaw = switchStatusGA && switchStatusGA.lastValue;
+      const switchState = switchRaw === true || switchRaw === 1 || ['1', 'true', 'on', 'ein'].includes(String(switchRaw).toLowerCase()) ? true
+        : switchRaw === false || switchRaw === 0 || ['0', 'false', 'off', 'aus'].includes(String(switchRaw).toLowerCase()) ? false : null;
+      const switchCommandGA = isSwitch && d.addresses && gaByAddress.get(d.addresses.command);
+      const switchWritable = isSwitch && switchCommandGA && switchCommandGA.dpt === '1.001';
+      const switchPanel = isSwitch ? `<div class="device-switch-panel">
+        <div class="d-flex align-items-center justify-content-between gap-3">
+          <div><div class="small text-muted">Actuator feedback</div><div class="device-switch-feedback fw-semibold">${switchState === null ? 'Unknown' : switchState ? 'On' : 'Off'}</div><div class="small text-muted">${escHtml(switchStatusAddress || 'Status not assigned')}</div></div>
+          <div class="form-check form-switch">
+            <input class="form-check-input device-switch-toggle" type="checkbox" role="switch" data-id="${escHtml(d.id)}" aria-label="Switch ${escHtml(d.name)}" ${switchState === true ? 'checked' : ''} ${switchWritable ? '' : 'disabled'} style="width:2.8rem;height:1.5rem">
+          </div>
+        </div>
+        <div class="device-switch-message text-muted mt-2" data-id="${escHtml(d.id)}" role="status"></div>
+      </div>` : '';
+      return heading+`<div class="col-12 col-xl-6"><article class="card device-card h-100" style="border-left:3px solid ${color}" data-routing-device="${escHtml(d.id)}" title="Routing Designer für dieses Device öffnen" tabindex="0" role="link">
+        <div class="card-body">
+          <div class="d-flex align-items-start gap-3 mb-3">
+            <div class="device-icon" aria-hidden="true"><i class="bi ${isHeating ? 'bi-thermometer-half' : 'bi-grid'}"></i></div>
+            <div class="flex-grow-1 min-w-0"><h3 class="h6 mb-1">${escHtml(d.name)}</h3><div class="small text-muted">${escHtml(tpl ? tpl.name : d.templateId)}${d.roomId ? ' · '+escHtml(rooms.find(r=>r.id===d.roomId)?.name||'Unbekannter Raum') : ''}</div></div>
+            <div class="d-flex align-items-center gap-2">
+              ${status}
+              <button class="btn btn-sm btn-outline-secondary btn-edit-device" data-id="${escHtml(d.id)}" aria-label="Configure ${escHtml(d.name)}" title="Device settings"><i class="bi bi-gear"></i></button>
+            </div>
+          </div>
+          ${metrics}
+          ${switchPanel}
+        </div>
+        <details data-device-id="${escHtml(d.id)}" ${expanded.has(d.id) ? 'open' : ''}><summary>Technical details · ${Object.keys(d.addresses || {}).length} group addresses</summary>${detailRows || '<div class="px-3 pb-3 text-muted small">No addresses assigned</div>'}</details>
+      </article></div>`;
+    }).join('');
+  }
+  // Open the Routing Designer for the clicked KNX device, but leave controls
+  // and the expandable technical details fully interactive.
+  function openDeviceRouting(event) {
+    const card=event.target.closest('[data-routing-device]');
+    if(!card || event.target.closest('button,input,select,textarea,a,summary,details,label'))return;
+    window.location.href='/routing.html?device='+encodeURIComponent(card.dataset.routingDevice);
+  }
+  document.getElementById('device-list').addEventListener('click',openDeviceRouting);
+  document.getElementById('device-list').addEventListener('keydown',event=>{
+    if((event.key==='Enter'||event.key===' ')&&event.target.matches('[data-routing-device]')){
+      event.preventDefault();window.location.href='/routing.html?device='+encodeURIComponent(event.target.dataset.routingDevice);
+    }
+  });
+  function renderDeviceFields(mapping = {}) {
+    const tpl = deviceTemplate(deviceTemplateSelect.value);
+    deviceObjects.innerHTML = tpl ? tpl.objects.map(o => {
+      const candidates = configuredGAs.filter(g => gaDirectionMatches(g, o) && (tpl.id !== 'roller-shutter' || o.key !== 'stop' || !g.dpt || ['1.007','1.009','1.017'].includes(g.dpt))).sort((a,b) => { const x=gaPosition(a.address),y=gaPosition(b.address); return x&&y ? (x[0]-y[0]||x[1]-y[1]||x[2]-y[2]) : String(a.address).localeCompare(String(b.address),undefined,{numeric:true}); });
+      const options = candidates.map(g => `<option value="${escHtml(g.address)}" ${mapping[o.key] === g.address ? 'selected' : ''}>${escHtml(g.address + ' – ' + (g.name || 'Unnamed'))}</option>`).join('');
+      return `<div class="mb-3"><label class="form-label" for="device-object-${escHtml(o.key)}">${escHtml(o.label)} <small class="text-muted">DPT ${escHtml(tpl.id === 'roller-shutter' && o.key === 'stop' ? '1.007 / 1.009 / 1.017' : o.dpt)}${o.optional ? ' · optional' : ''}</small></label><select class="form-select device-object" id="device-object-${escHtml(o.key)}" data-key="${escHtml(o.key)}"><option value="">Select address…</option>${options}</select></div>`;
+    }).join('') : '';
+  }
+  function openDeviceEditor(device) {
+    editingDeviceId = device ? device.id : null;
+    document.getElementById('btn-delete-device-dialog').classList.toggle('d-none', !device);
+    deviceError.classList.add('d-none');
+    document.getElementById('deviceModalTitle').textContent = device ? 'Edit Device' : 'Add Device';
+    document.getElementById('device-name').value = device ? device.name : '';
+    deviceTemplateSelect.innerHTML = deviceTemplates.map(t => `<option value="${escHtml(t.id)}">${escHtml(t.name)}</option>`).join('');
+    document.getElementById('device-room').innerHTML='<option value="">Ohne Raum</option>'+rooms.map(r=>'<option value="'+escHtml(r.id)+'">'+escHtml(r.name)+'</option>').join('');
+    document.getElementById('device-room').value=device?.roomId||'';
+    if (device) deviceTemplateSelect.value = device.templateId;
+    renderDeviceFields(device ? device.addresses : {});
+    deviceModal.show();
+  }
+  document.getElementById('setpoint-write-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const id = setpointDeviceId;
+    const input = document.getElementById('setpoint-modal-input');
+    const button = document.getElementById('setpoint-modal-send');
+    const status = document.getElementById('setpoint-modal-status');
+    const value = Number(input.value);
+    if (!id || !input.value.trim() || !Number.isFinite(value) || value < 5 || value > 35 || Math.abs(value * 10 - Math.round(value * 10)) > 1e-7) {
+      status.textContent = 'Enter a temperature between 5 and 35 °C in 0.1 °C steps.';
+      status.className = 'small text-danger mt-2';
+      return;
+    }
+    button.disabled = true;
+    status.textContent = 'Sending KNX write…';
+    status.className = 'small text-muted mt-2';
+    try {
+      const response = await fetch('/api/devices/' + encodeURIComponent(id) + '/setpoint', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Write failed');
+      setpointModal.hide();
+    } catch (err) {
+      status.textContent = 'Write failed: ' + err.message;
+      status.className = 'small text-danger mt-2';
+    } finally { button.disabled = false; }
+  });
+  document.getElementById('setpointModal').addEventListener('hidden.bs.modal', () => { setpointDeviceId = null; });
+  document.getElementById('device-list').addEventListener('change', async e => {
+    const toggle = e.target.closest('.device-switch-toggle');
+    if (!toggle) return;
+    const device = devices.find(d => d.id === toggle.dataset.id);
+    if (!device || device.templateId !== 'switch') return;
+    const ga = configuredGAs.find(g => g.address === device.addresses.status);
+    const raw = ga && ga.lastValue;
+    const actualOn = raw === true || raw === 1 || ['1', 'true', 'on', 'ein'].includes(String(raw).toLowerCase());
+    const desired = toggle.checked;
+    // Keep the switch showing feedback, not the unconfirmed command.
+    toggle.checked = actualOn;
+    toggle.disabled = true;
+    const message = toggle.closest('.device-switch-panel').querySelector('.device-switch-message');
+    message.textContent = 'Sending command…';
+    try {
+      const response = await fetch('/api/devices/' + encodeURIComponent(device.id) + '/switch', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value: desired }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Switch write failed');
+      message.textContent = 'Command sent; awaiting actuator status feedback.';
+      message.className = 'device-switch-message text-muted mt-2';
+    } catch (err) {
+      message.textContent = 'Write failed: ' + err.message;
+      message.className = 'device-switch-message text-danger mt-2';
+    } finally { toggle.disabled = false; }
+  });
+  document.getElementById('btn-add-device').addEventListener('click', () => openDeviceEditor());
+  deviceTemplateSelect.addEventListener('change', () => renderDeviceFields());
+  document.getElementById('device-list').addEventListener('click', e => {
+    const setpointEdit = e.target.closest('.device-setpoint-edit');
+    if (setpointEdit) {
+      const device = devices.find(d => d.id === setpointEdit.dataset.id);
+      if (!device || device.templateId !== 'room-heating') return;
+      const address = device.addresses && device.addresses.setpoint;
+      const ga = configuredGAs.find(g => g.address === address);
+      if (!ga || ga.dpt !== '9.001') return;
+      setpointDeviceId = device.id;
+      document.getElementById('setpointModalTitle').textContent = device.name + ' – Setpoint';
+      document.getElementById('setpoint-modal-address').textContent = 'KNX group address: ' + address;
+      const raw = pendingGAValues.has(address) ? pendingGAValues.get(address) : ga.lastValue;
+      document.getElementById('setpoint-modal-input').value = raw !== undefined && raw !== null && raw !== '' && Number.isFinite(Number(raw)) ? Number(raw).toFixed(1) : '';
+      const status = document.getElementById('setpoint-modal-status');
+      status.textContent = 'Write will be sent to KNX; bus/device confirmation is separate.';
+      status.className = 'small text-muted mt-2';
+      setpointModal.show();
+      return;
+    }
+    const edit = e.target.closest('.btn-edit-device');
+    if (edit) openDeviceEditor(devices.find(d => d.id === edit.dataset.id));
+  });
+  document.getElementById('btn-delete-device-dialog').addEventListener('click', async () => {
+    const id = editingDeviceId;
+    const device = devices.find(d => d.id === id);
+    if (!device) return;
+    if (!confirm('Delete device "' + device.name + '"? Its group addresses will remain untouched.')) return;
+    const button = document.getElementById('btn-delete-device-dialog');
+    button.disabled = true;
+    try {
+      const response = await fetch('/api/devices/' + encodeURIComponent(id), { method: 'DELETE' });
+      if (!response.ok) throw new Error((await response.json()).error || 'Delete failed');
+      deviceModal.hide();
+      editingDeviceId = null;
+    } catch (err) {
+      deviceError.textContent = 'Delete failed: ' + err.message;
+      deviceError.classList.remove('d-none');
+    } finally { button.disabled = false; }
+  });
+  document.getElementById('btn-save-device').addEventListener('click', async () => {
+    const addresses = {};
+    deviceObjects.querySelectorAll('.device-object').forEach(el => { if (el.value) addresses[el.dataset.key] = el.value; });
+    const body = { name: document.getElementById('device-name').value.trim(), templateId: deviceTemplateSelect.value, addresses, roomId: document.getElementById('device-room').value || null };
+    try {
+      const url = editingDeviceId ? '/api/devices/' + encodeURIComponent(editingDeviceId) : '/api/devices';
+      const r = await fetch(url, { method: editingDeviceId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+      deviceModal.hide();
+    } catch (err) { deviceError.textContent = err.message; deviceError.classList.remove('d-none'); }
+  });
+  const roomsModal=new bootstrap.Modal(document.getElementById('roomsModal'));
+  const roomsError=document.getElementById('rooms-error');
+  function showRoomsError(message){roomsError.textContent=message;roomsError.classList.remove('d-none');}
+  function renderRooms(){
+    const filter=document.getElementById('room-filter');
+    const selected=filter.value;
+    filter.innerHTML='<option value="all">Alle Räume</option><option value="unassigned">Ohne Raum</option>'+rooms.map(r=>'<option value="'+escHtml(r.id)+'">'+escHtml(r.name)+'</option>').join('');
+    filter.value=selected==='unassigned'||selected==='all'||rooms.some(r=>r.id===selected)?selected:'all';
+    document.getElementById('rooms-list').innerHTML=rooms.length?rooms.map(r=>'<div class="d-flex justify-content-between align-items-center border-bottom py-2"><div><strong>'+escHtml(r.name)+'</strong><span class="text-muted small ms-2">'+devices.filter(d=>d.roomId===r.id).length+' Devices</span></div><div class="d-flex gap-1"><button class="btn btn-sm btn-outline-secondary room-rename" data-id="'+escHtml(r.id)+'">Umbenennen</button><button class="btn btn-sm btn-outline-danger room-delete" data-id="'+escHtml(r.id)+'" '+(devices.some(d=>d.roomId===r.id)?'disabled title="Raum enthält Devices"':'')+'>Löschen</button></div></div>').join(''):'<p class="text-muted small">Noch keine Räume angelegt.</p>';
+    renderDevices();
+  }
+  async function roomRequest(url,method,body){
+    const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
+    const data=await r.json();
+    if(!r.ok)throw Error(data.error||'Room request failed');
+    return data;
+  }
+  document.getElementById('btn-manage-rooms').addEventListener('click',()=>{roomsError.classList.add('d-none');renderRooms();roomsModal.show();});
+  document.getElementById('room-create-form').addEventListener('submit',async e=>{
+    e.preventDefault();roomsError.classList.add('d-none');
+    try{await roomRequest('/api/rooms','POST',{name:document.getElementById('room-name').value.trim()});document.getElementById('room-name').value='';}
+    catch(err){showRoomsError(err.message);}
+  });
+  document.getElementById('rooms-list').addEventListener('click',async e=>{
+    const rename=e.target.closest('.room-rename'),del=e.target.closest('.room-delete');
+    if(!rename&&!del)return;
+    const room=rooms.find(r=>r.id===(rename||del).dataset.id);if(!room)return;
+    try{
+      if(rename){
+        const name=prompt('Raum umbenennen',room.name);
+        if(name===null||name.trim()===room.name)return;
+        await roomRequest('/api/rooms/'+encodeURIComponent(room.id),'PUT',{name:name.trim()});
+      }else{
+        if(!confirm('Raum „'+room.name+'“ wirklich löschen?'))return;
+        await roomRequest('/api/rooms/'+encodeURIComponent(room.id),'DELETE');
+      }
+      roomsError.classList.add('d-none');
+    }catch(err){showRoomsError(err.message);}
+  });
+  fetch('/api/rooms').then(r=>r.json()).then(data=>{rooms=data;renderRooms();}).catch(err=>console.error('Rooms unavailable',err));
+  socket.on('rooms',data=>{rooms=data;renderRooms();});
+  document.getElementById('room-filter').addEventListener('change',renderDevices);
+  fetch('/api/device-templates').then(r => { if (!r.ok) throw Error('Template HTTP '+r.status); return r.json(); }).then(t => { deviceTemplates = t; renderGATable(configuredGAs); }).catch(err => console.error('Templates unavailable', err));
+  
+  fetch('/api/devices').then(r => r.json()).then(d => { devices = d; renderDevices(); renderGATable(configuredGAs); }).catch(err => console.error('Devices unavailable', err));
+  socket.on('devices', d => { devices = d; renderDevices(); renderGATable(configuredGAs); });
+  document.getElementById('device-search').addEventListener('input', renderDevices);
+  document.getElementById('ga-search').addEventListener('input', () => renderGATable(configuredGAs));
+  document.getElementById('ga-filter').addEventListener('change', () => renderGATable(configuredGAs));
+  function switchView(view) {
+    const addresses = view === 'addresses';
+    document.getElementById('view-devices').hidden = addresses;
+    document.getElementById('view-addresses').hidden = !addresses;
+    for (const [id, selected] of [['tab-devices', !addresses], ['tab-addresses', addresses]]) {
+      const tab = document.getElementById(id);
+      tab.classList.toggle('active', selected);
+      tab.setAttribute('aria-selected', String(selected));
+    }
+    try { localStorage.setItem('dashboard-view', view); } catch (_) {}
+  }
+  document.getElementById('tab-devices').addEventListener('click', () => switchView('devices'));
+  document.getElementById('tab-addresses').addEventListener('click', () => switchView('addresses'));
+  function applyDashboardHash(){
+    const view=location.hash==='#view-addresses'?'addresses':location.hash==='#view-devices'?'devices':null;
+    if(!view)return;
+    switchView(view);
+    requestAnimationFrame(()=>document.getElementById('view-'+view).scrollIntoView({block:'start'}));
+  }
+  // A same-page anchor does not emit hashchange when its hash is already active.
+  // Activate the hidden panel before scrolling, even on repeated clicks.
+  document.querySelectorAll('a[href="/devices.html"],a[href="/addresses.html"]').forEach(link=>{
+    link.addEventListener('click',event=>{
+      if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
+      event.preventDefault();
+      const hash=new URL(link.href).hash;
+      if(location.hash!==hash)history.pushState(null,'',hash);
+    
+    });
+  });
+
+
+  applyDashboardHash();
+  
+  switchView('addresses');
+
+  // ── PWA service worker ────────────────────────────────────────────────────────
+
+
+  // ── Clear button ──────────────────────────────────────────────────────────────
+  document.getElementById('btn-clear').addEventListener('click', () => {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center empty-msg p-3">Log cleared.</td></tr>';
+    hasRows = false;
+    total = knx2mqtt = mqtt2knx = 0;
+    document.getElementById('cnt-total').textContent    = '0';
+    document.getElementById('cnt-knx2mqtt').textContent = '0';
+    document.getElementById('cnt-mqtt2knx').textContent = '0';
+    document.getElementById('cnt-last-val').textContent = '–';
+  });
+</script>
+</body>
+</html>
