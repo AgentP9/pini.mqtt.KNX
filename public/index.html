@@ -292,6 +292,18 @@
   </div>
 
 
+<!-- ETS import review: no existing GA is changed without explicit approval. -->
+<div class="modal fade" id="gaImportReviewModal" tabindex="-1" aria-labelledby="gaImportReviewTitle" aria-hidden="true">
+ <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title" id="gaImportReviewTitle">ETS-Import prüfen</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button></div>
+  <div class="modal-body"><p class="text-muted small">Bestehende Gruppenadressen werden nur geändert, wenn du die jeweiligen Änderungen auswählst. Neue Adressen können separat übernommen werden. Nicht ausgewählte Änderungen bleiben unverändert.</p>
+   <div id="ga-import-summary" class="fw-semibold mb-3"></div>
+   <div class="d-flex gap-2 flex-wrap mb-3"><button type="button" class="btn btn-sm btn-outline-primary" id="ga-import-select-all">Alle Änderungen auswählen</button><button type="button" class="btn btn-sm btn-outline-secondary" id="ga-import-select-none">Alle abwählen</button></div>
+   <div id="ga-import-review-list"></div><div id="ga-import-review-error" class="alert alert-danger d-none mt-3" role="alert"></div>
+  </div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Abbrechen</button><button type="button" class="btn btn-primary" id="ga-import-apply">Ausgewählte Änderungen übernehmen</button></div>
+ </div></div>
+</div>
+
 <!-- Setpoint write dialog -->
 <div class="modal fade" id="setpointModal" tabindex="-1" aria-labelledby="setpointModalTitle" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
@@ -853,35 +865,112 @@
   }
 
   const importFileInput = document.getElementById('ga-import-file');
+  const gaImportModal = new bootstrap.Modal(document.getElementById('gaImportReviewModal'));
+  let importCandidates = [];
+  let importSnapshot = [];
+  let importSelection = new Set();
 
   document.getElementById('btn-import-ga').addEventListener('click', () => {
     importFileInput.value = '';
     importFileInput.click();
   });
 
+  function reviewImport(addresses) {
+    const existing = new Map(configuredGAs.map(ga => [ga.address, ga]));
+    const unique = new Set();
+    if (addresses.some(ga => { if (unique.has(ga.address)) return true; unique.add(ga.address); return false; })) {
+      throw new Error('Die ETS-Datei enthält doppelte Gruppenadressen.');
+    }
+    importCandidates = [];
+    importSnapshot = [];
+    for (const ga of addresses) {
+      const old = existing.get(ga.address);
+      const changes = [];
+      if (old) {
+        for (const field of ['name', 'dpt']) {
+          // Empty/missing ETS attributes are not a request to erase existing data.
+          if (ga[field] && ga[field] !== (old[field] || '')) {
+            changes.push({ field, before: old[field] || '', after: ga[field] });
+          }
+        }
+      }
+      if (!old || changes.length) {
+        importCandidates.push({ address: ga.address, name: ga.name, old, changes });
+        importSnapshot.push(old ? { address: ga.address, name: old.name || '', dpt: old.dpt || '', comment: old.comment || '' } : { address: ga.address });
+      }
+    }
+    importSelection = new Set(importCandidates.map((_, i) => i));
+    const newCount = importCandidates.filter(c => !c.old).length;
+    const changedCount = importCandidates.length - newCount;
+    document.getElementById('ga-import-summary').textContent =
+      addresses.length + ' importierte Adressen · ' + newCount + ' neu · ' + changedCount + ' mit Änderungen · ' + (addresses.length - importCandidates.length) + ' unverändert';
+    document.getElementById('ga-import-review-error').classList.add('d-none');
+    renderImportReview();
+    gaImportModal.show();
+  }
+
+  function renderImportReview() {
+    const list = document.getElementById('ga-import-review-list');
+    list.innerHTML = importCandidates.length ? importCandidates.map((candidate, i) => {
+      const checked = importSelection.has(i) ? 'checked' : '';
+      const description = candidate.old
+        ? candidate.changes.map(change => '<div class="small mt-1"><strong>' + escHtml(change.field === 'dpt' ? 'DPT' : 'Name') + ':</strong> <del class="text-muted">' + escHtml(change.before || '(leer)') + '</del> → <strong>' + escHtml(change.after) + '</strong></div>').join('')
+        : '<div class="small text-success">Neue Gruppenadresse · Name: ' + escHtml(candidate.name || '(leer)') + '</div>';
+      return '<label class="d-flex gap-3 align-items-start border rounded p-3 mb-2" style="cursor:pointer"><input type="checkbox" class="form-check-input mt-1" data-import-index="' + i + '" ' + checked + '><span><strong>' + escHtml(candidate.address) + '</strong> <span class="badge ' + (candidate.old ? 'text-bg-warning' : 'text-bg-success') + '">' + (candidate.old ? 'Änderung' : 'Neu') + '</span>' + description + '</span></label>';
+    }).join('') : '<p class="text-muted">Keine Änderungen erkannt. Bestehende Gruppenadressen bleiben unverändert.</p>';
+    document.getElementById('ga-import-apply').disabled = !importSelection.size;
+  }
+  document.getElementById('ga-import-review-list').addEventListener('change', event => {
+    const checkbox = event.target.closest('[data-import-index]');
+    if (!checkbox) return;
+    const i = Number(checkbox.dataset.importIndex);
+    if (checkbox.checked) importSelection.add(i); else importSelection.delete(i);
+    document.getElementById('ga-import-apply').disabled = !importSelection.size;
+  });
+  document.getElementById('ga-import-select-all').addEventListener('click', () => { importSelection = new Set(importCandidates.map((_, i) => i)); renderImportReview(); });
+  document.getElementById('ga-import-select-none').addEventListener('click', () => { importSelection.clear(); renderImportReview(); });
+
   importFileInput.addEventListener('change', () => {
     const file = importFileInput.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      let addresses;
+    reader.onload = event => {
       try {
-        addresses = parseETSXml(ev.target.result);
-      } catch (err) {
-        alert('Import failed: ' + err.message);
-        return;
-      }
-      if (!addresses.length) { alert('No group addresses found in the file.'); return; }
-      fetch('/api/groupaddresses/import', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ addresses }),
-      })
-        .then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
-        .then((data) => alert(`Import complete: ${data.added} added, ${data.updated} updated.`))
-        .catch((err) => alert('Import failed: ' + err.message));
+        const addresses = parseETSXml(event.target.result);
+        if (!addresses.length) throw new Error('Keine Gruppenadressen in der Datei gefunden.');
+        reviewImport(addresses);
+      } catch (err) { alert('Import fehlgeschlagen: ' + err.message); }
     };
+    reader.onerror = () => alert('ETS-Datei konnte nicht gelesen werden.');
     reader.readAsText(file);
+  });
+
+  document.getElementById('ga-import-apply').addEventListener('click', async () => {
+    const button = document.getElementById('ga-import-apply');
+    const error = document.getElementById('ga-import-review-error');
+    const chosen = importCandidates.filter((_, i) => importSelection.has(i));
+    if (!chosen.length) return;
+    const addresses = chosen.map(candidate => {
+      if (!candidate.old) return { address: candidate.address, name: candidate.name || '', dpt: candidate.changes.find(c => c.field === 'dpt')?.after || '' };
+      const patch = { address: candidate.address };
+      candidate.changes.forEach(change => { patch[change.field] = change.after; });
+      return patch;
+    });
+    const expected = chosen.map(candidate => candidate.old
+      ? { address: candidate.address, name: candidate.old.name || '', dpt: candidate.old.dpt || '', comment: candidate.old.comment || '' }
+      : { address: candidate.address });
+    button.disabled = true;
+    error.classList.add('d-none');
+    try {
+      const response = await fetch('/api/groupaddresses/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ addresses, expected }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'HTTP ' + response.status);
+      gaImportModal.hide();
+      alert('ETS-Import abgeschlossen: ' + result.added + ' neu, ' + result.updated + ' geändert.');
+    } catch (err) {
+      error.textContent = 'Import nicht durchgeführt: ' + err.message;
+      error.classList.remove('d-none');
+    } finally { button.disabled = !importSelection.size; }
   });
 
   document.getElementById('btn-save-ga').addEventListener('click', () => {
