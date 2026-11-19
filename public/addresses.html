@@ -561,11 +561,11 @@
     const heatingTemplate=deviceTemplates.find(t=>t.id==='room-heating');
     if(heatingTemplate){
       const rolePatterns={
-        temperature:/\\s+temperatur\\s+(?:messwert|istwert)$/i,
-        setpoint:/\\s+(?:aktueller\\s+)?sollwert$/i,
-        offset:/\\s+sollwertverschiebung$/i
+        temperature:/\s+temperatur\s+(?:messwert|istwert)$/i,
+        setpoint:/\s+(?:aktueller\s+)?sollwert$/i,
+        offset:/\s+sollwertverschiebung$/i
       };
-      const roomFor=(name)=>String(name||'').trim().replace(/\\s+/g,' ').replace(/\\s+(?:temperatur\\s+(?:messwert|istwert)|(?:aktueller\\s+)?sollwert|sollwertverschiebung)$/i,'').trim();
+      const roomFor=(name)=>String(name||'').trim().replace(/\s+/g,' ').replace(/\s+(?:temperatur\s+(?:messwert|istwert)|(?:aktueller\s+)?sollwert|sollwertverschiebung)$/i,'').trim();
       const room=roomFor(ga.name);
       const role=Object.keys(rolePatterns).find(k=>rolePatterns[k].test(String(ga.name||'').trim()));
       if(role && room){
