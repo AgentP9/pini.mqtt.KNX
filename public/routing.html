@@ -49,8 +49,20 @@ body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:42
 <script>
 let graph={endpoints:[],mqttDevices:[],routes:[]},devices=[],templates=[],rooms=[],selected=null,dirty=false;
 let routingIssues=[];
-const routeIssue=id=>routingIssues.find(issue=>issue.routeId===id);
-function showRoutingIssues(){const box=document.getElementById('routing-diagnostics');box.hidden=!routingIssues.length;box.innerHTML=routingIssues.length?'<strong><i class="bi bi-exclamation-triangle-fill me-2"></i>'+routingIssues.length+' Verbindung(en) mit Typ- oder DPT-Konflikt</strong><div class="small mt-2">Prüfe die rot markierten Geräte und Verbindungen. Die Typprüfung berücksichtigt die konfigurierte Wertumwandlung.</div>'+routingIssues.map(issue=>'<div class="mt-2">'+(issue.routeId?'<a href="/routing.html?route='+encodeURIComponent(issue.routeId)+'">Route '+esc(issue.routeId)+'</a>':'Gerätesignal '+esc(issue.from.id+' / '+issue.from.signal))+': '+esc(issue.reasons.join('; '))+'</div>').join(''):'';}
+const routeIssue=id=>routingIssues.find(issue=>!issue.accepted&&issue.routeId===id);
+function showRoutingIssues(){
+ const box=$('routing-diagnostics');
+ const open=routingIssues.filter(i=>!i.accepted);
+ box.hidden=!routingIssues.length;
+ box.className='alert '+(open.length?'alert-danger':'alert-secondary');
+ box.innerHTML=routingIssues.length?'<strong><i class="bi bi-exclamation-triangle-fill me-2"></i>'+open.length+' ungeprüfte Konflikte · '+(routingIssues.length-open.length)+' akzeptiert</strong><p class="small mt-2 mb-2">Akzeptierte Abweichungen bleiben sichtbar, werden aber nicht mehr rot markiert. Nach jedem ETS-Import werden alle Akzeptanzen zurückgesetzt.</p>'+routingIssues.map(issue=>'<div class="d-flex align-items-center justify-content-between gap-2 border-top py-2"><span class="small">'+(issue.routeId?'Route '+esc(issue.routeId):'Gerätesignal '+esc(issue.from.id+' / '+issue.from.signal))+': '+esc(issue.reasons.join('; '))+(issue.accepted?' <span class="badge text-bg-secondary">Akzeptiert</span>':'')+'</span><button class="btn btn-sm '+(issue.accepted?'btn-outline-secondary':'btn-outline-success')+' flex-shrink-0" data-diagnostic-key="'+esc(issue.key)+'" data-accept="'+(!issue.accepted)+'">'+(issue.accepted?'Akzeptanz aufheben':'Akzeptieren')+'</button></div>').join(''):'';
+}
+$('routing-diagnostics').addEventListener('click',async event=>{
+ const button=event.target.closest('[data-diagnostic-key]');if(!button)return;
+ button.disabled=true;
+ try {const response=await fetch('/api/routing/diagnostics/accept',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:button.dataset.diagnosticKey,accepted:button.dataset.accept==='true'})});const data=await response.json();if(!response.ok)throw Error(data.error||response.statusText);routingIssues=data.issues||[];showRoutingIssues();render();}
+ catch(err){button.disabled=false;alert('Akzeptanz konnte nicht gespeichert werden: '+err.message);}
+});
 function loadRoutingIssues(){fetch('/api/routing/diagnostics').then(r=>{if(!r.ok)throw Error('HTTP '+r.status);return r.json()}).then(data=>{routingIssues=data.issues||[];showRoutingIssues();render();}).catch(e=>console.warn('Routing diagnostics unavailable:',e));}
 socket.on('routing-diagnostics',data=>{routingIssues=data.issues||[];showRoutingIssues();render();});
 const roomColors=['#3b82f6','#10b981','#a855f7','#f59e0b','#ec4899','#06b6d4','#ef4444','#84cc16'];
