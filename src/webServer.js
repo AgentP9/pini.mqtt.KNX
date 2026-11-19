@@ -196,7 +196,7 @@ class WebServer {
       const normalized = [];
       const seen = new Set();
       for (const item of addresses) {
-        if (!item || typeof item.address !== 'string' || !/^\\d+\\/\\d+\\/\\d+$/.test(item.address) || seen.has(item.address)) {
+        if (!item || typeof item.address !== 'string' || !/^\d+\/\d+\/\d+$/.test(item.address) || seen.has(item.address)) {
           return res.status(400).json({ error: 'Invalid or duplicate group address in import' });
         }
         seen.add(item.address);
