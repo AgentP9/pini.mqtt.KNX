@@ -45,3 +45,13 @@ The dashboard, KNX-Devices, group-address editor, Routing Designer and settings 
 The service worker caches only the static shell resources and the offline notice. It deliberately does **not** cache KNX/MQTT values, API responses, configuration screens or Socket.IO messages. If the server cannot be reached, navigation displays an offline notice rather than stale controls. All writes and live interactions require the server.
 
 Test installability and the app icon in Chrome/Edge and Safari on the actual deployment origin. The current SVG icon is provided in the manifest; platform-specific PNG icons may be needed for optimal installation on some devices.
+
+## Mobile live monitor
+
+Open **Live-Monitor** in the navigation or directly at `/monitor.html`. This is a read-only diagnostic interface designed for phones at the physical KNX switch or sensor. It provides:
+
+- **Geräte**: KNX device signals, last confirmed received values and separately marked pending outbound writes. Values that have not been received since the bridge started are marked unknown.
+- **Beobachten**: Select one device to follow its assigned group addresses and the Routing Designer events associated with that device. The device selection is preserved in the URL (`/monitor.html?device=<device-id>`).
+- **Live-Log**: Last 200 incoming KNX/bridge events with address/topic/value search, pause and clear.
+
+The monitor uses the existing Socket.IO connection; no page reloads, commands or configuration writes are performed. It also appears as a PWA shortcut. The bridge does not retain KNX value history across restarts, so the initial device status is the last value observed by the current process, **not** a fresh read of the KNX bus.
