@@ -532,7 +532,8 @@
         const found=configuredGAs.filter(g=>!occupied.has(g.address)&&patterns[obj.key].test((g.name||'').trim())&&gaDirectionMatches(g,obj));
         if(found.length===1)matches[obj.key]=found[0].address;
       }
-      if(Object.keys(matches).length===4&&new Set(Object.values(matches)).size===4)
+      if(Object.keys(matches).length===4&&new Set(Object.values(matches)).size===4
+        &&Object.values(matches).includes(ga.address))
         return {templateId:'system',templateName:systemTemplate.name,name:'System',addresses:matches,score:100};
     }
     if (!base || base === ga.name && !/\s/.test(base)) return null;
