@@ -303,7 +303,7 @@
   <div class="modal-header"><h5 class="modal-title" id="gaImportReviewTitle">ETS-Import prüfen</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button></div>
   <div class="modal-body"><p class="text-muted small">Bestehende Gruppenadressen werden nur geändert, wenn du die jeweiligen Änderungen auswählst. Neue Adressen können separat übernommen werden. Nicht ausgewählte Änderungen bleiben unverändert.</p>
    <div id="ga-import-summary" class="fw-semibold mb-3"></div>
-   <div class="d-flex gap-2 flex-wrap mb-3"><button type="button" class="btn btn-sm btn-outline-primary" id="ga-import-select-all">Alle Änderungen auswählen</button><button type="button" class="btn btn-sm btn-outline-secondary" id="ga-import-select-none">Alle abwählen</button></div>
+   <div class="d-flex gap-2 flex-wrap mb-3"><button type="button" class="btn btn-sm btn-outline-primary" id="ga-import-select-all">Alle Änderungen auswählen</button><button type="button" class="btn btn-sm btn-outline-primary" id="ga-import-select-new">Nur neue Gruppenadressen</button><button type="button" class="btn btn-sm btn-outline-secondary" id="ga-import-select-none">Alle abwählen</button></div>
    <div id="ga-import-review-list"></div><div id="ga-import-review-error" class="alert alert-danger d-none mt-3" role="alert"></div>
   </div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Abbrechen</button><button type="button" class="btn btn-primary" id="ga-import-apply">Ausgewählte Änderungen übernehmen</button></div>
  </div></div>
@@ -939,6 +939,7 @@
     document.getElementById('ga-import-apply').disabled = !importSelection.size;
   });
   document.getElementById('ga-import-select-all').addEventListener('click', () => { importSelection = new Set(importCandidates.map((_, i) => i)); renderImportReview(); });
+  document.getElementById('ga-import-select-new').addEventListener('click', () => { importSelection = new Set(importCandidates.flatMap((candidate, i) => candidate.old ? [] : [i])); renderImportReview(); });
   document.getElementById('ga-import-select-none').addEventListener('click', () => { importSelection.clear(); renderImportReview(); });
 
   importFileInput.addEventListener('change', () => {
