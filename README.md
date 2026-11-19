@@ -59,3 +59,15 @@ The monitor uses the existing Socket.IO connection; no page reloads, commands or
 ### Device-aware PWA start view
 
 The PWA retains a single manifest (`id: /`, `start_url: /`) and a single service worker. When launched **standalone** on a narrow touch-screen phone (viewport under 768px with coarse pointer), its root URL redirects to `/monitor.html`. Desktop launches continue to open the dashboard. Explicit navigation to the dashboard (`/?dashboard=1`) and dashboard deep links (`/#view-devices`, `/#view-addresses`) bypass the redirect. This avoids creating a second PWA or changing the installed app identity.
+
+## openHAB ZIP export
+
+In **Verbindungen**, choose **openHAB Export (.zip)** to download a snapshot of all configured MQTT endpoint and MQTT-device topics. The ZIP contains:
+
+- `knx-mqtt.things`: one openHAB MQTT Generic Thing with channels for every topic.
+- `knx-mqtt.items`: linked openHAB Items (Switch, Number, String).
+- `README.txt`: installation instructions, topic counts and warnings.
+
+Set the MQTT broker UID in the generated `.things` file (default placeholder: `mqtt:broker:knx`) and place the files in the corresponding `things` and `items` directories under `$OPENHAB_CONF`. The export respects enabled Routing Designer directions: KNX→MQTT uses a state topic, MQTT→KNX uses a command topic, and bidirectional routes use both. Unconnected topics are included as read-only channels for completeness. A command-only channel is **not** treated as confirmed actuator state. Transformations continue to run in the bridge; review payload types and conversions before using the Items in automations. No credentials or secrets are included.
+
+The endpoint is `GET /api/export/openhab`. The download is generated on demand and is not cached.
