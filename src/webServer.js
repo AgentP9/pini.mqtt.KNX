@@ -228,9 +228,12 @@ class WebServer {
         seen.add(item.address);
         const before = currentByAddress.get(item.address);
         const snapshot = expectedByAddress.get(item.address);
-        if (JSON.stringify(before ? [before.name || '', before.dpt || '', before.comment || ''] : null) !==
-            JSON.stringify(snapshot ? [snapshot.name || '', snapshot.dpt || '', snapshot.comment || ''] : null)) {
-          return res.status(409).json({ error: 'Group addresses changed since preview; reload and review the import again' });
+        // A preview entry containing only an address denotes a *new* GA.
+        // Do not mistake that marker for an existing GA with empty fields.
+        const expectedExisting = snapshot && ['name', 'dpt', 'comment'].some(field => Object.hasOwn(snapshot, field));
+        if (!snapshot || JSON.stringify(before ? [before.name || '', before.dpt || '', before.comment || ''] : null) !==
+            JSON.stringify(expectedExisting ? [snapshot.name || '', snapshot.dpt || '', snapshot.comment || ''] : null)) {
+          return res.status(409).json({ error: 'Gruppenadresse ' + item.address + ' hat sich seit der Importvorschau geändert. Bitte Import erneut prüfen.', address: item.address, code: 'IMPORT_PREVIEW_STALE' });
         }
         const entry = { ...(before || {}), address: item.address };
         for (const field of ['name', 'dpt', 'comment']) {
