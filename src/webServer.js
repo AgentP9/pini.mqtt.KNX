@@ -185,33 +185,53 @@ class WebServer {
       return res.status(500).json({ error: 'Failed to persist configuration' });
     });
 
-    // POST /api/groupaddresses/import – bulk add/update from an ETS XML export
+    // POST /api/groupaddresses/import – apply explicitly reviewed ETS changes.
     this.app.post('/api/groupaddresses/import', (req, res) => {
-      const { addresses } = req.body || {};
-      if (!Array.isArray(addresses)) {
-        return res.status(400).json({ error: 'addresses array is required' });
+      const { addresses, expected } = req.body || {};
+      if (!Array.isArray(addresses) || !Array.isArray(expected)) {
+        return res.status(400).json({ error: 'addresses and expected arrays are required; review the import first' });
       }
-
-      let added = 0, updated = 0;
+      const currentByAddress = new Map(this.groupAddresses.map(g => [g.address, g]));
+      const expectedByAddress = new Map(expected.map(g => [g.address, g]));
+      const normalized = [];
+      const seen = new Set();
       for (const item of addresses) {
-        const { address, name, dpt, comment } = item || {}
-        if (!address) continue;
-        const entry = { address, name: name || '', dpt: dpt || '', comment: comment || '' };
-        const idx = this.groupAddresses.findIndex((g) => g.address === address);
-        if (idx >= 0) {
-          // Merge: keep existing values unless the import provides new ones
-          this.groupAddresses[idx] = entry;
-          updated++;
-        } else {
-          this.groupAddresses.push(entry);
-          added++;
+        if (!item || typeof item.address !== 'string' || !/^\\d+\\/\\d+\\/\\d+$/.test(item.address) || seen.has(item.address)) {
+          return res.status(400).json({ error: 'Invalid or duplicate group address in import' });
+        }
+        seen.add(item.address);
+        const before = currentByAddress.get(item.address);
+        const snapshot = expectedByAddress.get(item.address);
+        if (JSON.stringify(before ? [before.name || '', before.dpt || '', before.comment || ''] : null) !==
+            JSON.stringify(snapshot ? [snapshot.name || '', snapshot.dpt || '', snapshot.comment || ''] : null)) {
+          return res.status(409).json({ error: 'Group addresses changed since preview; reload and review the import again' });
+        }
+        const entry = { ...(before || {}), address: item.address };
+        for (const field of ['name', 'dpt', 'comment']) {
+          if (Object.prototype.hasOwnProperty.call(item, field)) {
+            if (typeof item[field] !== 'string') return res.status(400).json({ error: 'Invalid ' + field });
+            entry[field] = item[field];
+          }
+        }
+        normalized.push(entry);
+      }
+      let added = 0, updated = 0;
+      const next = this.groupAddresses.map(g => ({ ...g }));
+      for (const entry of normalized) {
+        const idx = next.findIndex(g => g.address === entry.address);
+        if (idx < 0) { next.push(entry); added++; }
+        else if (['name', 'dpt', 'comment'].some(field => (next[idx][field] || '') !== (entry[field] || ''))) {
+          next[idx] = entry; updated++;
         }
       }
-
+      if (!added && !updated) return res.json({ ok: true, added, updated });
+      const previous = this.groupAddresses;
+      this.groupAddresses = next;
       if (this._saveGroupAddresses()) {
         this.io.emit('groupaddresses', this._enrichGAs());
         return res.json({ ok: true, added, updated });
       }
+      this.groupAddresses = previous;
       return res.status(500).json({ error: 'Failed to persist configuration' });
     });
 
