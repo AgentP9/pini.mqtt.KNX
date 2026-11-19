@@ -41,6 +41,51 @@ class RoutingStore {
     }
     return { address, ga, type: ga.dpt.startsWith('1.') ? 'boolean' : ['10.001','11.001','19.001'].includes(ga.dpt) ? 'text' : 'number' };
   }
+  diagnostics() {
+    const issues = [];
+    const templates = this.deviceStore.templates();
+    const byRef = ref => {
+      if (ref.type === 'device') {
+        const device = this.deviceStore.devices.find(d => d.id === ref.id);
+        const obj = templates.find(t => t.id === device?.templateId)?.objects.find(o => o.key === ref.signal);
+        const address = device?.addresses?.[ref.signal];
+        const ga = this.groupAddresses.find(g => g.address === address);
+        if (!device || !obj || !ga) return { type: null, problem: 'Gerät, Signal oder Gruppenadresse fehlt', address };
+        const valid = ga.dpt === obj.dpt || (device.templateId === 'roller-shutter' && ref.signal === 'stop' && ['1.017', '1.009'].includes(ga.dpt));
+        const type = ga.dpt?.startsWith('1.') ? 'boolean' : ['10.001', '11.001', '19.001'].includes(ga.dpt) ? 'text' : ga.dpt ? 'number' : null;
+        return { type, address, problem: valid ? null : 'DPT ' + (ga.dpt || 'unbekannt') + ' passt nicht zum Gerätesignal (erwartet ' + obj.dpt + ')' };
+      }
+      if (ref.type === 'mqtt') { const e = this.endpoints.find(e => e.id === ref.id); return { type: e?.payloadType || null, problem: e ? null : 'MQTT-Endpunkt fehlt' }; }
+      if (ref.type === 'mqttDevice') { const d = this.mqttDevices.find(d => d.id === ref.id); const e = d?.signals.find(e => e.key === ref.signal); return { type: e?.payloadType || null, problem: e ? null : 'MQTT-Signal fehlt' }; }
+      return { type: null, problem: 'Unbekannter Endpunkt' };
+    };
+    for (const route of this.routes) {
+      const from = byRef(route.from), to = byRef(route.to);
+      const reasons = [from.problem, to.problem].filter(Boolean);
+      const t = route.transform;
+      const valueType = v => typeof v === 'string' ? 'text' : typeof v === 'number' ? 'number' : typeof v === 'boolean' ? 'boolean' : null;
+      const forwardTypes = () => {
+        if (!t) return from.type ? [from.type] : [];
+        if (t.kind === 'constant') return [valueType(t.value)];
+        if (t.kind === 'map' || t.kind === 'json') {
+          const vals = Object.values(t.values || {});
+          if (Object.hasOwn(t, 'defaultValue')) vals.push(t.defaultValue);
+          return [...new Set(vals.map(valueType).filter(Boolean))];
+        }
+        return [];
+      };
+      const types = forwardTypes();
+      if (from.type && to.type && !t && from.type !== to.type) reasons.push('Datentyp ' + from.type + ' → ' + to.type + ' ohne Wertumwandlung');
+      if (t && types.some(type => type !== to.type)) reasons.push('Wertumwandlung liefert ' + types.join('/') + ', Ziel erwartet ' + to.type);
+      if (t && !types.length) reasons.push('Wertumwandlung ohne prüfbare Ausgabewerte');
+      if (route.bidirectional && t?.kind === 'map') {
+        const keys = Object.keys(t.values || {});
+        if (keys.some(key => valueType(key) !== from.type && !(from.type === 'number' && Number.isFinite(Number(key))) && !(from.type === 'boolean' && ['true','false'].includes(key.toLowerCase())))) reasons.push('Rückrichtung: Mapping-Schlüssel passen nicht zum Quelltyp');
+      }
+      if (reasons.length) issues.push({ routeId: route.id, from: route.from, to: route.to, addresses: [from.address, to.address].filter(Boolean), reasons });
+    }
+    return issues;
+  }
   validateAll(endpoints, routes, mqttDevices = this.mqttDevices) {
     if (!Array.isArray(endpoints) || !Array.isArray(routes) || endpoints.length > 300 || routes.length > 500) throw Error('Invalid routing configuration');
     const ids = new Set(), topics = new Set();
