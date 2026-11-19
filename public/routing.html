@@ -64,12 +64,12 @@ $('routing-diagnostics').addEventListener('click',async event=>{
  catch(err){button.disabled=false;alert('Akzeptanz konnte nicht gespeichert werden: '+err.message);}
 });
 function loadRoutingIssues(){fetch('/api/routing/diagnostics').then(r=>{if(!r.ok)throw Error('HTTP '+r.status);return r.json()}).then(data=>{routingIssues=data.issues||[];showRoutingIssues();render();}).catch(e=>console.warn('Routing diagnostics unavailable:',e));}
-socket.on('routing-diagnostics',data=>{routingIssues=data.issues||[];showRoutingIssues();render();});
 const roomColors=['#3b82f6','#10b981','#a855f7','#f59e0b','#ec4899','#06b6d4','#ef4444','#84cc16'];
 let focusAddress=new URLSearchParams(location.search).get("ga"),focusRoute=new URLSearchParams(location.search).get("route"),focusDevice=new URLSearchParams(location.search).get("device");
 const lastTraffic=new Map();
 const socket=io();socket.on('routing-traffic',entry=>{lastTraffic.set(entry.id,entry);});
 const $=id=>document.getElementById(id);
+socket.on('routing-diagnostics',data=>{routingIssues=data.issues||[];showRoutingIssues();render();});
 // Close native modal dialogs when clicking their backdrop, not their content.
 document.querySelectorAll('dialog').forEach(dialog=>{
  dialog.addEventListener('click',event=>{
