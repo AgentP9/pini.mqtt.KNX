@@ -70,9 +70,22 @@ function showRoutingIssues(){
  const open=routingIssues.filter(i=>!i.accepted);
  box.hidden=!routingIssues.length;
  box.className='alert '+(open.length?'alert-danger':'alert-secondary');
- box.innerHTML=routingIssues.length?'<strong><i class="bi bi-exclamation-triangle-fill me-2"></i>'+open.length+' ungeprüfte Konflikte · '+(routingIssues.length-open.length)+' akzeptiert</strong><p class="small mt-2 mb-2">Akzeptierte Abweichungen bleiben sichtbar, werden aber nicht mehr rot markiert. Nach jedem ETS-Import werden alle Akzeptanzen zurückgesetzt.</p>'+routingIssues.map(issue=>'<div class="d-flex align-items-center justify-content-between gap-2 border-top py-2"><span class="small">'+(issue.routeId?'Route '+esc(issue.routeId):'Gerätesignal '+esc(issue.from.id+' / '+issue.from.signal))+': '+esc(issue.reasons.join('; '))+(issue.accepted?' <span class="badge text-bg-secondary">Akzeptiert</span>':'')+'</span><button class="btn btn-sm '+(issue.accepted?'btn-outline-secondary':'btn-outline-success')+' flex-shrink-0" data-diagnostic-key="'+esc(issue.key)+'" data-accept="'+(!issue.accepted)+'">'+(issue.accepted?'Akzeptanz aufheben':'Akzeptieren')+'</button></div>').join(''):'';
+ box.innerHTML=routingIssues.length?'<strong><i class="bi bi-exclamation-triangle-fill me-2"></i>'+open.length+' ungeprüfte Konflikte · '+(routingIssues.length-open.length)+' akzeptiert</strong><p class="small mt-2 mb-2">Konflikt anklicken, um die betroffene Verbindung oder das KNX-Device gefiltert anzuzeigen. Akzeptierte Abweichungen bleiben sichtbar; nach jedem ETS-Import werden Akzeptanzen zurückgesetzt.</p>'+routingIssues.map((issue,index)=>'<div class="d-flex align-items-center justify-content-between gap-2 border-top py-2"><button type="button" class="btn btn-link text-start text-body text-decoration-none flex-grow-1 p-0 small" data-focus-issue="'+index+'" title="Betroffene Verbindung anzeigen"><i class="bi bi-search me-1"></i>'+(issue.routeId?'Route '+esc(issue.routeId):'Gerätesignal '+esc(issue.from?.id+' / '+issue.from?.signal))+': '+esc((issue.reasons||[]).join('; '))+(issue.accepted?' <span class="badge text-bg-secondary">Akzeptiert</span>':'')+'</button><button class="btn btn-sm '+(issue.accepted?'btn-outline-secondary':'btn-outline-success')+' flex-shrink-0" data-diagnostic-key="'+esc(issue.key)+'" data-accept="'+(!issue.accepted)+'">'+(issue.accepted?'Akzeptanz aufheben':'Akzeptieren')+'</button></div>').join(''):'';
 }
 $('routing-diagnostics').addEventListener('click',async event=>{
+ const focusButton=event.target.closest('[data-focus-issue]');
+ if(focusButton){
+  const issue=routingIssues[Number(focusButton.dataset.focusIssue)];if(!issue)return;
+  const route=issue.routeId&&graph.routes.find(r=>r.id===issue.routeId);
+  const deviceId=issue.from?.type==='device'?issue.from.id:issue.to?.type==='device'?issue.to.id:null;
+  if(route){focusRoute=route.id;focusDevice=null;focusAddress=null;}
+  else if(deviceId){focusDevice=deviceId;focusRoute=null;focusAddress=null;}
+  else {notice('Für diesen Konflikt wurde keine zugehörige Verbindung gefunden.',true);return;}
+  const params=new URLSearchParams();params.set(focusRoute?'route':'device',focusRoute||focusDevice);
+  history.replaceState(null,'',location.pathname+'?'+params.toString());
+  render();$('focus-bar').scrollIntoView({behavior:'smooth',block:'start'});
+  return;
+ }
  const button=event.target.closest('[data-diagnostic-key]');if(!button)return;
  button.disabled=true;
  try {const response=await fetch('/api/routing/diagnostics/accept',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:button.dataset.diagnosticKey,accepted:button.dataset.accept==='true'})});const data=await response.json();if(!response.ok)throw Error(data.error||response.statusText);routingIssues=data.issues||[];showRoutingIssues();render();}
