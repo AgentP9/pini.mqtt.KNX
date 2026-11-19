@@ -1367,28 +1367,9 @@
   }
   document.getElementById('tab-devices').addEventListener('click', () => switchView('devices'));
   document.getElementById('tab-addresses').addEventListener('click', () => switchView('addresses'));
-  function applyDashboardHash(){
-    const view=location.hash==='#view-addresses'?'addresses':location.hash==='#view-devices'?'devices':null;
-    if(!view)return;
-    switchView(view);
-    requestAnimationFrame(()=>document.getElementById('view-'+view).scrollIntoView({block:'start'}));
-  }
-  // A same-page anchor does not emit hashchange when its hash is already active.
-  // Activate the hidden panel before scrolling, even on repeated clicks.
-  document.querySelectorAll('a[href="/devices.html"],a[href="/addresses.html"]').forEach(link=>{
-    link.addEventListener('click',event=>{
-      if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
-      event.preventDefault();
-      const hash=new URL(link.href).hash;
-      if(location.hash!==hash)history.pushState(null,'',hash);
-    
-    });
-  });
-
-
-  applyDashboardHash();
-  
-  switchView('devices');
+  // Dedicated pages use normal navigation links; never intercept them as hash tabs.
+  // Keep the inactive panel hidden, while existing shared handlers remain available.
+    switchView('devices');
 
   // ── PWA service worker ────────────────────────────────────────────────────────
 
