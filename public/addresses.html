@@ -555,6 +555,33 @@
       if(Object.keys(matches).length===4&&new Set(Object.values(matches)).size===4)
         return {templateId:'bigassfan',templateName:fanTemplate.name,name:'BigAssFan',addresses:matches,score:100};
     }
+    // Heating GAs use functional names rather than a shared suffix:
+    // "Flur Temperatur Messwert", "Flur Aktueller Sollwert", "Flur Sollwertverschiebung".
+    // Match the complete room prefix and DPT; never infer from GA adjacency.
+    const heatingTemplate=deviceTemplates.find(t=>t.id==='room-heating');
+    if(heatingTemplate){
+      const rolePatterns={
+        temperature:/\\s+temperatur\\s+(?:messwert|istwert)$/i,
+        setpoint:/\\s+(?:aktueller\\s+)?sollwert$/i,
+        offset:/\\s+sollwertverschiebung$/i
+      };
+      const roomFor=(name)=>String(name||'').trim().replace(/\\s+/g,' ').replace(/\\s+(?:temperatur\\s+(?:messwert|istwert)|(?:aktueller\\s+)?sollwert|sollwertverschiebung)$/i,'').trim();
+      const room=roomFor(ga.name);
+      const role=Object.keys(rolePatterns).find(k=>rolePatterns[k].test(String(ga.name||'').trim()));
+      if(role && room){
+        const matches={};
+        for(const obj of heatingTemplate.objects){
+          const found=configuredGAs.filter(g=>!occupied.has(g.address)
+            &&roomFor(g.name).toLowerCase()===room.toLowerCase()
+            &&rolePatterns[obj.key].test(String(g.name||'').trim())
+            &&gaDirectionMatches(g,obj));
+          if(found.length===1)matches[obj.key]=found[0].address;
+        }
+        if(matches.temperature&&matches.setpoint
+          &&new Set(Object.values(matches)).size===Object.keys(matches).length)
+          return {templateId:'room-heating',templateName:heatingTemplate.name,name:room,addresses:matches,score:100};
+      }
+    }
     const shutterTemplate=deviceTemplates.find(t=>t.id==='roller-shutter');
     if(shutterTemplate){
       const group=configuredGAs.filter(g=>!occupied.has(g.address)&&gaBaseName(g.name).toLowerCase()===base.toLowerCase());
