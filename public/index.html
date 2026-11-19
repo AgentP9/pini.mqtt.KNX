@@ -110,17 +110,23 @@
     .route-row { border: 1px solid var(--bs-border-color); border-radius: 0.375rem; padding: 0.5rem; margin-bottom: 0.5rem; position: relative; }
     .route-row .btn-remove-route { position: absolute; top: 0.25rem; right: 0.25rem; }
     .repeat-icon { font-size: 0.75rem; }
+
+    /* Dashboard: brand + connection controls above, navigation on its own second row. */
+    .dashboard-shell .app-shell-inner { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: .5rem 1rem; align-items: center; }
+    .dashboard-shell .app-brand { grid-column: 1; grid-row: 1; justify-self: start; }
+    .dashboard-shell .app-shell-actions { grid-column: 2; grid-row: 1; margin-left: 0; justify-self: end; }
+    .dashboard-shell .app-nav { grid-column: 1 / -1; grid-row: 2; width: 100%; min-width: 0; }
+    @media(max-width:650px) { .dashboard-shell .app-shell-inner { grid-template-columns: 1fr; } .dashboard-shell .app-brand { grid-column: 1; grid-row: 1; } .dashboard-shell .app-shell-actions { grid-column: 1; grid-row: 2; justify-self: start; } .dashboard-shell .app-nav { grid-column: 1; grid-row: 3; overflow-x: auto; flex-wrap: nowrap; } }
   </style>
 </head>
 <body>
 
-<header class="app-shell"><div class="app-shell-inner">
+<header class="app-shell dashboard-shell"><div class="app-shell-inner">
   <a class="app-brand" href="/"><i class="bi bi-lightning-charge-fill text-primary me-1"></i> pini.mqtt.KNX</a>
   <nav class="app-nav" aria-label="Hauptnavigation">
     <a href="/" aria-current="page"><i class="bi bi-speedometer2"></i> Übersicht</a>
     <a href="/#view-devices"><i class="bi bi-grid"></i> KNX-Devices</a>
     <a href="/#view-addresses"><i class="bi bi-list-ul"></i> Gruppenadressen</a>
-    <a href="/monitor.html"><i class="bi bi-activity"></i> Live-Monitor</a>
     <a href="/routing.html"><i class="bi bi-diagram-3"></i> Verbindungen</a>
     <a href="/settings.html"><i class="bi bi-gear"></i> Einstellungen</a>
   </nav>
