@@ -882,7 +882,11 @@
     importFileInput.click();
   });
 
-  function reviewImport(addresses) {
+  async function reviewImport(addresses) {
+    // Compare against authoritative server state, not a possibly stale socket snapshot.
+    const currentResponse = await fetch('/api/groupaddresses', {cache:'no-store'});
+    if (!currentResponse.ok) throw new Error('Aktuelle Gruppenadressen konnten nicht geladen werden (HTTP '+currentResponse.status+')');
+    configuredGAs = await currentResponse.json();
     const existing = new Map(configuredGAs.map(ga => [ga.address, ga]));
     const unique = new Set();
     if (addresses.some(ga => { if (unique.has(ga.address)) return true; unique.add(ga.address); return false; })) {
@@ -941,11 +945,11 @@
     const file = importFileInput.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = event => {
+    reader.onload = async event => {
       try {
         const addresses = parseETSXml(event.target.result);
         if (!addresses.length) throw new Error('Keine Gruppenadressen in der Datei gefunden.');
-        reviewImport(addresses);
+        await reviewImport(addresses);
       } catch (err) { alert('Import fehlgeschlagen: ' + err.message); }
     };
     reader.onerror = () => alert('ETS-Datei konnte nicht gelesen werden.');
