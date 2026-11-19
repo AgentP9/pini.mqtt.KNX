@@ -1366,8 +1366,25 @@
   }
   document.getElementById('tab-devices').addEventListener('click', () => switchView('devices'));
   document.getElementById('tab-addresses').addEventListener('click', () => switchView('addresses'));
-  function applyDashboardHash(){if(location.hash==='#view-addresses')switchView('addresses');else if(location.hash==='#view-devices')switchView('devices');}
+  function applyDashboardHash(){
+    const view=location.hash==='#view-addresses'?'addresses':location.hash==='#view-devices'?'devices':null;
+    if(!view)return;
+    switchView(view);
+    requestAnimationFrame(()=>document.getElementById('view-'+view).scrollIntoView({block:'start'}));
+  }
+  // A same-page anchor does not emit hashchange when its hash is already active.
+  // Activate the hidden panel before scrolling, even on repeated clicks.
+  document.querySelectorAll('a[href="/#view-devices"],a[href="/#view-addresses"]').forEach(link=>{
+    link.addEventListener('click',event=>{
+      if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
+      event.preventDefault();
+      const hash=new URL(link.href).hash;
+      if(location.hash!==hash)history.pushState(null,'',hash);
+      applyDashboardHash();
+    });
+  });
   window.addEventListener('hashchange',applyDashboardHash);
+  window.addEventListener('popstate',applyDashboardHash);
   applyDashboardHash();
   
   switchView(location.hash === '#view-addresses' ? 'addresses' : location.hash === '#view-devices' ? 'devices' : localStorage.getItem('dashboard-view') === 'addresses' ? 'addresses' : 'devices');
