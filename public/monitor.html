@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="de" data-bs-theme="light">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#172a46"><meta name="apple-mobile-web-app-capable" content="yes">
+<title>Live-Monitor · pini.mqtt.KNX</title>
+<link rel="manifest" href="/manifest.json"><link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/favicon.svg">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="/app-shell.css"><script src="/app-shell.js" defer></script>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+body{padding-bottom:calc(5rem + env(safe-area-inset-bottom));background:var(--bs-tertiary-bg)}
+.monitor-wrap{max-width:1050px;margin:auto;padding:0 1rem}
+.monitor-status{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.monitor-status .badge{font-size:.8rem}
+.monitor-tabs{position:sticky;top:0;z-index:20;display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;padding:.65rem 0;background:var(--bs-tertiary-bg)}
+.monitor-tabs button{min-height:48px;border:1px solid var(--bs-border-color);border-radius:.8rem;background:var(--bs-body-bg);color:var(--bs-secondary-color);font-weight:600}
+.monitor-tabs button.active{background:var(--bs-primary-bg-subtle);border-color:var(--bs-primary);color:var(--bs-primary-text-emphasis)}
+.monitor-card{background:var(--bs-body-bg);border:1px solid var(--bs-border-color);border-radius:1rem;padding:1rem;margin-bottom:.7rem}
+.monitor-card h3{font-size:1rem;margin:0}
+.monitor-row{display:flex;justify-content:space-between;align-items:flex-start;gap:.8rem;padding:.65rem 0;border-top:1px solid var(--bs-border-color)}
+.monitor-row:first-child{border:0}
+.monitor-value{font-weight:650;overflow-wrap:anywhere;text-align:right;max-width:52%}
+.monitor-muted{color:var(--bs-secondary-color);font-size:.8rem}
+.monitor-event{border-left:4px solid var(--bs-primary);padding:.8rem 1rem;margin-bottom:.6rem;background:var(--bs-body-bg);border-radius:.65rem;overflow-wrap:anywhere}
+.monitor-event.command{border-left-color:var(--bs-warning)}
+.monitor-event.unmapped{border-left-color:var(--bs-secondary)}
+.monitor-event .value{font-size:1.15rem;font-weight:700}
+.monitor-event .meta{font-size:.78rem;color:var(--bs-secondary-color)}
+.monitor-event code{overflow-wrap:anywhere}
+.monitor-pulse{animation:pulse 1s ease}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(13,110,253,.4)}100%{box-shadow:0 0 0 10px transparent}}
+.monitor-toolbar{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem}
+.monitor-toolbar .form-control,.monitor-toolbar .form-select{min-height:46px}
+.monitor-toolbar .btn{min-height:46px}
+.monitor-empty{padding:2rem 1rem;text-align:center;color:var(--bs-secondary-color)}
+.monitor-panel[hidden]{display:none!important}
+@media(min-width:850px){.monitor-wrap{padding:0 1.5rem}.monitor-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem}.monitor-grid .monitor-card{margin:0}}
+</style>
+</head>
+<body>
+<header class="app-shell"><div class="app-shell-inner">
+<a class="app-brand" href="/?dashboard=1"><i class="bi bi-lightning-charge-fill text-primary me-1"></i> pini.mqtt.KNX</a>
+<nav class="app-nav" aria-label="Hauptnavigation">
+<a href="/?dashboard=1"><i class="bi bi-speedometer2"></i> Übersicht</a>
+<a href="/monitor.html" aria-current="page"><i class="bi bi-activity"></i> Live-Monitor</a>
+<a href="/routing.html"><i class="bi bi-diagram-3"></i> Verbindungen</a>
+<a href="/settings.html"><i class="bi bi-gear"></i> Einstellungen</a>
+</nav><div class="app-shell-actions"><button type="button" class="btn btn-sm" data-app-theme-toggle title="Darstellung wechseln" aria-label="Darstellung wechseln"><i class="bi bi-circle-half"></i></button></div>
+</div></header>
+<main class="monitor-wrap">
+<div class="app-page-head"><div><div class="app-eyebrow">Diagnose · Nur lesen</div><h1 class="app-page-title h3">Live-Monitor</h1><p class="app-page-subtitle">Direkt am Taster prüfen, welches KNX-Telegramm ankommt und welche MQTT-Nachrichten daraus entstehen.</p></div></div>
+<div class="monitor-status mb-3" role="status" aria-live="polite"><span id="socket-status" class="badge text-bg-secondary">Verbinde …</span><span id="knx-status" class="badge text-bg-secondary">KNX: …</span><span id="mqtt-status" class="badge text-bg-secondary">MQTT: …</span><span id="event-count" class="monitor-muted ms-auto">0 neue Ereignisse</span></div>
+<div class="monitor-tabs" role="tablist" aria-label="Monitor-Ansichten">
+<button type="button" role="tab" aria-selected="true" aria-controls="panel-devices" class="active" data-panel="devices"><i class="bi bi-grid me-1"></i> Geräte</button>
+<button type="button" role="tab" aria-selected="false" aria-controls="panel-watch" data-panel="watch"><i class="bi bi-eye me-1"></i> Beobachten</button>
+<button type="button" role="tab" aria-selected="false" aria-controls="panel-live" data-panel="live"><i class="bi bi-terminal me-1"></i> Live-Log</button>
+</div>
+<section id="panel-devices" class="monitor-panel" role="tabpanel">
+<div class="monitor-toolbar"><input id="device-search" class="form-control flex-grow-1" style="min-width:180px" type="search" placeholder="Gerät, Raum oder Adresse suchen" aria-label="Geräte suchen"></div>
+<div id="device-list" class="monitor-grid"><div class="monitor-empty">Lade Geräte …</div></div>
+</section>
+<section id="panel-watch" class="monitor-panel" role="tabpanel" hidden>
+<div class="monitor-card">
+<label for="watch-device" class="form-label fw-semibold">Gerät beobachten</label>
+<select id="watch-device" class="form-select mb-2"><option value="">Gerät auswählen …</option></select>
+<p class="monitor-muted mb-2">Alle dem Gerät zugeordneten KNX-Adressen werden live gefiltert. Dazu passende Routing-Ereignisse werden angezeigt, soweit sie einer Route zugeordnet werden können.</p>
+<div id="watch-addresses" class="small mb-2"></div>
+<div class="d-flex gap-2 flex-wrap"><button id="watch-clear" type="button" class="btn btn-outline-secondary btn-sm">Verlauf leeren</button><span id="watch-count" class="monitor-muted align-self-center">0 Ereignisse</span></div>
+</div>
+<div id="watch-log" aria-live="polite" aria-relevant="additions"><div class="monitor-empty">Wähle ein Gerät, um seine Nachrichten zu beobachten.</div></div>
+</section>
+<section id="panel-live" class="monitor-panel" role="tabpanel" hidden>
+<div class="monitor-toolbar"><input id="log-search" type="search" class="form-control flex-grow-1" style="min-width:160px" placeholder="Adresse, Topic oder Wert filtern" aria-label="Log filtern"><button type="button" class="btn btn-outline-secondary" id="log-pause"><i class="bi bi-pause-circle me-1"></i> Pause</button><button type="button" class="btn btn-outline-secondary" id="log-clear">Leeren</button></div>
+<div id="live-log" aria-live="off"><div class="monitor-empty">Warte auf Telegramme …</div></div>
+</section>
+</main>
+<script>
+'use strict';
+const socket = io();
+const $ = id => document.getElementById(id);
+const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+let devices = [], rooms = [], addresses = [], routing = {routes:[],endpoints:[],mqttDevices:[]};
+let confirmed = {}, pending = {}, events = [], watchEvents = [], selected = new URLSearchParams(location.search).get('device') || '', paused = false, count = 0;
+const maxEvents = 200;
+const deviceAddresses = device => new Set(Object.values(device.addresses || {}).filter(Boolean));
+const deviceForAddress = address => devices.find(device => deviceAddresses(device).has(address));
+const nameForAddress = address => addresses.find(ga => ga.address === address)?.name || address;
+const roomName = device => rooms.find(room => room.id === device.roomId)?.name || 'Ohne Raum';
+const formatTime = value => {const date = new Date(value || Date.now());return Number.isNaN(date.getTime())?'–':date.toLocaleTimeString('de-DE');};
+function setTab(name){
+ document.querySelectorAll('[data-panel]').forEach(btn => {const active = btn.dataset.panel === name;btn.classList.toggle('active',active);btn.setAttribute('aria-selected',String(active));});
+ document.querySelectorAll('.monitor-panel').forEach(panel => {panel.hidden = panel.id !== 'panel-' + name;});
+ if(location.hash !== '#' + name) history.replaceState(null,'','#' + name);
+}
+document.querySelectorAll('[data-panel]').forEach(button => button.addEventListener('click',()=>setTab(button.dataset.panel)));
+function renderDevices(){
+ const query = $('device-search').value.toLocaleLowerCase('de');
+ const matches = devices.filter(d => [d.name,roomName(d),...Object.values(d.addresses||{})].join(' ').toLocaleLowerCase('de').includes(query)).sort((a,b)=>roomName(a).localeCompare(roomName(b),'de')||a.name.localeCompare(b.name,'de'));
+ $('device-list').innerHTML = matches.length ? matches.map(device => {
+  const signals = Object.entries(device.addresses || {}).map(([signal,address]) => {
+   const known = Object.prototype.hasOwnProperty.call(confirmed,address);
+   const value = known ? confirmed[address] : 'Noch kein Telegramm';
+   const queued = Object.prototype.hasOwnProperty.call(pending,address);
+   return '<div class="monitor-row"><div><strong>'+escapeHtml(signal)+'</strong><div class="monitor-muted">'+escapeHtml(address)+' · '+escapeHtml(nameForAddress(address))+'</div></div><div class="monitor-value">'+escapeHtml(value)+(queued?'<div class="monitor-muted text-warning">Schreibauftrag: '+escapeHtml(pending[address])+'</div>':'')+(known?'<div class="monitor-muted">Letzter empfangener Wert</div>':'')+'</div></div>';
+  }).join('');
+  return '<article class="monitor-card"><div class="d-flex justify-content-between align-items-start gap-2 mb-2"><div><div class="monitor-muted">'+escapeHtml(roomName(device))+'</div><h3>'+escapeHtml(device.name)+'</h3></div><button type="button" class="btn btn-outline-primary btn-sm" data-watch="'+escapeHtml(device.id)+'"><i class="bi bi-eye me-1"></i> Beobachten</button></div>'+signals+'</article>';
+ }).join('') : '<div class="monitor-empty">Keine passenden Geräte gefunden.</div>';
+}
+$('device-list').addEventListener('click',event=>{const button=event.target.closest('[data-watch]');if(!button)return;chooseDevice(button.dataset.watch);setTab('watch');});
+function renderWatchSelect(){
+ const select=$('watch-device');select.innerHTML='<option value="">Gerät auswählen …</option>'+devices.slice().sort((a,b)=>a.name.localeCompare(b.name,'de')).map(d=>'<option value="'+escapeHtml(d.id)+'">'+escapeHtml(roomName(d)+' / '+d.name)+'</option>').join('');
+ if(devices.some(d=>d.id===selected))select.value=selected;
+ renderWatchAddresses();renderWatch();
+}
+function chooseDevice(id){selected=devices.some(d=>d.id===id)?id:'';watchEvents=[];$('watch-device').value=selected;const url=new URL(location.href);if(selected)url.searchParams.set('device',selected);else url.searchParams.delete('device');history.replaceState(null,'',url);renderWatchAddresses();renderWatch();}
+$('watch-device').addEventListener('change',event=>chooseDevice(event.target.value));
+$('watch-clear').addEventListener('click',()=>{watchEvents=[];renderWatch();});
+function renderWatchAddresses(){
+ const device=devices.find(d=>d.id===selected);
+ $('watch-addresses').innerHTML=device?'<strong>Überwachte KNX-Adressen:</strong><div class="mt-1">'+Object.entries(device.addresses||{}).map(([key,address])=>'<span class="badge text-bg-secondary me-1 mb-1">'+escapeHtml(key)+': '+escapeHtml(address)+'</span>').join('')+'</div>':'';
+}
+function routeIdsForDevice(device){
+ if(!device)return new Set();
+ return new Set((routing.routes||[]).filter(r=>r.enabled!==false&&[r.from,r.to].some(ref=>ref?.type==='device'&&ref.id===device.id)).map(r=>r.id));
+}
+function matchesDevice(entry,device){
+ if(!device)return false;
+ if(entry.address&&deviceAddresses(device).has(entry.address))return true;
+ return entry.routeId&&routeIdsForDevice(device).has(entry.routeId);
+}
+function eventMarkup(entry){
+ const direction=String(entry.direction==='KNX→MQTT'&&!entry.topic&&!entry.routeId?'KNX-Telegramm':entry.direction||'Ereignis');
+ const command=direction.includes('→KNX')||entry.outbound;
+ const label=entry.address ? nameForAddress(entry.address) : entry.routeId ? 'Routing '+entry.routeId : 'MQTT';
+ return '<article class="monitor-event '+(command?'command':'')+(entry.configured===false?' unmapped':'')+'"><div class="d-flex justify-content-between gap-2"><strong>'+escapeHtml(label)+'</strong><time class="meta">'+escapeHtml(formatTime(entry.timestamp))+'</time></div><div class="value mt-1">'+escapeHtml(entry.value)+'</div><div class="meta mt-1">'+escapeHtml(direction)+(entry.address?' · GA '+escapeHtml(entry.address):'')+(entry.topic?' · '+escapeHtml(entry.topic):'')+(entry.src?' · Quelle '+escapeHtml(entry.src):'')+(entry.routeId?' · Route '+escapeHtml(entry.routeId):'')+'</div></article>';
+}
+function renderWatch(){
+ $('watch-count').textContent=watchEvents.length+' Ereignisse';
+ $('watch-log').innerHTML=!selected?'<div class="monitor-empty">Wähle ein Gerät, um seine Nachrichten zu beobachten.</div>':watchEvents.length?watchEvents.map(eventMarkup).join(''):'<div class="monitor-empty">Beobachtung aktiv. Drücke jetzt den Taster und beobachte die Telegramme.</div>';
+}
+function renderLive(){
+ const q=$('log-search').value.toLocaleLowerCase('de');
+ const filtered=events.filter(e=>[e.address,e.topic,e.name,e.value,e.direction,e.routeId].join(' ').toLocaleLowerCase('de').includes(q));
+ $('live-log').innerHTML=filtered.length?filtered.map(eventMarkup).join(''):'<div class="monitor-empty">Noch keine passenden Ereignisse.</div>';
+}
+$('log-search').addEventListener('input',renderLive);
+$('device-search').addEventListener('input',renderDevices);
+$('log-clear').addEventListener('click',()=>{events=[];renderLive();});
+$('log-pause').addEventListener('click',()=>{paused=!paused;$('log-pause').innerHTML=paused?'<i class="bi bi-play-circle me-1"></i> Fortsetzen':'<i class="bi bi-pause-circle me-1"></i> Pause';});
+function ingest(entry,historical=false){
+ if(!entry||typeof entry!=='object')return;
+ if(!historical){count++;$('event-count').textContent=count+' neue Ereignisse';}
+ if(!paused){events.unshift(entry);if(events.length>maxEvents)events.length=maxEvents;renderLive();}
+ const device=devices.find(d=>d.id===selected);
+ if(matchesDevice(entry,device)){watchEvents.unshift(entry);if(watchEvents.length>maxEvents)watchEvents.length=maxEvents;renderWatch();}
+}
+function updateConnection(service,connected){const badge=$(service.toLowerCase()+'-status');if(!badge)return;badge.textContent=service+': '+(connected?'Verbunden':'Getrennt');badge.className='badge '+(connected?'text-bg-success':'text-bg-danger');}
+socket.on('connect',()=>{$('socket-status').textContent='Live verbunden';$('socket-status').className='badge text-bg-success';});
+socket.on('disconnect',()=>{$('socket-status').textContent='Live getrennt';$('socket-status').className='badge text-bg-danger';});
+socket.on('status',({service,connected})=>updateConnection(service,connected));
+socket.on('init',log=>{events=Array.isArray(log)?log.slice(-maxEvents).reverse():[];renderLive();if(selected){const device=devices.find(d=>d.id===selected);watchEvents=events.filter(entry=>matchesDevice(entry,device));renderWatch();}});
+socket.on('traffic',entry=>ingest(entry));
+socket.on('routing-traffic',entry=>ingest({...entry,routeId:entry.id}));
+socket.on('devices',data=>{devices=Array.isArray(data)?data:[];renderDevices();renderWatchSelect();});
+socket.on('rooms',data=>{rooms=Array.isArray(data)?data:[];renderDevices();renderWatchSelect();});
+socket.on('groupaddresses',data=>{addresses=Array.isArray(data)?data:[];renderDevices();});
+socket.on('value-snapshot',data=>{confirmed=data?.values||{};pending=data?.pending||{};renderDevices();});
+socket.on('ga-value',({address,value,confirmed:isConfirmed})=>{if(isConfirmed){confirmed[address]=value;delete pending[address];}else pending[address]=value;renderDevices();});
+fetch('/api/rooms').then(r=>r.ok?r.json():[]).then(data=>{rooms=data;renderDevices();renderWatchSelect();}).catch(()=>{});
+fetch('/api/routing').then(r=>r.ok?r.json():null).then(data=>{if(data)routing=data;}).catch(()=>{});
+if(selected)setTab('watch');else if(['#devices','#watch','#live'].includes(location.hash))setTab(location.hash.slice(1));
+</script>
+</body></html>

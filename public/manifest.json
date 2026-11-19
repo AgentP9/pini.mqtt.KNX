@@ -19,6 +19,18 @@
   ],
   "shortcuts": [
     {
+      "name": "Live-Monitor",
+      "short_name": "Monitor",
+      "url": "/monitor.html",
+      "icons": [
+        {
+          "src": "/favicon.svg",
+          "sizes": "any",
+          "type": "image/svg+xml"
+        }
+      ]
+    },
+    {
       "name": "Verbindungen",
       "short_name": "Routing",
       "url": "/routing.html",

@@ -13,6 +13,17 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="apple-touch-icon" href="/favicon.svg" />
   <link rel="manifest" href="/manifest.json" />
+  <!-- Same PWA start_url on every device; choose the initial view on launch. -->
+  <script>
+    (function () {
+      const phone = window.matchMedia('(max-width: 767.98px) and (pointer: coarse)').matches;
+      const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+      const explicitDashboard = new URLSearchParams(location.search).has('dashboard') || Boolean(location.hash);
+      if (phone && standalone && !explicitDashboard && (location.pathname === '/' || location.pathname === '/index.html')) {
+        location.replace('/monitor.html');
+      }
+    })();
+  </script>
   <!-- Restore theme before first paint to avoid flash -->
   <script>
     (function () {
@@ -109,6 +120,7 @@
     <a href="/" aria-current="page"><i class="bi bi-speedometer2"></i> Übersicht</a>
     <a href="/#view-devices"><i class="bi bi-grid"></i> KNX-Devices</a>
     <a href="/#view-addresses"><i class="bi bi-list-ul"></i> Gruppenadressen</a>
+    <a href="/monitor.html"><i class="bi bi-activity"></i> Live-Monitor</a>
     <a href="/routing.html"><i class="bi bi-diagram-3"></i> Verbindungen</a>
     <a href="/settings.html"><i class="bi bi-gear"></i> Einstellungen</a>
   </nav>
@@ -123,7 +135,7 @@
 
 <div class="container-fluid px-4">
 
-  <div class="app-page-head"><div><div class="app-eyebrow">Systemübersicht</div><h1 class="app-page-title h3">KNX und MQTT. Ein System.</h1><p class="app-page-subtitle">Gruppenadressen definieren KNX-Objekte, Devices strukturieren sie und Verbindungen bestimmen den Datenfluss.</p></div><a class="btn btn-primary" href="/routing.html"><i class="bi bi-diagram-3 me-1"></i> Verbindungen verwalten <span id="routing-count" class="badge text-bg-light ms-1" aria-label="Aktive Verbindungen">…</span></a></div>
+  <div class="app-page-head"><div><div class="app-eyebrow">Systemübersicht</div><h1 class="app-page-title h3">KNX und MQTT. Ein System.</h1><p class="app-page-subtitle">Gruppenadressen definieren KNX-Objekte, Devices strukturieren sie und Verbindungen bestimmen den Datenfluss.</p></div><a class="btn btn-outline-primary" href="/monitor.html"><i class="bi bi-phone me-1"></i> Live-Monitor</a> <a class="btn btn-primary" href="/routing.html"><i class="bi bi-diagram-3 me-1"></i> Verbindungen verwalten <span id="routing-count" class="badge text-bg-light ms-1" aria-label="Aktive Verbindungen">…</span></a></div>
   <nav class="app-workflow mb-4" aria-label="Konfigurationsablauf">
     <a href="/#view-addresses"><span class="step-icon"><i class="bi bi-list-ul"></i></span><span><strong>1. Gruppenadressen</strong><small>KNX-Adressen und DPTs importieren und pflegen</small></span></a>
     <a href="/#view-devices"><span class="step-icon"><i class="bi bi-grid"></i></span><span><strong>2. Devices</strong><small>KNX-Signale Räumen und Geräten zuordnen</small></span></a>
