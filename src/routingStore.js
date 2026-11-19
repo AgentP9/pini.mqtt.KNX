@@ -95,7 +95,12 @@ class RoutingStore {
       const valueType = v => typeof v === 'string' ? 'text' : typeof v === 'number' ? 'number' : typeof v === 'boolean' ? 'boolean' : null;
       // Map values are stored as strings in the editor. Numeric strings are valid
       // for numeric MQTT targets; non-numeric strings remain type conflicts.
-      const outputType = v => to.type === 'number' && typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)) ? 'number' : valueType(v);
+      const outputType = v => {
+        if (typeof v === 'string' && to.type === 'number' && v.trim() !== '' && Number.isFinite(Number(v))) return 'number';
+        // DPT 1.x / KNX boolean routes commonly use ON/OFF or true/false strings.
+        if (typeof v === 'string' && to.type === 'boolean' && ['true', 'false', 'on', 'off'].includes(v.trim().toLowerCase())) return 'boolean';
+        return valueType(v);
+      };
       const forwardTypes = () => {
         if (!t) return from.type ? [from.type] : [];
         if (t.kind === 'constant') return [valueType(t.value)];
