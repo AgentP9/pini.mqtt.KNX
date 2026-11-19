@@ -83,7 +83,7 @@ const socket = io();
 const $ = id => document.getElementById(id);
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 let devices = [], rooms = [], addresses = [], routing = {routes:[],endpoints:[],mqttDevices:[]};
-let confirmed = {}, pending = {}, events = [], watchEvents = [], selected = '', paused = false, count = 0;
+let confirmed = {}, pending = {}, events = [], watchEvents = [], selected = new URLSearchParams(location.search).get('device') || '', paused = false, count = 0;
 const maxEvents = 200;
 const deviceAddresses = device => new Set(Object.values(device.addresses || {}).filter(Boolean));
 const deviceForAddress = address => devices.find(device => deviceAddresses(device).has(address));
@@ -112,10 +112,10 @@ function renderDevices(){
 $('device-list').addEventListener('click',event=>{const button=event.target.closest('[data-watch]');if(!button)return;chooseDevice(button.dataset.watch);setTab('watch');});
 function renderWatchSelect(){
  const select=$('watch-device');select.innerHTML='<option value="">Gerät auswählen …</option>'+devices.slice().sort((a,b)=>a.name.localeCompare(b.name,'de')).map(d=>'<option value="'+escapeHtml(d.id)+'">'+escapeHtml(roomName(d)+' / '+d.name)+'</option>').join('');
- if(devices.some(d=>d.id===selected))select.value=selected;else selected='';
+ if(devices.some(d=>d.id===selected))select.value=selected;
  renderWatchAddresses();renderWatch();
 }
-function chooseDevice(id){selected=devices.some(d=>d.id===id)?id:'';watchEvents=[];$('watch-device').value=selected;renderWatchAddresses();renderWatch();}
+function chooseDevice(id){selected=devices.some(d=>d.id===id)?id:'';watchEvents=[];$('watch-device').value=selected;const url=new URL(location.href);if(selected)url.searchParams.set('device',selected);else url.searchParams.delete('device');history.replaceState(null,'',url);renderWatchAddresses();renderWatch();}
 $('watch-device').addEventListener('change',event=>chooseDevice(event.target.value));
 $('watch-clear').addEventListener('click',()=>{watchEvents=[];renderWatch();});
 function renderWatchAddresses(){
@@ -132,7 +132,7 @@ function matchesDevice(entry,device){
  return entry.routeId&&routeIdsForDevice(device).has(entry.routeId);
 }
 function eventMarkup(entry){
- const direction=String(entry.direction||'Ereignis');
+ const direction=String(entry.direction==='KNX→MQTT'&&!entry.topic&&!entry.routeId?'KNX-Telegramm':entry.direction||'Ereignis');
  const command=direction.includes('→KNX')||entry.outbound;
  const label=entry.address ? nameForAddress(entry.address) : entry.routeId ? 'Routing '+entry.routeId : 'MQTT';
  return '<article class="monitor-event '+(command?'command':'')+(entry.configured===false?' unmapped':'')+'"><div class="d-flex justify-content-between gap-2"><strong>'+escapeHtml(label)+'</strong><time class="meta">'+escapeHtml(formatTime(entry.timestamp))+'</time></div><div class="value mt-1">'+escapeHtml(entry.value)+'</div><div class="meta mt-1">'+escapeHtml(direction)+(entry.address?' · GA '+escapeHtml(entry.address):'')+(entry.topic?' · '+escapeHtml(entry.topic):'')+(entry.src?' · Quelle '+escapeHtml(entry.src):'')+(entry.routeId?' · Route '+escapeHtml(entry.routeId):'')+'</div></article>';
@@ -171,6 +171,6 @@ socket.on('value-snapshot',data=>{confirmed=data?.values||{};pending=data?.pendi
 socket.on('ga-value',({address,value,confirmed:isConfirmed})=>{if(isConfirmed){confirmed[address]=value;delete pending[address];}else pending[address]=value;renderDevices();});
 fetch('/api/rooms').then(r=>r.ok?r.json():[]).then(data=>{rooms=data;renderDevices();renderWatchSelect();}).catch(()=>{});
 fetch('/api/routing').then(r=>r.ok?r.json():null).then(data=>{if(data)routing=data;}).catch(()=>{});
-if(['#devices','#watch','#live'].includes(location.hash))setTab(location.hash.slice(1));
+if(selected)setTab('watch');else if(['#devices','#watch','#live'].includes(location.hash))setTab(location.hash.slice(1));
 </script>
 </body></html>
