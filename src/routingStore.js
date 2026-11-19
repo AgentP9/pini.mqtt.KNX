@@ -59,6 +59,16 @@ class RoutingStore {
       if (ref.type === 'mqttDevice') { const d = this.mqttDevices.find(d => d.id === ref.id); const e = d?.signals.find(e => e.key === ref.signal); return { type: e?.payloadType || null, problem: e ? null : 'MQTT-Signal fehlt' }; }
       return { type: null, problem: 'Unbekannter Endpunkt' };
     };
+    // Also report KNX device mappings without any route.
+    for (const device of this.deviceStore.devices) {
+      for (const signal of Object.keys(device.addresses || {})) {
+        const ref = { type: 'device', id: device.id, signal };
+        const resolved = byRef(ref);
+        if (resolved.problem && !this.routes.some(route => [route.from, route.to].some(endpoint => endpoint.type === 'device' && endpoint.id === device.id && endpoint.signal === signal))) {
+          issues.push({ routeId: null, from: ref, to: ref, addresses: [resolved.address].filter(Boolean), reasons: [resolved.problem] });
+        }
+      }
+    }
     for (const route of this.routes) {
       const from = byRef(route.from), to = byRef(route.to);
       const reasons = [from.problem, to.problem].filter(Boolean);
