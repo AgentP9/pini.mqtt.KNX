@@ -113,3 +113,20 @@ test('routing direction is defined by graph, not group-address metadata', () => 
   assert.equal(f.store.list().legacyCleaned,undefined);
  } finally {f.cleanup();}
 });
+
+
+test('numeric string mapping to number target is not a diagnostic conflict',()=>{
+ const f=fixture();
+ try {
+  f.store.save({endpoints:[{...f.endpoint,payloadType:'number'}],routes:[{id:'numeric-map',from:{type:'device',id:'d1',signal:'command'},to:{type:'mqtt',id:'m1'},enabled:true,transform:{kind:'map',values:{ON:'20',OFF:'20'}}}]});
+  assert.equal(f.store.diagnostics().length,0);
+ } finally {f.cleanup();}
+});
+
+test('non-numeric string mapping to number target remains a diagnostic conflict',()=>{
+ const f=fixture();
+ try {
+  f.store.save({endpoints:[{...f.endpoint,payloadType:'number'}],routes:[{id:'bad-map',from:{type:'device',id:'d1',signal:'command'},to:{type:'mqtt',id:'m1'},enabled:true,transform:{kind:'map',values:{ON:'PLAY',OFF:'PAUSE'}}}]});
+  assert.match(f.store.diagnostics()[0].reasons.join(' '),/Ziel erwartet number/);
+ } finally {f.cleanup();}
+});
