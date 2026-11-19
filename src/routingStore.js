@@ -14,6 +14,7 @@ class RoutingStore {
     this.endpoints = raw.endpoints || [];
     this.routes = (raw.routes || []).map(({ legacyKey, ...route }) => route);
     this.knxMqttBaseTopic = raw.knxMqttBaseTopic || 'knx';
+    this.acceptedDiagnostics = Array.isArray(raw.acceptedDiagnostics) ? raw.acceptedDiagnostics.filter(x => typeof x === 'string') : [];
     this.validateAll(this.endpoints, this.routes, this.mqttDevices);
   }
   list() { return { endpoints: this.endpoints, mqttDevices: this.mqttDevices, routes: this.routes, knxMqttBaseTopic: this.knxMqttBaseTopic }; }
@@ -40,6 +41,79 @@ class RoutingStore {
       throw Error('Device signal not configured: device=' + (device.name || device.id) + ', signal=' + ref.signal + ', GA=' + (address || 'missing') + ', actualDPT=' + (ga?.dpt || 'missing') + ', expectedDPT=' + (object?.dpt || 'missing'));
     }
     return { address, ga, type: ga.dpt.startsWith('1.') ? 'boolean' : ['10.001','11.001','19.001'].includes(ga.dpt) ? 'text' : 'number' };
+  }
+  diagnosticKey(issue) {
+    return issue.routeId ? 'route:' + issue.routeId : 'device:' + issue.from.id + ':' + issue.from.signal;
+  }
+  setDiagnosticAcceptance(key, accepted) {
+    const issue = this.diagnostics().find(issue => issue.key === key);
+    if (!issue) throw Error('Diagnostic not found');
+    const next = new Set(this.acceptedDiagnostics);
+    if (accepted) next.add(key); else next.delete(key);
+    this.persistAcceptedDiagnostics([...next]);
+  }
+  persistAcceptedDiagnostics(accepted) {
+    const data = JSON.stringify({ version: 3, endpoints: this.endpoints, mqttDevices: this.mqttDevices, routes: this.routes, knxMqttBaseTopic: this.knxMqttBaseTopic, acceptedDiagnostics: accepted }, null, 2) + '\n';
+    fs.mkdirSync(path.dirname(this.file), { recursive: true });
+    const tmp = this.file + '.' + crypto.randomUUID() + '.tmp';
+    try { fs.writeFileSync(tmp, data, { mode: 0o600 }); fs.renameSync(tmp, this.file); }
+    finally { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); }
+    this.acceptedDiagnostics = accepted;
+  }
+  diagnostics() {
+    const issues = [];
+    const templates = this.deviceStore.templates();
+    const byRef = ref => {
+      if (ref.type === 'device') {
+        const device = this.deviceStore.devices.find(d => d.id === ref.id);
+        const obj = templates.find(t => t.id === device?.templateId)?.objects.find(o => o.key === ref.signal);
+        const address = device?.addresses?.[ref.signal];
+        const ga = this.groupAddresses.find(g => g.address === address);
+        if (!device || !obj || !ga) return { type: null, problem: 'Gerät, Signal oder Gruppenadresse fehlt', address };
+        const valid = ga.dpt === obj.dpt || (device.templateId === 'roller-shutter' && ref.signal === 'stop' && ['1.017', '1.009'].includes(ga.dpt));
+        const type = ga.dpt?.startsWith('1.') ? 'boolean' : ['10.001', '11.001', '19.001'].includes(ga.dpt) ? 'text' : ga.dpt ? 'number' : null;
+        return { type, address, problem: valid ? null : 'DPT ' + (ga.dpt || 'unbekannt') + ' passt nicht zum Gerätesignal (erwartet ' + obj.dpt + ')' };
+      }
+      if (ref.type === 'mqtt') { const e = this.endpoints.find(e => e.id === ref.id); return { type: e?.payloadType || null, problem: e ? null : 'MQTT-Endpunkt fehlt' }; }
+      if (ref.type === 'mqttDevice') { const d = this.mqttDevices.find(d => d.id === ref.id); const e = d?.signals.find(e => e.key === ref.signal); return { type: e?.payloadType || null, problem: e ? null : 'MQTT-Signal fehlt' }; }
+      return { type: null, problem: 'Unbekannter Endpunkt' };
+    };
+    // Also report KNX device mappings without any route.
+    for (const device of this.deviceStore.devices) {
+      for (const signal of Object.keys(device.addresses || {})) {
+        const ref = { type: 'device', id: device.id, signal };
+        const resolved = byRef(ref);
+        if (resolved.problem && !this.routes.some(route => [route.from, route.to].some(endpoint => endpoint.type === 'device' && endpoint.id === device.id && endpoint.signal === signal))) {
+          issues.push({ routeId: null, from: ref, to: ref, addresses: [resolved.address].filter(Boolean), reasons: [resolved.problem] });
+        }
+      }
+    }
+    for (const route of this.routes) {
+      const from = byRef(route.from), to = byRef(route.to);
+      const reasons = [from.problem, to.problem].filter(Boolean);
+      const t = route.transform;
+      const valueType = v => typeof v === 'string' ? 'text' : typeof v === 'number' ? 'number' : typeof v === 'boolean' ? 'boolean' : null;
+      const forwardTypes = () => {
+        if (!t) return from.type ? [from.type] : [];
+        if (t.kind === 'constant') return [valueType(t.value)];
+        if (t.kind === 'map' || t.kind === 'json') {
+          const vals = Object.values(t.values || {});
+          if (Object.hasOwn(t, 'defaultValue')) vals.push(t.defaultValue);
+          return [...new Set(vals.map(valueType).filter(Boolean))];
+        }
+        return [];
+      };
+      const types = forwardTypes();
+      if (from.type && to.type && !t && from.type !== to.type) reasons.push('Datentyp ' + from.type + ' → ' + to.type + ' ohne Wertumwandlung');
+      if (t && types.some(type => type !== to.type)) reasons.push('Wertumwandlung liefert ' + types.join('/') + ', Ziel erwartet ' + to.type);
+      if (t && !types.length) reasons.push('Wertumwandlung ohne prüfbare Ausgabewerte');
+      if (route.bidirectional && t?.kind === 'map') {
+        const keys = Object.keys(t.values || {});
+        if (keys.some(key => valueType(key) !== from.type && !(from.type === 'number' && Number.isFinite(Number(key))) && !(from.type === 'boolean' && ['true','false'].includes(key.toLowerCase())))) reasons.push('Rückrichtung: Mapping-Schlüssel passen nicht zum Quelltyp');
+      }
+      if (reasons.length) issues.push({ routeId: route.id, from: route.from, to: route.to, addresses: [from.address, to.address].filter(Boolean), reasons });
+    }
+    return issues.map(issue => ({ ...issue, key: this.diagnosticKey(issue), accepted: this.acceptedDiagnostics.includes(this.diagnosticKey(issue)) }));
   }
   validateAll(endpoints, routes, mqttDevices = this.mqttDevices) {
     if (!Array.isArray(endpoints) || !Array.isArray(routes) || endpoints.length > 300 || routes.length > 500) throw Error('Invalid routing configuration');
@@ -105,7 +179,7 @@ class RoutingStore {
     this.validateAll(next.endpoints, routes, mqttDevices);
     const knxMqttBaseTopic = next.knxMqttBaseTopic === undefined ? this.knxMqttBaseTopic : next.knxMqttBaseTopic;
     if (typeof knxMqttBaseTopic !== 'string' || !knxMqttBaseTopic || knxMqttBaseTopic.length > 180 || /[+#\\s]/.test(knxMqttBaseTopic) || knxMqttBaseTopic.startsWith('/') || knxMqttBaseTopic.endsWith('/')) throw Error('Invalid KNX MQTT base topic');
-    const data = JSON.stringify({ version: 3, endpoints: next.endpoints, mqttDevices, routes, knxMqttBaseTopic }, null, 2) + '\n';
+    const data = JSON.stringify({ version: 3, endpoints: next.endpoints, mqttDevices, routes, knxMqttBaseTopic, acceptedDiagnostics: this.acceptedDiagnostics }, null, 2) + '\n';
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     const tmp = this.file + '.' + crypto.randomUUID() + '.tmp';
     try { fs.writeFileSync(tmp, data, { mode: 0o600 }); fs.renameSync(tmp, this.file); }
