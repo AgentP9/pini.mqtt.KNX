@@ -13,6 +13,17 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="apple-touch-icon" href="/favicon.svg" />
   <link rel="manifest" href="/manifest.json" />
+  <!-- Same PWA start_url on every device; choose the initial view on launch. -->
+  <script>
+    (function () {
+      const phone = window.matchMedia('(max-width: 767.98px) and (pointer: coarse)').matches;
+      const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+      const explicitDashboard = new URLSearchParams(location.search).has('dashboard') || Boolean(location.hash);
+      if (phone && standalone && !explicitDashboard && (location.pathname === '/' || location.pathname === '/index.html')) {
+        location.replace('/monitor.html');
+      }
+    })();
+  </script>
   <!-- Restore theme before first paint to avoid flash -->
   <script>
     (function () {
