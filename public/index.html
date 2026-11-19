@@ -895,7 +895,7 @@
         }
       }
       if (!old || changes.length) {
-        importCandidates.push({ address: ga.address, name: ga.name, old, changes });
+        importCandidates.push({ address: ga.address, name: ga.name, dpt: ga.dpt, old, changes });
         importSnapshot.push(old ? { address: ga.address, name: old.name || '', dpt: old.dpt || '', comment: old.comment || '' } : { address: ga.address });
       }
     }
@@ -951,7 +951,7 @@
     const chosen = importCandidates.filter((_, i) => importSelection.has(i));
     if (!chosen.length) return;
     const addresses = chosen.map(candidate => {
-      if (!candidate.old) return { address: candidate.address, name: candidate.name || '', dpt: candidate.changes.find(c => c.field === 'dpt')?.after || '' };
+      if (!candidate.old) return { address: candidate.address, name: candidate.name || '', dpt: candidate.dpt || '' };
       const patch = { address: candidate.address };
       candidate.changes.forEach(change => { patch[change.field] = change.after; });
       return patch;
