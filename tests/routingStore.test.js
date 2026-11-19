@@ -113,3 +113,38 @@ test('routing direction is defined by graph, not group-address metadata', () => 
   assert.equal(f.store.list().legacyCleaned,undefined);
  } finally {f.cleanup();}
 });
+
+
+test('numeric string mapping to number target is not a diagnostic conflict',()=>{
+ const f=fixture();
+ try {
+  f.store.save({endpoints:[{...f.endpoint,payloadType:'number'}],routes:[{id:'numeric-map',from:{type:'device',id:'d1',signal:'command'},to:{type:'mqtt',id:'m1'},enabled:true,transform:{kind:'map',values:{ON:'20',OFF:'20'}}}]});
+  assert.equal(f.store.diagnostics().length,0);
+ } finally {f.cleanup();}
+});
+
+test('non-numeric string mapping to number target remains a diagnostic conflict',()=>{
+ const f=fixture();
+ try {
+  f.store.save({endpoints:[{...f.endpoint,payloadType:'number'}],routes:[{id:'bad-map',from:{type:'device',id:'d1',signal:'command'},to:{type:'mqtt',id:'m1'},enabled:true,transform:{kind:'map',values:{ON:'PLAY',OFF:'PAUSE'}}}]});
+  assert.match(f.store.diagnostics()[0].reasons.join(' '),/Ziel erwartet number/);
+ } finally {f.cleanup();}
+});
+
+
+test('JSON boolean mapping with ON/OFF strings does not produce false type conflict',()=>{
+ const f=fixture();
+ try {
+  const md={id:'shelly1',name:'Shelly',templateId:'generic',signals:[{key:'status',topic:'shelly/status',payloadType:'text',direction:'output'}]};
+  f.store.save({endpoints:[],mqttDevices:[md],routes:[{id:'json-boolean',from:{type:'mqttDevice',id:'shelly1',signal:'status'},to:{type:'device',id:'d1',signal:'status'},enabled:true,transform:{kind:'json',path:'output',values:{true:'ON',false:'OFF'}}}]});
+  assert.equal(f.store.diagnostics().length,0);
+ } finally {f.cleanup();}
+});
+
+test('unrecognized boolean map output remains a diagnostic conflict',()=>{
+ const f=fixture();
+ try {
+  f.store.save({endpoints:[{...f.endpoint,payloadType:'text'}],routes:[{id:'invalid-boolean',from:{type:'mqtt',id:'m1'},to:{type:'device',id:'d1',signal:'status'},enabled:true,transform:{kind:'map',values:{PLAY:'MAYBE'}}}]});
+  assert.match(f.store.diagnostics()[0].reasons.join(' '),/Ziel erwartet boolean/);
+ } finally {f.cleanup();}
+});
