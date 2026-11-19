@@ -33,6 +33,15 @@ class WebServer {
     this.app.use(express.static(path.join(__dirname, '../public')));
 
     this.app.get('/api/routing/diagnostics', (_req, res) => res.json({ issues: this.routingStore.diagnostics() }));
+    this.app.post('/api/routing/diagnostics/accept', (req, res) => {
+      try {
+        if (typeof req.body?.key !== 'string' || typeof req.body?.accepted !== 'boolean') return res.status(400).json({ error: 'key and accepted required' });
+        this.routingStore.setDiagnosticAcceptance(req.body.key, req.body.accepted);
+        const data = { issues: this.routingStore.diagnostics() };
+        this.io.emit('routing-diagnostics', data);
+        return res.json(data);
+      } catch (err) { return res.status(err.message === 'Diagnostic not found' ? 404 : 500).json({ error: err.message }); }
+    });
 
     // Device templates only reference existing group addresses. Existing GA routes stay untouched.
     this.app.get('/api/rooms', (_req, res) => res.json(this.deviceStore.listRooms()));
@@ -226,10 +235,18 @@ class WebServer {
           next[idx] = entry; updated++;
         }
       }
-      if (!added && !updated) return res.json({ ok: true, added, updated });
+      if (!added && !updated) {
+        try {
+          this.routingStore.persistAcceptedDiagnostics([]);
+          this.io.emit('routing-diagnostics', { issues: this.routingStore.diagnostics() });
+          return res.json({ ok: true, added, updated });
+        } catch (err) { return res.status(500).json({ error: 'Failed to reset diagnostic acceptance' }); }
+      }
       const previous = this.groupAddresses.map(g => ({ ...g }));
       this.groupAddresses.splice(0, this.groupAddresses.length, ...next);
       if (this._saveGroupAddresses()) {
+        try { this.routingStore.persistAcceptedDiagnostics([]); }
+        catch (err) { return res.status(500).json({ error: 'Group addresses saved but diagnostic acceptance could not be reset' }); }
         this.io.emit('groupaddresses', this._enrichGAs());
         this.io.emit('routing-diagnostics', { issues: this.routingStore.diagnostics() });
         return res.json({ ok: true, added, updated });
