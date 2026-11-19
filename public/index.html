@@ -132,9 +132,8 @@
   </nav>
   <div class="app-shell-actions">
     <span id="knx-badge" class="badge rounded-pill text-bg-warning badge-status" title="KNX-Verbindung wird geprüft" aria-label="KNX: Status unbekannt">KNX <i class="bi bi-circle-fill ms-1" aria-hidden="true"></i></span>
-    <span id="mqtt-badge" class="badge rounded-pill text-bg-warning badge-status" title="MQTT-Verbindung wird geprüft" aria-label="MQTT: Status unbekannt">MQTT <i class="bi bi-circle-fill ms-1" aria-hidden="true"></i></span>
+    <button type="button" id="mqtt-badge" class="badge rounded-pill text-bg-warning badge-status border-0" style="cursor:pointer" title="MQTT neu verbinden" aria-label="MQTT neu verbinden">MQTT <i class="bi bi-circle-fill ms-1" aria-hidden="true"></i></button>
     <button class="btn btn-sm" type="button" data-bs-toggle="offcanvas" data-bs-target="#trafficDrawer" aria-controls="trafficDrawer" aria-label="Live Logs" title="Live Logs"><i class="bi bi-terminal"></i></button>
-    <button class="btn btn-sm" id="btn-restart-mqtt" title="MQTT neu verbinden" aria-label="MQTT neu verbinden"><i class="bi bi-arrow-repeat"></i></button>
     <button class="btn btn-sm" id="btn-dark-mode" title="Darstellung wechseln" aria-label="Darstellung wechseln"><i class="bi bi-moon-fill" id="dark-mode-icon"></i></button>
   </div>
 </div></header>
@@ -488,8 +487,8 @@
     const el = document.getElementById(service.toLowerCase() + '-badge');
     if (!el) return;
     el.innerHTML = `${service} <i class="bi bi-circle-fill ms-1" aria-hidden="true"></i>`;
-    el.className = `badge rounded-pill badge-status ${connected ? 'text-bg-success' : 'text-bg-danger'}`;
-    el.title = `${service}: ${connected ? 'Verbunden' : 'Getrennt'}`;
+    el.className = `badge rounded-pill badge-status ${connected ? 'text-bg-success' : 'text-bg-danger'} ${service === 'MQTT' ? 'border-0' : ''}`;
+    el.title = service === 'MQTT' ? `MQTT: ${connected ? 'Verbunden' : 'Getrennt'} – klicken zum Neuverbinden` : `${service}: ${connected ? 'Verbunden' : 'Getrennt'}`;
     el.setAttribute('aria-label', el.title);
   }
 
@@ -1040,7 +1039,7 @@
     renderDevices();
   });
 
-  document.getElementById('btn-restart-mqtt').addEventListener('click', () => {
+  document.getElementById('mqtt-badge').addEventListener('click', () => {
     socket.emit('mqtt-restart');
   });
 
