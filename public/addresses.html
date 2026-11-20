@@ -348,6 +348,7 @@
       <select class="form-select mb-3" id="device-room"><option value="">Ohne Raum</option></select>
       <label class="form-label" for="device-template">Template</label>
       <select class="form-select mb-3" id="device-template"></select>
+      <div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" id="device-show-all-addresses"><label class="form-check-label" for="device-show-all-addresses">Show All addresses</label></div>
       <div id="device-objects"></div>
       <p class="small text-muted mt-2 mb-0">Select existing group addresses explicitly. No sequential address assumptions or automatic changes to DPT. Routing directions are configured in the Routing Designer.</p>
     </div>
@@ -1208,13 +1209,16 @@
   function renderDeviceFields(mapping = {}) {
     const tpl = deviceTemplate(deviceTemplateSelect.value);
     deviceObjects.innerHTML = tpl ? tpl.objects.map(o => {
-      const candidates = configuredGAs.filter(g => gaDirectionMatches(g, o) && (tpl.id !== 'roller-shutter' || o.key !== 'stop' || !g.dpt || ['1.007','1.009','1.017'].includes(g.dpt))).sort((a,b) => { const x=gaPosition(a.address),y=gaPosition(b.address); return x&&y ? (x[0]-y[0]||x[1]-y[1]||x[2]-y[2]) : String(a.address).localeCompare(String(b.address),undefined,{numeric:true}); });
+      const assignedElsewhere = new Set(devices.filter(d => d.id !== editingDeviceId).flatMap(d => Object.values(d.addresses || {})));
+      const showAll = document.getElementById('device-show-all-addresses').checked;
+      const candidates = configuredGAs.filter(g => (showAll || !assignedElsewhere.has(g.address)) && gaDirectionMatches(g, o) && (tpl.id !== 'roller-shutter' || o.key !== 'stop' || !g.dpt || ['1.007','1.009','1.017'].includes(g.dpt))).sort((a,b) => { const x=gaPosition(a.address),y=gaPosition(b.address); return x&&y ? (x[0]-y[0]||x[1]-y[1]||x[2]-y[2]) : String(a.address).localeCompare(String(b.address),undefined,{numeric:true}); });
       const options = candidates.map(g => `<option value="${escHtml(g.address)}" ${mapping[o.key] === g.address ? 'selected' : ''}>${escHtml(g.address + ' – ' + (g.name || 'Unnamed'))}</option>`).join('');
       return `<div class="mb-3"><label class="form-label" for="device-object-${escHtml(o.key)}">${escHtml(o.label)} <small class="text-muted">DPT ${escHtml(tpl.id === 'roller-shutter' && o.key === 'stop' ? '1.007 / 1.009 / 1.017' : o.dpt)}${o.optional ? ' · optional' : ''}</small></label><select class="form-select device-object" id="device-object-${escHtml(o.key)}" data-key="${escHtml(o.key)}"><option value="">Select address…</option>${options}</select></div>`;
     }).join('') : '';
   }
   function openDeviceEditor(device) {
     editingDeviceId = device ? device.id : null;
+    document.getElementById('device-show-all-addresses').checked = false;
     document.getElementById('btn-delete-device-dialog').classList.toggle('d-none', !device);
     deviceError.classList.add('d-none');
     document.getElementById('deviceModalTitle').textContent = device ? 'Edit Device' : 'Add Device';
@@ -1283,6 +1287,10 @@
   });
   document.getElementById('btn-add-device').addEventListener('click', () => openDeviceEditor());
   deviceTemplateSelect.addEventListener('change', () => renderDeviceFields());
+  document.getElementById('device-show-all-addresses').addEventListener('change', () => {
+    const mapping = Object.fromEntries([...deviceObjects.querySelectorAll('select.device-object')].map(el => [el.dataset.key, el.value]));
+    renderDeviceFields(mapping);
+  });
   document.getElementById('device-list').addEventListener('click', e => {
     const setpointEdit = e.target.closest('.device-setpoint-edit');
     if (setpointEdit) {
