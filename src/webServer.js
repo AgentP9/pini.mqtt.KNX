@@ -44,6 +44,24 @@ class WebServer {
       } catch (err) { return res.status(err.message === 'Diagnostic not found' ? 404 : 500).json({ error: err.message }); }
     });
 
+    // Staircase light logic: configuration and live countdown.
+    this.app.get('/api/logic/staircase', (_req, res) => res.json(this.staircaseLogic.list()));
+    const saveStaircase = (req, res, id) => {
+      try {
+        const block = this.staircaseLogic.save(req.body, id);
+        if (!block) return res.status(404).json({ error: 'Logic block not found' });
+        return res.json(block);
+      } catch (err) { return res.status(400).json({ error: err.message }); }
+    };
+    this.app.post('/api/logic/staircase', (req, res) => saveStaircase(req, res));
+    this.app.put('/api/logic/staircase/:id', (req, res) => saveStaircase(req, res, req.params.id));
+    this.app.delete('/api/logic/staircase/:id', (req, res) => {
+      try {
+        if (!this.staircaseLogic.remove(req.params.id)) return res.status(404).json({ error: 'Logic block not found' });
+        return res.json({ ok: true });
+      } catch (err) { return res.status(500).json({ error: err.message }); }
+    });
+
     // Device templates only reference existing group addresses. Existing GA routes stay untouched.
     this.app.get('/api/rooms', (_req, res) => res.json(this.deviceStore.listRooms()));
     const publishRooms = () => this.io.emit('rooms', this.deviceStore.listRooms());
