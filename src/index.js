@@ -5,6 +5,8 @@ const config = require('./config');
 const KnxHandler = require('./knxHandler');
 const MqttHandler = require('./mqttHandler');
 const WebServer = require('./webServer');
+const StaircaseLogic = require('./staircaseLogic');
+const path = require('path');
 
 const eventEmitter = new EventEmitter();
 
@@ -14,6 +16,26 @@ const webServer = new WebServer(config.webPort, eventEmitter, config.groupAddres
 // ── Connections ────────────────────────────────────────────────────────────────
 const knxHandler = new KnxHandler(config.knx, config.groupAddresses);
 const mqttHandler = new MqttHandler(config.mqtt);
+
+// Staircase timers are owned by the backend, not the browser.
+const staircaseLogic = new StaircaseLogic({
+  file: process.env.STAIRCASE_LOGIC_PATH || path.join(path.dirname(config.groupAddressesPath), 'staircase-logic.json'),
+  writeKnx: (address, value) => knxHandler.write(address, value === 'ON' ? '1' : '0'),
+  publishMqtt: (topic, value) => {
+    if (!mqttHandler.connected) return false;
+    mqttHandler.publish(topic, value);
+    return true;
+  },
+  onChange: blocks => eventEmitter.emit('staircase-changed', blocks),
+});
+webServer.staircaseLogic = staircaseLogic;
+eventEmitter.on('staircase-changed', blocks => {
+  webServer.io.emit('staircase', blocks);
+  if (mqttHandler.connected) staircaseLogic.mqttTopics().forEach(topic => mqttHandler.subscribe(topic));
+});
+knxHandler.on('groupValueWrite', ({ address, value }) => staircaseLogic.trigger('knx', address, value));
+mqttHandler.on('message', ({ topic, value }) => staircaseLogic.trigger('mqtt', topic, value));
+mqttHandler.on('connected', () => staircaseLogic.mqttTopics().forEach(topic => mqttHandler.subscribe(topic)));
 
 // ── Router helpers ─────────────────────────────────────────────────────────────
 
