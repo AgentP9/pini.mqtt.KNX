@@ -23,9 +23,9 @@ test('logic blocks are loaded from backend and updated by socket', () => {
 });
 
 test('logic is configured on existing routes instead of standalone', () => {
-  assert.match(html, /route-logic-action/);
-  assert.match(html, /id="route-logic-dialog"/);
-  assert.match(html, /routeId:editingLogicRoute/);
-  assert.match(html, /logicBlocks.find\(b=>b.routeId===r.id\)/);
-  assert.match(html, /Bitte zuerst die Verbindungsänderungen aktivieren/);
+  assert.doesNotMatch(html, /route-logic-action/);
+  assert.match(html, /id="route-logic-mode"/);
+  assert.match(html, /routeId,name:/);
+  assert.match(html, /logicBlocks.find\(b=>b.routeId===route.id\)/);
+  assert.match(html, /Bitte zuerst Verbindungsänderungen aktivieren/);
 });
