@@ -32,8 +32,17 @@ class StaircaseLogic {
       if (!endpoint || !['knx', 'mqtt'].includes(endpoint.type)) throw Error('Endpoint type must be knx or mqtt');
       if (endpoint.type === 'knx' ? !isAddress(endpoint.value) : !isTopic(endpoint.value)) throw Error('Invalid endpoint address/topic');
     }
+    const dimmer = b.dimmer || { enabled: false };
+    if (typeof dimmer.enabled !== 'boolean' && dimmer.enabled !== undefined) throw Error('Invalid dimmer enabled flag');
+    if (dimmer.enabled) {
+      if (!isAddress(dimmer.address)) throw Error('Dimmer KNX group address required');
+      if (!Number.isInteger(dimmer.percent) || dimmer.percent < 1 || dimmer.percent > 100) throw Error('Dimmer level must be 1–100%');
+      if (dimmer.address === b.input.value || dimmer.address === b.output.value) throw Error('Dimmer address must differ from trigger and switch');
+      const ga = this.routingStore?.groupAddresses?.find(g => g.address === dimmer.address);
+      if (this.routingStore && ga?.dpt !== '5.001') throw Error('Dimmer address must have DPT 5.001');
+    }
     if (b.input.type === b.output.type && b.input.value === b.output.value) throw Error('Input and output must differ (feedback loop)');
-    return { id: b.id || crypto.randomUUID(), routeId: b.routeId || null, name, enabled: b.enabled !== false, durationSeconds: b.durationSeconds, input: { type: b.input.type, value: b.input.value }, output: { type: b.output.type, value: b.output.value } };
+    return { id: b.id || crypto.randomUUID(), routeId: b.routeId || null, name, enabled: b.enabled !== false, durationSeconds: b.durationSeconds, dimmer: dimmer.enabled ? { enabled: true, address: dimmer.address, percent: dimmer.percent } : { enabled: false }, input: { type: b.input.type, value: b.input.value }, output: { type: b.output.type, value: b.output.value } };
   }
   list() {
     return this.blocks.map(b => ({ ...b, active: this.timers.has(b.id), expiresAt: this.timers.get(b.id)?.expiresAt || null }));
@@ -105,7 +114,10 @@ class StaircaseLogic {
     for (const block of this.blocks) {
       if (!block.enabled || block.input.type !== type || block.input.value !== value || (routeId ? block.routeId !== routeId : Boolean(block.routeId))) continue;
       // Only arm when the ON command can actually be delivered.
-      if (this.send(block.output, 'ON') === false) continue;
+      const started = block.dimmer?.enabled
+        ? this.writeKnx(block.dimmer.address, String(Math.round(block.dimmer.percent * 255 / 100)))
+        : this.send(block.output, 'ON');
+      if (started === false) continue;
       this.stop(block.id);
       const expiresAt = this.now() + block.durationSeconds * 1000;
       const handle = this.schedule(() => {
