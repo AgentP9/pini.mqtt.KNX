@@ -6,6 +6,8 @@
 <link rel="stylesheet" href="/app-shell.css"><script src="/app-shell.js" defer></script>
 <style>
 .node.type-warning{border:2px solid #dc3545!important;box-shadow:0 0 0 3px rgba(220,53,69,.14)}.signal.type-warning{background:rgba(220,53,69,.12);border-radius:7px}.route-transform.type-warning{border:2px solid #dc3545!important;background:#fff0f0!important;color:#842029!important}.connection-path.type-warning,.connection-arrow.type-warning{stroke:#dc3545!important;stroke-width:4!important}
+.connection-path.has-logic,.connection-arrow.has-logic{stroke:#198754;stroke-width:3}
+.connection-path.has-logic.inactive,.connection-arrow.has-logic.inactive{stroke:var(--bs-secondary-color)}
 
 #edit-mqtt-dialog{width:min(95vw,780px)!important;max-height:90dvh!important;overflow:hidden!important;padding:0!important}#edit-mqtt-form{display:flex;flex-direction:column;max-height:90dvh}#edit-mqtt-form .mqtt-editor-head{padding:1rem 1rem .75rem;flex-shrink:0}#edit-mqtt-form .mqtt-editor-body{overflow-y:auto;min-height:0;padding:0 1rem 1rem}#edit-mqtt-form .mqtt-editor-footer{padding:.75rem 1rem;border-top:1px solid var(--bs-border-color);background:var(--bs-body-bg);flex-shrink:0}.edit-mqtt-channel{padding:0!important;overflow:hidden}.edit-mqtt-channel .channel-head{display:flex;align-items:center;gap:.65rem;padding:.65rem .75rem}.edit-mqtt-channel .channel-expand{border:0;background:transparent;flex:1;min-width:0;text-align:left;padding:0;display:flex;align-items:center;gap:.6rem;color:inherit}.edit-mqtt-channel .channel-expand .bi{transition:transform .15s}.edit-mqtt-channel.is-expanded .channel-expand .bi{transform:rotate(90deg)}.edit-mqtt-channel .channel-summary{font-size:.78rem;color:var(--bs-secondary-color);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}.edit-mqtt-channel .channel-details{display:none;border-top:1px solid var(--bs-border-color);padding:.7rem .75rem}.edit-mqtt-channel.is-expanded .channel-details{display:block}.edit-mqtt-channel .form-switch{flex-shrink:0}
 
@@ -264,12 +266,12 @@ function drawLinks(routes=graph.routes.filter(isFocused)){
   if(paired&&String(r.id)>String(paired.id))continue;
   const path=document.createElementNS(ns,'path');
   path.setAttribute('d',knxToKnx?'M '+x1+' '+y1+' C '+loopX+' '+y1+', '+loopX+' '+y2+', '+(x2+2)+' '+y2:'M '+x1+' '+y1+' C '+mid+' '+y1+', '+mid+' '+y2+', '+x2+' '+y2);
-  path.setAttribute('class','connection-path'+(r.enabled?'':' inactive')+(routeIssue(r.id)?' type-warning':''));svg.appendChild(path);
+  path.setAttribute('class','connection-path'+(r.enabled?'':' inactive')+(routeIssue(r.id)?' type-warning':(logicBlocks.some(b=>b.routeId===r.id&&b.enabled)?' has-logic':'')));svg.appendChild(path);
   const arrowAt=(x,y,rightward)=>{
    const arrow=document.createElementNS(ns,'path');
    arrow.setAttribute('d',rightward?'M -7 -4 L 0 0 L -7 4':'M 7 -4 L 0 0 L 7 4');
    arrow.setAttribute('transform','translate('+x+' '+y+')');
-   arrow.setAttribute('class','connection-arrow'+(r.enabled?'':' inactive')+(routeIssue(r.id)?' type-warning':''));svg.appendChild(arrow);
+   arrow.setAttribute('class','connection-arrow'+(r.enabled?'':' inactive')+(routeIssue(r.id)?' type-warning':(logicBlocks.some(b=>b.routeId===r.id&&b.enabled)?' has-logic':'')));svg.appendChild(arrow);
   };
   if(knxToKnx)arrowAt(x2+2,y2,false);
   else if(fromDevice)arrowAt(x2-2,y2,true);
