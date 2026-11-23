@@ -3,7 +3,7 @@
 <meta name="theme-color" content="#212529"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><link rel="manifest" href="/manifest.json"><link rel="apple-touch-icon" href="/favicon.svg"><title>Routing Designer · pini.mqtt.KNX</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet"><script src="/socket.io/socket.io.js"></script><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<link rel="stylesheet" href="/app-shell.css"><script src="/app-shell.js" defer></script>
+<link rel="stylesheet" href="/app-shell.css"><script src="/app-shell.js" defer></script><script src="/routingRoomFilter.js"></script>
 <style>
 .node.type-warning{border:2px solid #dc3545!important;box-shadow:0 0 0 3px rgba(220,53,69,.14)}.signal.type-warning{background:rgba(220,53,69,.12);border-radius:7px}.route-transform.type-warning{border:2px solid #dc3545!important;background:#fff0f0!important;color:#842029!important}.connection-path.type-warning,.connection-arrow.type-warning{stroke:#dc3545!important;stroke-width:4!important}
 .connection-path.has-logic,.connection-arrow.has-logic{stroke:#198754;stroke-width:3}
@@ -41,7 +41,7 @@ body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:42
 <div class="routing-actions" role="group" aria-label="Routing-Änderungen"><button type="button" class="btn btn-outline-secondary" id="reload" title="Änderungen verwerfen" aria-label="Änderungen verwerfen" data-bs-toggle="tooltip" data-bs-placement="left"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i></button><button type="button" class="btn btn-primary" id="save" title="Änderungen aktivieren" aria-label="Änderungen aktivieren" data-bs-toggle="tooltip" data-bs-placement="left"><i class="bi bi-check-lg" aria-hidden="true"></i><span class="routing-unsaved-indicator" aria-hidden="true"></span></button></div>
 <div id="notice" role="status" class="small mb-3"></div><div id="routing-diagnostics" class="alert alert-danger" hidden role="alert"></div><div id="focus-bar" class="alert alert-info py-2" hidden><span id="focus-label"></span> <button class="btn btn-sm btn-outline-primary ms-2" id="clear-focus">Alle Devices anzeigen</button></div>
 <div class="row g-3"><div class="col-12">
-<div class="d-flex justify-content-between align-items-center mb-2"><h2 class="h6 m-0">Signalübersicht</h2><span class="small muted">Zuerst Quelle, dann Ziel anklicken</span></div>
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2"><h2 class="h6 m-0">Signalübersicht</h2><div class="d-flex align-items-center gap-2 flex-wrap"><label class="small" for="room-filter">Raum</label><select id="room-filter" class="form-select form-select-sm" style="width:auto;max-width:18rem" aria-label="Verbindungen nach Raum filtern"><option value="all">Alle Räume</option><option value="unassigned">Ohne Raum</option></select><span class="small muted">Zuerst Quelle, dann Ziel anklicken</span></div></div>
 <div class="workspace" id="workspace"><svg id="links" class="links" aria-hidden="true"></svg><div class="lanes"><section id="devices"><h2 class="h6 mb-3"><i class="bi bi-house"></i> Devices</h2></section><section id="logic"><h2 class="h6 mb-3"><i class="bi bi-hourglass-split"></i> Logik</h2></section><section id="mqtt"><h2 class="h6 mb-3"><i class="bi bi-broadcast"></i> MQTT-Endpunkte</h2></section></div></div>
 </div></div></main><dialog id="routing-add-dialog" class="routing-add-dialog" aria-labelledby="routing-add-title"><div class="d-flex justify-content-between align-items-center"><h2 id="routing-add-title" class="h5 mb-0">Hinzufügen</h2><button type="button" class="btn-close" id="close-add-dialog" aria-label="Schließen"></button></div><ul class="nav nav-tabs mt-3" role="tablist"><li class="nav-item"><button type="button" class="nav-link active" data-add-tab="device">MQTT-Device</button></li><li class="nav-item"><button type="button" class="nav-link" data-add-tab="signal">MQTT-Signal</button></li><li class="nav-item"><button type="button" class="nav-link" data-add-tab="topic">MQTT-Topic</button></li><li class="nav-item"><button type="button" class="nav-link" data-add-tab="logic">Logik</button></li></ul><div id="add-device-panel" data-add-panel="device" class="mt-3"><button type="button" id="open-mqtt-device" class="btn btn-outline-primary w-100"><i class="bi bi-plus-circle"></i> MQTT-Device anlegen</button></div><div data-add-panel="signal" hidden><form class="card-body" id="mqtt-signal-form">
 <label class="form-label" for="signal-device">MQTT-Device</label><select class="form-select mb-2" id="signal-device" required></select>
@@ -80,6 +80,7 @@ $('routing-diagnostics').addEventListener('click',async event=>{
   else {notice('Für diesen Konflikt wurde keine zugehörige Verbindung gefunden.',true);return;}
   const params=new URLSearchParams();params.set(focusRoute?'route':'device',focusRoute||focusDevice);
   history.replaceState(null,'',location.pathname+'?'+params.toString());
+  $('room-filter').value='all';
   render();$('focus-bar').scrollIntoView({behavior:'smooth',block:'start'});
   return;
  }
@@ -101,6 +102,13 @@ document.querySelectorAll('[data-add-tab]').forEach(button=>button.addEventListe
 
 const roomColors=['#3b82f6','#10b981','#a855f7','#f59e0b','#ec4899','#06b6d4','#ef4444','#84cc16'];
 let focusAddress=new URLSearchParams(location.search).get("ga"),focusRoute=new URLSearchParams(location.search).get("route"),focusDevice=new URLSearchParams(location.search).get("device");
+$('room-filter').addEventListener('change',()=>render());
+function renderRoomOptions(){
+ const filter=$('room-filter'),previous=filter.value;
+ filter.replaceChildren(new Option('Alle Räume','all'),new Option('Ohne Raum','unassigned'));
+ for(const room of [...rooms].sort((a,b)=>a.name.localeCompare(b.name,'de',{sensitivity:'base'})))filter.add(new Option(room.name,room.id));
+ filter.value=[...filter.options].some(option=>option.value===previous)?previous:'all';
+}
 const lastTraffic=new Map();
 const socket=io();socket.on('routing-traffic',entry=>{lastTraffic.set(entry.id,entry);});
 socket.on('staircase',data=>{logicBlocks=data;render();});
@@ -155,10 +163,13 @@ function updateRoutingActions(){document.querySelector('.routing-actions')?.clas
 function render(){
  updateRoutingActions();
  const list=signals(),eps=endpointSignals();
- const focused=graph.routes.filter(isFocused);
+ const roomId=$('room-filter').value;
+ const roomView=filterRoutingByRoom(devices,graph.routes,roomId);
+ const focused=roomView.routes.filter(isFocused);
  $('focus-bar').hidden=!focusAddress&&!focusRoute&&!focusDevice;
  $('focus-label').textContent=focusAddress?'Routing für Gruppenadresse '+focusAddress:focusDevice?'Routing für Device '+(devices.find(d=>d.id===focusDevice)?.name||focusDevice):'Ausgewählte Verbindung '+(focusRoute||'');
- const visibleDevices=focusDevice?devices.filter(d=>d.id===focusDevice):focusAddress||focusRoute?devices.filter(d=>focused.some(r=>[r.from,r.to].some(ref=>ref.type==='device'&&ref.id===d.id))):devices;
+ const roomDeviceIds=roomId!=='all'?filterRoutingByRoom(devices,focused,roomId).deviceIds:null;
+ const visibleDevices=roomDeviceIds?devices.filter(d=>roomDeviceIds.has(d.id)):focusDevice?devices.filter(d=>d.id===focusDevice):focusAddress||focusRoute?devices.filter(d=>focused.some(r=>[r.from,r.to].some(ref=>ref.type==='device'&&ref.id===d.id))):devices;
  const visibleMqttIds=new Set(focused.flatMap(r=>[r.from,r.to].filter(ref=>ref.type!=='device').map(ref=>ref.id)));
  const sortedRooms=[...rooms].sort((a,b)=>a.name.localeCompare(b.name,'de',{sensitivity:'base'}));
  const roomColorById=new Map(sortedRooms.map((r,i)=>[r.id,roomColors[i%roomColors.length]]));
@@ -171,7 +182,7 @@ function render(){
   return {id:d.id,html:'<div class="node" data-node="device:'+esc(d.id)+'"><div class="knx-node-header d-flex align-items-center justify-content-between gap-2"'+headerStyle+'><h3 class="mb-0">'+esc(deviceTitle(d.name,d.roomId))+'</h3><button type="button" class="btn btn-sm btn-outline-primary create-corresponding-mqtt" data-id="'+esc(d.id)+'" title="Corresponding MQTT-Device anlegen" aria-label="Corresponding MQTT-Device für '+esc(d.name)+' anlegen"><i class="bi bi-plus-square" aria-hidden="true"></i></button></div>'+own.map(signalHtml).join('')+'</div>'};
  });
  const mqttCards=[
- ...(graph.mqttDevices||[]).filter(d=>!focusAddress&&!focusRoute&&!focusDevice||visibleMqttIds.has(d.id)).map(d=>{const linked=(()=>{
+ ...(graph.mqttDevices||[]).filter(d=>roomId==='all'&&!focusAddress&&!focusRoute&&!focusDevice||visibleMqttIds.has(d.id)).map(d=>{const linked=(()=>{
   // Routing is the primary association: device names are not unique across rooms.
   const counts=new Map();
   for(const route of graph.routes){
@@ -188,7 +199,7 @@ function render(){
   const sameName=devices.filter(device=>device.name===d.name);
   return sameName.length===1?sameName[0]:null;
  })();const roomColor=linked&&roomColorById.get(linked.roomId);const headerStyle=roomColor?' style="background:color-mix(in srgb, '+roomColor+' 18%, var(--bs-body-bg));border-bottom:2px solid '+roomColor+'"':'';return {id:d.id,html:'<div class="node" data-node="mqttDevice:'+esc(d.id)+'"><div class="mqtt-node-header d-flex align-items-center justify-content-between gap-2"'+headerStyle+'><h3 class="mb-0">'+esc(deviceTitle(d.name,linked?.roomId))+'</h3><button type="button" class="btn btn-sm btn-outline-secondary edit-mqtt-device" data-id="'+esc(d.id)+'" title="MQTT-Device bearbeiten" aria-label="MQTT-Device '+esc(d.name)+' bearbeiten"><i class="bi bi-pencil-square" aria-hidden="true"></i></button></div>'+eps.filter(x=>x.ref.type==='mqttDevice'&&x.ref.id===d.id).map(signalHtml).join('')+(mqttTemplateUpgrade(d)?.additions.length?'<button class="btn btn-sm btn-outline-primary upgrade-mqtt-device me-2" data-id="'+esc(d.id)+'"><i class="bi bi-arrow-up-circle"></i> Template aktualisieren ('+mqttTemplateUpgrade(d).additions.length+')</button>':'')+'</div>'};}),
- ...eps.filter(x=>x.ref.type==='mqtt'&&(!focusAddress&&!focusRoute||visibleMqttIds.has(x.ref.id))).map(x=>({id:x.ref.id,html:'<div class="node" data-node="mqtt:'+esc(x.ref.id)+'"><h3>'+esc(graph.endpoints.find(e=>e.id===x.ref.id).name)+'</h3>'+signalHtml(x)+'<button class="btn btn-sm btn-link text-danger delete-endpoint" data-id="'+esc(x.ref.id)+'">Entfernen</button></div>'}))
+ ...eps.filter(x=>x.ref.type==='mqtt'&&(roomId==='all'&&!focusAddress&&!focusRoute&&!focusDevice||visibleMqttIds.has(x.ref.id))).map(x=>({id:x.ref.id,html:'<div class="node" data-node="mqtt:'+esc(x.ref.id)+'"><h3>'+esc(graph.endpoints.find(e=>e.id===x.ref.id).name)+'</h3>'+signalHtml(x)+'<button class="btn btn-sm btn-link text-danger delete-endpoint" data-id="'+esc(x.ref.id)+'">Entfernen</button></div>'}))
  ];
  // Order the right-hand cards by their connected KNX device, so related
  // devices start on the same horizontal level instead of independent lists.
@@ -684,8 +695,8 @@ $('mqtt-signal-form').addEventListener('submit',e=>{
 $('endpoint-form').addEventListener('submit',e=>{e.preventDefault();const topic=$('topic').value.trim();if(topic.startsWith('knx/')||/[+#\s]/.test(topic)||graph.endpoints.some(x=>x.topic===topic)){notice('Topic ungültig, reserviert oder bereits vorhanden.',true);return}graph.endpoints.push({id:uid(),name:$('topic-name').value.trim(),topic,payloadType:$('payload-type').value});dirty=true;e.target.reset();render();notice('MQTT-Endpunkt angelegt. Änderungen noch nicht aktiviert.')});
 $('save').onclick=async()=>{try{const r=await fetch('/api/routing',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(graph)});const d=await r.json();if(!r.ok)throw Error(d.error||'Speichern fehlgeschlagen');graph=d;dirty=false;const diagnosticsResponse=await fetch('/api/routing/diagnostics',{cache:'no-store'});if(!diagnosticsResponse.ok)throw Error('Konfliktprüfung fehlgeschlagen (HTTP '+diagnosticsResponse.status+')');const diagnostics=await diagnosticsResponse.json();routingIssues=diagnostics.issues||[];showRoutingIssues();render();notice('Routing gespeichert und aktiviert. '+routingIssues.filter(issue=>!issue.accepted).length+' ungeprüfte Konflikte.')}catch(e){notice(e.message,true)}};
 $('reload').onclick=()=>load();
-async function load(){try{const r=await Promise.all(['/api/routing','/api/devices','/api/device-templates','/api/rooms'].map(p=>fetch(p).then(x=>{if(!x.ok)throw Error(p+' nicht erreichbar');return x.json()})));[graph,devices,templates,rooms]=r;selected=null;dirty=false;render();notice('Routing geladen.')}catch(e){notice(e.message,true)}}
-window.addEventListener('resize',()=>requestAnimationFrame(()=>{alignNodes(graph.routes.filter(isFocused));drawLinks()}));
+async function load(){try{const r=await Promise.all(['/api/routing','/api/devices','/api/device-templates','/api/rooms'].map(p=>fetch(p).then(x=>{if(!x.ok)throw Error(p+' nicht erreichbar');return x.json()})));[graph,devices,templates,rooms]=r;selected=null;dirty=false;renderRoomOptions();render();notice('Routing geladen.')}catch(e){notice(e.message,true)}}
+window.addEventListener('resize',()=>requestAnimationFrame(()=>{const focused=filterRoutingByRoom(devices,graph.routes,$('room-filter').value).routes.filter(isFocused);alignNodes(focused);drawLinks(focused)}));
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
 load();
 
