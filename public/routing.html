@@ -196,7 +196,7 @@ function render(){
   return rank(a)-rank(b);
  });
  $('devices').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-house"></i> KNX-Devices</h2>'+deviceCards.map(c=>c.html).join('');
- $('logic').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-hourglass-split"></i> Logikbausteine</h2>'+(logicBlocks.length?logicBlocks.map(b=>'<article class="node logic-node" data-logic-id="'+esc(b.id)+'"><h3>'+esc(b.name)+'</h3><div class="signal"><span><i class="bi bi-box-arrow-in-right me-1"></i> Trigger · '+esc(b.input.type.toUpperCase())+' '+esc(b.input.value)+'</span></div><div class="signal"><span><i class="bi bi-box-arrow-right me-1"></i> Ausgang · '+esc(b.output.type.toUpperCase())+' '+esc(b.output.value)+'</span></div><div class="logic-status mt-2">'+(b.enabled?'Aktiv':'Deaktiviert')+' · '+b.durationSeconds+' s'+(b.expiresAt?' · läuft':'')+'</div><a href="/logic.html" class="btn btn-sm btn-outline-primary mt-2">Konfigurieren</a></article>').join(''):'<p class="small muted">Noch keine Logikbausteine. Über Hinzufügen anlegen.</p>');
+ $('logic').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-hourglass-split"></i> Logikbausteine</h2>'+(logicBlocks.length?logicBlocks.map(b=>'<article class="node logic-node" data-logic-id="'+esc(b.id)+'"><h3>'+esc(b.name)+'</h3><div class="signal"><span><i class="bi bi-box-arrow-in-right me-1"></i> Trigger · '+esc(b.input.type.toUpperCase())+' '+esc(b.input.value)+'</span><button class="btn btn-sm btn-outline-primary logic-port" data-logic-id="'+esc(b.id)+'" data-port="input" title="Trigger verbinden"><i class="bi bi-circle"></i></button></div><div class="signal"><button class="btn btn-sm btn-outline-primary logic-port" data-logic-id="'+esc(b.id)+'" data-port="output" title="Ausgang verbinden"><i class="bi bi-circle"></i></button><span><i class="bi bi-box-arrow-right me-1"></i> Ausgang · '+esc(b.output.type.toUpperCase())+' '+esc(b.output.value)+'</span></div><div class="logic-status mt-2">'+(b.enabled?'Aktiv':'Deaktiviert')+' · '+b.durationSeconds+' s'+(b.expiresAt?' · läuft':'')+'</div><a href="/logic.html" class="btn btn-sm btn-outline-primary mt-2">Konfigurieren</a></article>').join(''):'<p class="small muted">Noch keine Logikbausteine. Über Hinzufügen anlegen.</p>');
  $('mqtt').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-broadcast"></i> MQTT-Devices und Endpunkte</h2>'+mqttCards.map(c=>c.html).join('');
  $('signal-device').innerHTML=(graph.mqttDevices||[]).map(d=>'<option value="'+esc(d.id)+'">'+esc(d.name)+'</option>').join('');
  renderRoutes();
@@ -257,11 +257,65 @@ function drawLinks(routes=graph.routes.filter(isFocused)){
 
   
  }
+ drawLogicLinks();
 }
 $('clear-focus').onclick=()=>{focusAddress=null;focusRoute=null;focusDevice=null;history.replaceState(null,'',location.pathname);render()};
 function renderRoutes(){ /* Connections are managed directly on the canvas. */ }
 function signalHtml(s){const key=signalKey(s.ref);const button='<button class="btn btn-sm btn-outline-primary signal-btn '+(selected&&signalKey(selected.ref)===key?'selected':'')+'" data-key="'+esc(key)+'" title="Als Quelle oder Ziel wählen"><i class="bi bi-circle"></i></button>';const label='<span>'+esc(s.name.split(' · ').slice(1).join(' · '))+' <span class="muted">'+(s.ref.type==='device'?' · '+esc(s.address)+' · DPT '+esc(s.dpt):' ('+esc(s.type)+')')+'</span></span>';return '<div class="signal'+(s.enabled===false?' is-disabled':'')+'"'+(s.enabled===false?' title="Kanal deaktiviert"':'')+'>'+(s.ref.type==='device'?label+button:button+label)+'</div>'}
-function choose(ref){const all=[...signals(),...endpointSignals()];const next=all.find(s=>signalKey(s.ref)===signalKey(ref));if(!next)return;if(next.enabled===false){notice('Dieser MQTT-Kanal ist deaktiviert.',true);return;}if(!selected){selected=next;notice('Quelle gewählt: '+next.name+'. Jetzt Ziel auswählen.');render();return}const from=selected;selected=null;if(from.enabled===false){notice('Dieser MQTT-Kanal ist deaktiviert.',true);render();return;}if(from.ref.type!=='device'&&next.ref.type!=='device'){notice('Mindestens ein Endpunkt muss KNX sein.',true);render();return}if(signalKey(from.ref)===signalKey(next.ref)||(from.ref.type==='device'&&next.ref.type==='device'&&from.address===next.address)){notice('Quelle und Ziel müssen unterschiedliche Gruppenadressen haben.',true);render();return}if(from.ref.type==='device'&&next.ref.type==='device'&&graph.routes.some(r=>r.from.type==='device'&&r.to.type==='device'&&signals().find(x=>signalKey(x.ref)===signalKey(r.from))?.address===next.address&&signals().find(x=>signalKey(x.ref)===signalKey(r.to))?.address===from.address)){notice('Direkte KNX-Rückkopplung nicht erlaubt.',true);render();return}if(from.type!==next.type){notice('Datentypen unterscheiden sich. Nach dem Verbinden eine Wertumwandlung konfigurieren.',true)}if(graph.routes.some(r=>signalKey(r.from)===signalKey(from.ref)&&signalKey(r.to)===signalKey(next.ref))){notice('Diese Verbindung besteht bereits.',true);render();return}graph.routes.push({id:uid(),from:from.ref,to:next.ref,enabled:true,...(from.type!==next.type?{transform:{kind:'map',values:{}}}:{})});dirty=true;notice('Verbindung hinzugefügt. Mit „Änderungen aktivieren“ speichern.');render()}
+let logicSelection=null;
+function logicPortRef(button){return {id:button.dataset.logicId,port:button.dataset.port};}
+async function connectLogicPort(blockId,port,signal){
+ const block=logicBlocks.find(b=>b.id===blockId);
+ if(!block)throw Error('Logikbaustein nicht gefunden');
+ const resolved=signal.ref.type==='device'?{type:'knx',value:signal.address}:{type:'mqtt',value:signal.topic||graph.endpoints.find(e=>e.id===signal.ref.id)?.topic};
+ if(!resolved.value)throw Error('Keine Gruppenadresse oder MQTT-Topic gefunden');
+ if(signal.type!=='boolean')throw Error('Treppenhauslicht benötigt ein boolesches Schaltsignal');
+ if(signal.ref.type==='mqttDevice'&&signal.enabled===false)throw Error('MQTT-Kanal ist deaktiviert');
+ if(port==='input'&&resolved.type===block.output.type&&resolved.value===block.output.value||port==='output'&&resolved.type===block.input.type&&resolved.value===block.input.value)throw Error('Ein- und Ausgang dürfen nicht identisch sein');
+ const updated={...block,[port]:resolved};
+ const response=await fetch('/api/logic/staircase/'+encodeURIComponent(blockId),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(updated)});
+ const result=await response.json();
+ if(!response.ok)throw Error(result.error||'Verbindung konnte nicht gespeichert werden');
+ await loadLogicBlocks();
+ notice('Logikverbindung gespeichert und sofort aktiv.');
+}
+function logicEndpointSignal(block,port){
+ const endpoint=block[port];
+ if(endpoint.type==='knx')return signals().find(s=>s.address===endpoint.value);
+ return endpointSignals().find(s=>s.topic===endpoint.value||graph.endpoints.find(e=>e.id===s.ref.id)?.topic===endpoint.value);
+}
+function drawLogicLinks(){
+ const root=$('workspace'),svg=$('links'),rect=root.getBoundingClientRect(),ns='http://www.w3.org/2000/svg';
+ for(const block of logicBlocks){
+  for(const port of ['input','output']){
+   const signal=logicEndpointSignal(block,port);
+   if(!signal)continue;
+   const button=[...root.querySelectorAll('.signal-btn')].find(el=>el.dataset.key===signalKey(signal.ref));
+   const logicButton=[...root.querySelectorAll('.logic-port')].find(el=>el.dataset.logicId===block.id&&el.dataset.port===port);
+   if(!button||!logicButton)continue;
+   const a=(port==='input'?button:logicButton).getBoundingClientRect(),b=(port==='input'?logicButton:button).getBoundingClientRect();
+   const x1=(port==='input'?a.right:a.right)-rect.left+root.scrollLeft,y1=a.top+a.height/2-rect.top+root.scrollTop;
+   const x2=b.left-rect.left+root.scrollLeft,y2=b.top+b.height/2-rect.top+root.scrollTop;
+   const mid=(x1+x2)/2,path=document.createElementNS(ns,'path');
+   path.setAttribute('d','M '+x1+' '+y1+' C '+mid+' '+y1+', '+mid+' '+y2+', '+x2+' '+y2);
+   path.setAttribute('class','connection-path'+(block.enabled?'':' inactive'));
+   svg.appendChild(path);
+  }
+ }
+}
+document.addEventListener('click',async event=>{
+ const portButton=event.target.closest('.logic-port');
+ if(portButton){
+  const port=logicPortRef(portButton);
+  if(selected){
+   const signal=selected;selected=null;logicSelection=null;
+   try{await connectLogicPort(port.id,port.port,signal);}catch(err){notice(err.message,true);}
+  }else{
+   logicSelection={port};selected=null;notice('Logik-Port gewählt. Jetzt ein KNX- oder MQTT-Signal anklicken.');render();
+  }
+ }
+});
+function choose(ref){const all=[...signals(),...endpointSignals()];const next=all.find(s=>signalKey(s.ref)===signalKey(ref));if(!next)return;if(logicSelection?.port){const port=logicSelection.port;logicSelection=null;connectLogicPort(port.id,port.port,next).catch(err=>notice(err.message,true));return;}if(next.enabled===false){notice('Dieser MQTT-Kanal ist deaktiviert.',true);return;}if(!selected){selected=next;notice('Quelle gewählt: '+next.name+'. Jetzt Ziel oder Logik-Port auswählen.');render();return}const from=selected;selected=null;if(from.enabled===false){notice('Dieser MQTT-Kanal ist deaktiviert.',true);render();return;}if(from.ref.type!=='device'&&next.ref.type!=='device'){notice('Mindestens ein Endpunkt muss KNX sein.',true);render();return}if(signalKey(from.ref)===signalKey(next.ref)||(from.ref.type==='device'&&next.ref.type==='device'&&from.address===next.address)){notice('Quelle und Ziel müssen unterschiedliche Gruppenadressen haben.',true);render();return}if(from.ref.type==='device'&&next.ref.type==='device'&&graph.routes.some(r=>r.from.type==='device'&&r.to.type==='device'&&signals().find(x=>signalKey(x.ref)===signalKey(r.from))?.address===next.address&&signals().find(x=>signalKey(x.ref)===signalKey(r.to))?.address===from.address)){notice('Direkte KNX-Rückkopplung nicht erlaubt.',true);render();return}if(from.type!==next.type){notice('Datentypen unterscheiden sich. Nach dem Verbinden eine Wertumwandlung konfigurieren.',true)}if(graph.routes.some(r=>signalKey(r.from)===signalKey(from.ref)&&signalKey(r.to)===signalKey(next.ref))){notice('Diese Verbindung besteht bereits.',true);render();return}graph.routes.push({id:uid(),from:from.ref,to:next.ref,enabled:true,...(from.type!==next.type?{transform:{kind:'map',values:{}}}:{})});dirty=true;notice('Verbindung hinzugefügt. Mit „Änderungen aktivieren“ speichern.');render()}
 
 let editingRouteId=null;
 function routeMapText(r){
