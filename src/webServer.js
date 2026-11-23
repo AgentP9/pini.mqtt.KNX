@@ -133,7 +133,15 @@ class WebServer {
     this.app.get('/api/routing', (_req, res) => res.json(this.routingStore.list()));
     this.app.put('/api/routing', (req, res) => {
       try {
-        const data = this.routingStore.save(req.body || {});
+        const proposed = req.body || {};
+        for (const block of this.staircaseLogic.list().filter(b => b.routeId)) {
+          const current = this.routingStore.routes.find(r => r.id === block.routeId);
+          const next = proposed.routes?.find(r => r.id === block.routeId);
+          if (!current || !next || next.bidirectional || JSON.stringify(current.from) !== JSON.stringify(next.from) || JSON.stringify(current.to) !== JSON.stringify(next.to)) {
+            return res.status(409).json({ error: 'Connection has staircase logic: remove the logic before deleting, reversing or rewiring the connection (' + block.name + ')' });
+          }
+        }
+        const data = this.routingStore.save(proposed);
         this.eventEmitter.emit('routing-changed', data);
         res.json(data);
       } catch (err) { res.status(400).json({ error: err.message }); }
