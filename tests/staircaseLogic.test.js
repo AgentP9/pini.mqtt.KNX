@@ -47,7 +47,7 @@ test('ON and OFF both restart timer; exactly one OFF after last trigger', () => 
     h.advance(9000);
     h.logic.onRoute('route-flur', 'OFF');
     h.advance(9000);
-    assert.deepEqual(h.sent, [['mqtt','home/light','ON'],['knx','1/0/8','ON']]);
+    assert.deepEqual(h.sent, [['mqtt','home/light','ON'],['mqtt','home/light','ON']]);
     h.advance(1000);
     assert.deepEqual(h.sent.at(-1), ['mqtt','home/light','OFF']);
     assert.equal(h.sent.length, 3);
@@ -73,7 +73,7 @@ test('configuration persists; editing and deletion cancel pending timers', () =>
   try {
     const saved = h.logic.save(block);
     assert.equal(JSON.parse(fs.readFileSync(h.file)).blocks.length, 1);
-    h.logic.trigger('knx', '1/0/7', 'ON');
+    h.logic.onRoute('route-flur', 'ON');
     h.logic.save({ ...block, durationSeconds: 20 }, saved.id);
     h.advance(11000);
     assert.equal(h.sent.length, 1);
