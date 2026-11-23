@@ -77,7 +77,7 @@ test('configuration persists; editing and deletion cancel pending timers', () =>
     h.logic.save({ ...block, durationSeconds: 20 }, saved.id);
     h.advance(11000);
     assert.equal(h.sent.length, 1);
-    h.logic.trigger('knx', '1/0/7', 'ON');
+    h.logic.onRoute('route-flur', 'ON');
     h.logic.remove(saved.id);
     h.advance(21000);
     assert.equal(h.sent.length, 2);
