@@ -413,11 +413,13 @@ $('route-dialog-direction').onclick=()=>{
 $('route-dialog-cancel').onclick=()=>$('route-dialog').close();
 $('route-dialog-delete').onclick=()=>{
  if(!editingRouteId||!confirm('Diese Verbindung wirklich löschen?'))return;
+ if(logicBlocks.some(b=>b.routeId===editingRouteId)){notice('Bitte zuerst im Verbindungsdialog die Logik auf Direkt zurücksetzen.',true);return;}
  graph.routes=graph.routes.filter(r=>r.id!==editingRouteId);
  dirty=true;$('route-dialog').close();editingRouteId=null;render();notice('Verbindung entfernt. Bitte Änderungen aktivieren.');
 };
-$('route-dialog-form').addEventListener('submit',e=>{
+$('route-dialog-form').addEventListener('submit',async e=>{
  e.preventDefault();const r=graph.routes.find(r=>r.id===editingRouteId);if(!r)return;
+ const previous={...r};
  try{
   const parsed=JSON.parse($('route-dialog-map').value);
   if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))throw Error('JSON-Objekt erwartet');
@@ -453,8 +455,20 @@ $('route-dialog-form').addEventListener('submit',e=>{
   if(requestedEnabled&&[r.from,r.to].some(ref=>ref.type==='mqttDevice'&&graph.mqttDevices.find(device=>device.id===ref.id)?.signals.find(signal=>signal.key===ref.signal)?.enabled===false))throw Error('Verbindung kann nicht aktiviert werden, solange ein beteiligter MQTT-Kanal deaktiviert ist.');
   r.enabled=requestedEnabled;
   if(requestedEnabled||!r.suspendedByChannel)delete r.suspendedByChannel;
-  dirty=true;$('route-dialog').close();editingRouteId=null;render();notice('Verbindung aktualisiert. Bitte Änderungen aktivieren.');
- }catch(err){notice('Verbindung konnte nicht geändert werden: '+err.message,true);console.warn('Route update rejected:',err);if(err instanceof SyntaxError || /JSON|Wertetabelle|Wertumwandlung|Datentyp/.test(err.message))$('route-dialog-map').focus();}
+  const logicChanged=logicMode.value==='staircase'||logicBlocks.some(b=>b.routeId===r.id);
+  if(logicChanged){
+   if(dirty||JSON.stringify(previous)!==JSON.stringify(r)){
+    Object.assign(r,previous);
+    notice('Bitte zuerst Verbindungsänderungen aktivieren. Danach Logik im Verbindungsdialog speichern.',true);
+    return;
+   }
+   if(logicMode.value==='staircase'&&r.bidirectional)throw Error('Treppenhauslicht benötigt eine gerichtete Verbindung.');
+   await persistRouteLogic(r.id);
+   $('route-dialog').close();editingRouteId=null;render();notice('Logik der Verbindung gespeichert.');
+  }else{
+   dirty=true;$('route-dialog').close();editingRouteId=null;render();notice('Verbindung aktualisiert. Bitte Änderungen aktivieren.');
+  }
+ }catch(err){Object.assign(r,previous);notice('Verbindung konnte nicht geändert werden: '+err.message,true);console.warn('Route update rejected:',err);if(err instanceof SyntaxError || /JSON|Wertetabelle|Wertumwandlung|Datentyp/.test(err.message))$('route-dialog-map').focus();}
 });
 let editingMqttId=null;
 function openMqttEditor(id){
