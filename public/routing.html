@@ -293,13 +293,18 @@ function drawLogicLinks(){
    const button=[...root.querySelectorAll('.signal-btn')].find(el=>el.dataset.key===signalKey(signal.ref));
    const logicButton=[...root.querySelectorAll('.logic-port')].find(el=>el.dataset.logicId===block.id&&el.dataset.port===port);
    if(!button||!logicButton)continue;
-   const a=(port==='input'?button:logicButton).getBoundingClientRect(),b=(port==='input'?logicButton:button).getBoundingClientRect();
-   const x1=(port==='input'?a.right:a.right)-rect.left+root.scrollLeft,y1=a.top+a.height/2-rect.top+root.scrollTop;
-   const x2=b.left-rect.left+root.scrollLeft,y2=b.top+b.height/2-rect.top+root.scrollTop;
+   const a=button.getBoundingClientRect(),b=logicButton.getBoundingClientRect();
+   const leftToRight=a.left<b.left;
+   const x1=(leftToRight?a.right:a.left)-rect.left+root.scrollLeft,y1=a.top+a.height/2-rect.top+root.scrollTop;
+   const x2=(leftToRight?b.left:b.right)-rect.left+root.scrollLeft,y2=b.top+b.height/2-rect.top+root.scrollTop;
    const mid=(x1+x2)/2,path=document.createElementNS(ns,'path');
    path.setAttribute('d','M '+x1+' '+y1+' C '+mid+' '+y1+', '+mid+' '+y2+', '+x2+' '+y2);
    path.setAttribute('class','connection-path'+(block.enabled?'':' inactive'));
    svg.appendChild(path);
+   const arrow=document.createElementNS(ns,'path');
+   arrow.setAttribute('d',port==='input'?(leftToRight?'M -7 -4 L 0 0 L -7 4':'M 7 -4 L 0 0 L 7 4'):(leftToRight?'M 7 -4 L 0 0 L 7 4':'M -7 -4 L 0 0 L -7 4'));
+   arrow.setAttribute('transform','translate('+(port==='input'?x2:x1)+' '+(port==='input'?y2:y1)+')');
+   arrow.setAttribute('class','connection-arrow'+(block.enabled?'':' inactive'));svg.appendChild(arrow);
   }
  }
 }
@@ -315,7 +320,7 @@ document.addEventListener('click',async event=>{
   }
  }
 });
-function choose(ref){const all=[...signals(),...endpointSignals()];const next=all.find(s=>signalKey(s.ref)===signalKey(ref));if(!next)return;if(logicSelection?.port){const port=logicSelection.port;logicSelection=null;connectLogicPort(port.id,port.port,next).catch(err=>notice(err.message,true));return;}if(next.enabled===false){notice('Dieser MQTT-Kanal ist deaktiviert.',true);return;}if(!selected){selected=next;notice('Quelle gewählt: '+next.name+'. Jetzt Ziel oder Logik-Port auswählen.');render();return}const from=selected;selected=null;if(from.enabled===false){notice('Dieser MQTT-Kanal ist deaktiviert.',true);render();return;}if(from.ref.type!=='device'&&next.ref.type!=='device'){notice('Mindestens ein Endpunkt muss KNX sein.',true);render();return}if(signalKey(from.ref)===signalKey(next.ref)||(from.ref.type==='device'&&next.ref.type==='device'&&from.address===next.address)){notice('Quelle und Ziel müssen unterschiedliche Gruppenadressen haben.',true);render();return}if(from.ref.type==='device'&&next.ref.type==='device'&&graph.routes.some(r=>r.from.type==='device'&&r.to.type==='device'&&signals().find(x=>signalKey(x.ref)===signalKey(r.from))?.address===next.address&&signals().find(x=>signalKey(x.ref)===signalKey(r.to))?.address===from.address)){notice('Direkte KNX-Rückkopplung nicht erlaubt.',true);render();return}if(from.type!==next.type){notice('Datentypen unterscheiden sich. Nach dem Verbinden eine Wertumwandlung konfigurieren.',true)}if(graph.routes.some(r=>signalKey(r.from)===signalKey(from.ref)&&signalKey(r.to)===signalKey(next.ref))){notice('Diese Verbindung besteht bereits.',true);render();return}graph.routes.push({id:uid(),from:from.ref,to:next.ref,enabled:true,...(from.type!==next.type?{transform:{kind:'map',values:{}}}:{})});dirty=true;notice('Verbindung hinzugefügt. Mit „Änderungen aktivieren“ speichern.');render()}
+function choose(ref){const all=[...signals(),...endpointSignals()];const next=all.find(s=>signalKey(s.ref)===signalKey(ref));if(!next)return;if(logicSelection?.port){if(next.enabled===false){notice('Dieser MQTT-Kanal ist deaktiviert.',true);return;}const port=logicSelection.port;logicSelection=null;connectLogicPort(port.id,port.port,next).catch(err=>notice(err.message,true));return;}if(next.enabled===false){notice('Dieser MQTT-Kanal ist deaktiviert.',true);return;}if(!selected){selected=next;notice('Quelle gewählt: '+next.name+'. Jetzt Ziel oder Logik-Port auswählen.');render();return}const from=selected;selected=null;if(from.enabled===false){notice('Dieser MQTT-Kanal ist deaktiviert.',true);render();return;}if(from.ref.type!=='device'&&next.ref.type!=='device'){notice('Mindestens ein Endpunkt muss KNX sein.',true);render();return}if(signalKey(from.ref)===signalKey(next.ref)||(from.ref.type==='device'&&next.ref.type==='device'&&from.address===next.address)){notice('Quelle und Ziel müssen unterschiedliche Gruppenadressen haben.',true);render();return}if(from.ref.type==='device'&&next.ref.type==='device'&&graph.routes.some(r=>r.from.type==='device'&&r.to.type==='device'&&signals().find(x=>signalKey(x.ref)===signalKey(r.from))?.address===next.address&&signals().find(x=>signalKey(x.ref)===signalKey(r.to))?.address===from.address)){notice('Direkte KNX-Rückkopplung nicht erlaubt.',true);render();return}if(from.type!==next.type){notice('Datentypen unterscheiden sich. Nach dem Verbinden eine Wertumwandlung konfigurieren.',true)}if(graph.routes.some(r=>signalKey(r.from)===signalKey(from.ref)&&signalKey(r.to)===signalKey(next.ref))){notice('Diese Verbindung besteht bereits.',true);render();return}graph.routes.push({id:uid(),from:from.ref,to:next.ref,enabled:true,...(from.type!==next.type?{transform:{kind:'map',values:{}}}:{})});dirty=true;notice('Verbindung hinzugefügt. Mit „Änderungen aktivieren“ speichern.');render()}
 
 let editingRouteId=null;
 function routeMapText(r){
