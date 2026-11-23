@@ -115,7 +115,7 @@ class StaircaseLogic {
       if (!block.enabled || block.input.type !== type || block.input.value !== value || (routeId ? block.routeId !== routeId : Boolean(block.routeId))) continue;
       // Only arm when the ON command can actually be delivered.
       const started = block.dimmer?.enabled
-        ? this.writeKnx(block.dimmer.address, String(Math.round(block.dimmer.percent * 255 / 100)))
+        ? this.writeKnx(block.dimmer.address, String(block.dimmer.percent))
         : this.send(block.output, 'ON');
       if (started === false) continue;
       this.stop(block.id);

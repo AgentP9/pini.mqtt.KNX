@@ -20,7 +20,7 @@ const mqttHandler = new MqttHandler(config.mqtt);
 // Staircase timers are owned by the backend, not the browser.
 const staircaseLogic = new StaircaseLogic({
   file: process.env.STAIRCASE_LOGIC_PATH || path.join(path.dirname(config.groupAddressesPath), 'staircase-logic.json'),
-  writeKnx: (address, value) => knxHandler.write(address, value === 'ON' ? '1' : '0'),
+  writeKnx: (address, value) => knxHandler.write(address, value === 'ON' ? '1' : value === 'OFF' ? '0' : value),
   publishMqtt: (topic, value) => {
     if (!mqttHandler.connected) return false;
     mqttHandler.publish(topic, value);

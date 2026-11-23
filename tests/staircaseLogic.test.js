@@ -94,15 +94,15 @@ test('reject feedback loops and invalid duration', () => {
   } finally { h.cleanup(); }
 });
 
-test('dimmer sends scaled DPT5.001 value instead of switch ON, but still switches OFF on expiry', () => {
+test('dimmer sends DPT5.001 percentage instead of switch ON, but still switches OFF on expiry', () => {
   const h = harness();
   try {
     h.logic.save({ ...block, dimmer: { enabled: true, address: '2/2/11', percent: 80 } });
     h.logic.onRoute('route-flur', 'ON');
-    assert.deepEqual(h.sent, [['knx', '2/2/11', '204']]);
+    assert.deepEqual(h.sent, [['knx', '2/2/11', '80']]);
     h.advance(5000);
     h.logic.onRoute('route-flur', 'OFF');
-    assert.deepEqual(h.sent[1], ['knx', '2/2/11', '204']);
+    assert.deepEqual(h.sent[1], ['knx', '2/2/11', '80']);
     h.advance(9999);
     assert.equal(h.sent.length, 2);
     h.advance(1);
