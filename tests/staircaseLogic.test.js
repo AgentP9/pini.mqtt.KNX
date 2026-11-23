@@ -28,6 +28,7 @@ function harness() {
     }
   };
   logic.bindRouting({
+    groupAddresses: [{ address: '2/2/11', dpt: '5.001' }],
     routes: [{ id: 'route-flur', from: { type: 'device', id: 'knx' }, to: { type: 'mqtt', id: 'mqtt' } }],
     endpoints: [],
     resolve: ref => ref.type === 'device'
@@ -90,5 +91,28 @@ test('reject feedback loops and invalid duration', () => {
     assert.throws(() => h.logic.save({ ...block, routeId: 'missing' }), /Connection does not exist/);
     assert.throws(() => h.logic.save({ ...block, durationSeconds: 0 }), /Duration/);
     assert.throws(() => h.logic.save({ ...block, routeId: null }), /Select an existing connection/);
+  } finally { h.cleanup(); }
+});
+
+test('dimmer sends scaled DPT5.001 value instead of switch ON, but still switches OFF on expiry', () => {
+  const h = harness();
+  try {
+    h.logic.save({ ...block, dimmer: { enabled: true, address: '2/2/11', percent: 80 } });
+    h.logic.onRoute('route-flur', 'ON');
+    assert.deepEqual(h.sent, [['knx', '2/2/11', '204']]);
+    h.advance(5000);
+    h.logic.onRoute('route-flur', 'OFF');
+    assert.deepEqual(h.sent[1], ['knx', '2/2/11', '204']);
+    h.advance(9999);
+    assert.equal(h.sent.length, 2);
+    h.advance(1);
+    assert.deepEqual(h.sent[2], ['mqtt', 'home/light', 'OFF']);
+  } finally { h.cleanup(); }
+});
+test('dimmer rejects invalid levels and non-DPT5.001 group addresses', () => {
+  const h = harness();
+  try {
+    assert.throws(() => h.logic.save({ ...block, dimmer: { enabled: true, address: '2/2/11', percent: 101 } }), /1–100/);
+    assert.throws(() => h.logic.save({ ...block, dimmer: { enabled: true, address: '1/0/7', percent: 50 } }), /Dimmer address/);
   } finally { h.cleanup(); }
 });
