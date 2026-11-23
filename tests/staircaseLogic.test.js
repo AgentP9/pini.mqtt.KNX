@@ -27,22 +27,29 @@ function harness() {
       due.done = true; due.fn();
     }
   };
+  logic.bindRouting({
+    routes: [{ id: 'route-flur', from: { type: 'device', id: 'knx' }, to: { type: 'mqtt', id: 'mqtt' } }],
+    endpoints: [],
+    resolve: ref => ref.type === 'device'
+      ? { address: '1/0/7', type: 'boolean' }
+      : { topic: 'home/light', type: 'boolean' },
+  });
   const cleanup = () => { logic.close(); fs.rmSync(dir, { recursive: true, force: true }); };
   return { logic, sent, advance, cleanup, file: path.join(dir, 'logic.json') };
 }
-const block = { name: 'Flur', durationSeconds: 10, enabled: true, input: { type: 'knx', value: '1/0/7' }, output: { type: 'knx', value: '1/0/8' } };
+const block = { routeId: 'route-flur', name: 'Flur', durationSeconds: 10, enabled: true, input: { type: 'knx', value: '1/0/7' }, output: { type: 'knx', value: '1/0/8' } };
 
 test('ON and OFF both restart timer; exactly one OFF after last trigger', () => {
   const h = harness();
   try {
     h.logic.save(block);
-    h.logic.trigger('knx', '1/0/7', 'ON');
+    h.logic.onRoute('route-flur', 'ON');
     h.advance(9000);
-    h.logic.trigger('knx', '1/0/7', 'OFF');
+    h.logic.onRoute('route-flur', 'OFF');
     h.advance(9000);
-    assert.deepEqual(h.sent, [['knx','1/0/8','ON'],['knx','1/0/8','ON']]);
+    assert.deepEqual(h.sent, [['mqtt','home/light','ON'],['knx','1/0/8','ON']]);
     h.advance(1000);
-    assert.deepEqual(h.sent.at(-1), ['knx','1/0/8','OFF']);
+    assert.deepEqual(h.sent.at(-1), ['mqtt','home/light','OFF']);
     assert.equal(h.sent.length, 3);
   } finally { h.cleanup(); }
 });
@@ -50,15 +57,15 @@ test('disabled blocks, unrelated inputs and unsupported MQTT payloads do not tri
   const h = harness();
   try {
     h.logic.save({ ...block, enabled: false });
-    h.logic.trigger('knx', '1/0/7', 'ON');
+    h.logic.onRoute('route-flur', 'ON');
     h.logic.trigger('knx', '1/0/9', 'OFF');
     assert.equal(h.sent.length, 0);
-    h.logic.save({ ...block, input: { type: 'mqtt', value: 'home/trigger' }, output: { type: 'mqtt', value: 'home/light' } }, h.logic.list()[0].id);
-    h.logic.trigger('mqtt', 'home/trigger', 'garbage');
+    h.logic.save({ ...block, enabled: true }, h.logic.list()[0].id);
+    h.logic.onRoute('route-flur', 'garbage');
     assert.equal(h.sent.length, 0);
-    h.logic.trigger('mqtt', 'home/trigger', '0');
+    h.logic.onRoute('route-flur', '0');
     assert.deepEqual(h.sent[0], ['mqtt', 'home/light', 'ON']);
-    assert.deepEqual(h.logic.mqttTopics(), ['home/trigger']);
+    assert.deepEqual(h.logic.mqttTopics(), []);
   } finally { h.cleanup(); }
 });
 test('configuration persists; editing and deletion cancel pending timers', () => {
@@ -80,8 +87,8 @@ test('configuration persists; editing and deletion cancel pending timers', () =>
 test('reject feedback loops and invalid duration', () => {
   const h = harness();
   try {
-    assert.throws(() => h.logic.save({ ...block, output: block.input }), /differ/);
+    assert.throws(() => h.logic.save({ ...block, routeId: 'missing' }), /Connection does not exist/);
     assert.throws(() => h.logic.save({ ...block, durationSeconds: 0 }), /Duration/);
-    assert.throws(() => h.logic.save({ ...block, input: { type: 'mqtt', value: 'invalid/#' } }), /Invalid endpoint/);
+    assert.throws(() => h.logic.save({ ...block, routeId: null }), /Select an existing connection/);
   } finally { h.cleanup(); }
 });
