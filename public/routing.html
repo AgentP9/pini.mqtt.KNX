@@ -15,7 +15,7 @@
 
 body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:420px;background:var(--bs-body-bg);border:1px solid var(--bs-border-color);border-radius:1rem;overflow:auto}.lanes{display:grid;grid-template-columns:minmax(230px,1fr) minmax(230px,1fr);gap:12%;padding:1.5rem;position:relative;z-index:2}.node{background:var(--bs-body-bg);border:1px solid var(--bs-border-color);border-radius:.8rem;padding:.75rem;margin-bottom:.75rem;box-shadow:0 2px 8px #0001}.node h3{font-size:1rem;margin:0 0 .5rem}.knx-node-header,.mqtt-node-header{min-height:56px;padding:12px 14px;margin:0;border-radius:.75rem .75rem 0 0}.mqtt-node-header h3,.knx-node-header h3{line-height:1.5;min-height:0}.mqtt-node-header .btn,.knx-node-header .btn{flex-shrink:0}.knx-node-header h3{line-height:1.5;min-height:0}.knx-node-header .btn{flex-shrink:0}.signal{display:flex;align-items:center;justify-content:space-between;gap:.5rem;border-top:1px solid var(--bs-border-color);padding:.4rem 0;font-size:.85rem}.signal button{white-space:nowrap;flex-shrink:0}#mqtt .signal{justify-content:flex-start}#mqtt .signal .signal-btn{margin-right:.25rem}.signal button.selected{background:var(--bs-primary);color:white}.links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}.muted{color:var(--bs-secondary-color)}@media(max-width:650px){.lanes{gap:1rem;grid-template-columns:minmax(170px,1fr) minmax(170px,1fr);padding:.7rem}.node{padding:.5rem}.signal{flex-wrap:wrap}}
 .aligned-route{display:grid;grid-template-columns:minmax(180px,1fr) minmax(150px,.9fr) minmax(180px,1fr);gap:1rem;align-items:center;border-bottom:1px solid var(--bs-border-color);padding:1rem 0}.aligned-route .node{margin:0}.transform-chip{display:block;text-align:center;font-size:.8rem;white-space:normal;overflow-wrap:anywhere}.aligned-route .arrow{text-align:center;color:var(--bs-primary)}@media(max-width:700px){.aligned-route{gap:.4rem;grid-template-columns:minmax(90px,1fr) minmax(90px,1fr) minmax(90px,1fr)}.aligned-route .node{padding:.4rem}}.workspace{overflow:auto}.lanes{display:grid;grid-template-columns:minmax(230px,1fr) minmax(230px,1fr);gap:16%;padding:1.5rem;position:relative;z-index:2;align-items:start}.node{position:relative}.node[data-node^="device:"],.node[data-node^="mqttDevice:"]{padding:0;overflow:hidden}.node[data-node^="device:"]>.signal,.node[data-node^="mqttDevice:"]>.signal{margin:0 .75rem}.node[data-node^="mqttDevice:"]>.upgrade-mqtt-device{margin:.75rem}.node h3{min-height:1.5rem}.signal{min-height:43px}.links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3;overflow:visible}.connection-label{font-size:12px;fill:var(--bs-body-color);paint-order:stroke;stroke:var(--bs-body-bg);stroke-width:5px;stroke-linejoin:round}.connection-path{fill:none;stroke:var(--bs-primary);stroke-width:2.5;opacity:.8}.connection-path.inactive{stroke:var(--bs-secondary-color);stroke-dasharray:6 5;opacity:.55}.route-transform{position:absolute;z-index:4;transform:translate(-50%,-50%);font-size:.73rem;max-width:190px;white-space:normal;overflow-wrap:anywhere;box-shadow:0 1px 4px #0002}.route-transform.inactive{opacity:.65}
-.route-actions{display:flex;align-items:center;justify-content:center;gap:.45rem;margin-top:.35rem}.route-actions input{cursor:pointer}.route-actions .btn{padding:.12rem .3rem}.floating-route-actions{position:absolute;z-index:5;transform:translate(-50%,0);background:var(--bs-body-bg);border-radius:.35rem;padding:.12rem .3rem;box-shadow:0 1px 3px #0002}#route-dialog{border:1px solid var(--bs-border-color);border-radius:1rem;max-width:min(94vw,560px);width:100%;background:var(--bs-body-bg);color:var(--bs-body-color);box-shadow:0 20px 60px #0004}#route-dialog::backdrop{background:#0007}.aligned-route{padding:1.6rem 0;gap:1.75rem}.aligned-connector{min-height:64px}.lanes{gap:20%;padding:2rem 1.5rem}.signal{min-height:56px}.route-transform{max-width:170px;padding:.35rem .6rem}.node{padding:1rem}@media(max-width:700px){.aligned-route{gap:.6rem;padding:1rem 0}.lanes{gap:1rem;padding:1rem .7rem}.node{padding:.6rem}}.connection-arrow{fill:none;stroke:var(--bs-primary);stroke-width:2.8;stroke-linecap:round;stroke-linejoin:round}.connection-arrow.inactive{stroke:var(--bs-secondary-color);opacity:.55}</style><script src="/socket.io/socket.io.js"></script><script src="/header-status.js" defer></script></head><body>
+.route-actions{display:flex;align-items:center;justify-content:center;gap:.45rem;margin-top:.35rem}.route-actions input{cursor:pointer}.route-actions .btn{padding:.12rem .3rem}.floating-route-actions{position:absolute;z-index:5;transform:translate(-50%,0);background:var(--bs-body-bg);border-radius:.35rem;padding:.12rem .3rem;box-shadow:0 1px 3px #0002}#route-dialog{border:1px solid var(--bs-border-color);border-radius:1rem;max-width:min(94vw,560px);width:100%;background:var(--bs-body-bg);color:var(--bs-body-color);box-shadow:0 20px 60px #0004}#route-dialog::backdrop{background:#0007}.aligned-route{padding:1.6rem 0;gap:1.75rem}.aligned-connector{min-height:64px}.lanes{gap:20%;padding:2rem 1.5rem}.signal{min-height:56px}.route-transform{max-width:170px;padding:.35rem .6rem}.node{padding:1rem}@media(max-width:700px){.aligned-route{gap:.6rem;padding:1rem 0}.lanes{gap:1rem;padding:1rem .7rem}.node{padding:.6rem}}.connection-arrow{fill:none;stroke:var(--bs-primary);stroke-width:2.8;stroke-linecap:round;stroke-linejoin:round}.connection-arrow.inactive{stroke:var(--bs-secondary-color);opacity:.55}.lanes{grid-template-columns:minmax(240px,1fr) minmax(220px,.8fr) minmax(240px,1fr)!important;gap:1.5rem!important;min-width:860px}.logic-node{border-color:var(--bs-primary-border-subtle);background:var(--bs-primary-bg-subtle)}.logic-node .signal{justify-content:space-between}.logic-node .logic-status{font-size:.8rem}.routing-add-dialog{width:min(95vw,620px);max-height:90dvh;overflow:auto;border:1px solid var(--bs-border-color);border-radius:1rem;background:var(--bs-body-bg);color:var(--bs-body-color);padding:1.25rem}.routing-add-dialog::backdrop{background:#0008}.routing-add-dialog .tab-pane{padding-top:1rem}@media(max-width:900px){.lanes{gap:1rem!important;padding:1rem!important}} </style><script src="/socket.io/socket.io.js"></script><script src="/header-status.js" defer></script></head><body>
 <header class="app-shell dashboard-shell"><div class="app-shell-inner">
   <a class="app-brand" href="/"><i class="bi bi-lightning-charge-fill text-primary me-1"></i> pini.mqtt.KNX</a>
   <nav class="app-nav" aria-label="Hauptnavigation">
@@ -34,29 +34,23 @@ body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:42
   </div>
 </div></header>
 <main class="container-fluid px-4 pb-4" style="max-width:1500px">
-<div class="app-page-head"><div><div class="app-eyebrow">Konfiguration · Schritt 3 von 3</div><h1 class="app-page-title h3">Verbindungen</h1><p class="app-page-subtitle">Verbinde KNX-Devices mit MQTT-Signalen. Hier werden Richtung, Wertumwandlung und Aktivierung zentral festgelegt.</p></div><div class="d-flex gap-2 flex-wrap"><a class="btn btn-outline-primary" href="/api/export/openhab" download="pini-mqtt-knx-openhab.zip" title="MQTT-Topics als openHAB Things und Items exportieren"><i class="bi bi-file-earmark-zip me-1"></i> openHAB Export (.zip)</a></div></div>
+<div class="app-page-head"><div><div class="app-eyebrow">Konfiguration · Schritt 3 von 3</div><h1 class="app-page-title h3">Verbindungen</h1><p class="app-page-subtitle">Verbinde KNX-Devices mit MQTT-Signalen. Hier werden Richtung, Wertumwandlung und Aktivierung zentral festgelegt.</p></div><div class="d-flex gap-2 flex-wrap"><button type="button" class="btn btn-primary" id="open-add-dialog"><i class="bi bi-plus-lg me-1"></i> Hinzufügen</button><a class="btn btn-outline-primary" href="/api/export/openhab" download="pini-mqtt-knx-openhab.zip" title="MQTT-Topics als openHAB Things und Items exportieren"><i class="bi bi-file-earmark-zip me-1"></i> openHAB Export (.zip)</a></div></div>
 
 <div class="routing-actions" role="group" aria-label="Routing-Änderungen"><button type="button" class="btn btn-outline-secondary" id="reload" title="Änderungen verwerfen" aria-label="Änderungen verwerfen" data-bs-toggle="tooltip" data-bs-placement="left"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i></button><button type="button" class="btn btn-primary" id="save" title="Änderungen aktivieren" aria-label="Änderungen aktivieren" data-bs-toggle="tooltip" data-bs-placement="left"><i class="bi bi-check-lg" aria-hidden="true"></i><span class="routing-unsaved-indicator" aria-hidden="true"></span></button></div>
 <div id="notice" role="status" class="small mb-3"></div><div id="routing-diagnostics" class="alert alert-danger" hidden role="alert"></div><div id="focus-bar" class="alert alert-info py-2" hidden><span id="focus-label"></span> <button class="btn btn-sm btn-outline-primary ms-2" id="clear-focus">Alle Devices anzeigen</button></div>
-<div class="row g-3"><div class="col-12 col-xl-9">
+<div class="row g-3"><div class="col-12">
 <div class="d-flex justify-content-between align-items-center mb-2"><h2 class="h6 m-0">Signalübersicht</h2><span class="small muted">Zuerst Quelle, dann Ziel anklicken</span></div>
-<div class="workspace" id="workspace"><svg id="links" class="links" aria-hidden="true"></svg><div class="lanes"><section id="devices"><h2 class="h6 mb-3"><i class="bi bi-house"></i> Devices</h2></section><section id="mqtt"><h2 class="h6 mb-3"><i class="bi bi-broadcast"></i> MQTT-Endpunkte</h2></section></div></div>
-</div><aside class="col-12 col-xl-3">
-<div class="card mb-3"><div class="card-body"><button type="button" id="open-mqtt-device" class="btn btn-outline-primary w-100"><i class="bi bi-plus-circle"></i> MQTT-Device anlegen</button></div></div>
-<div class="card mb-3"><div class="card-header fw-semibold">MQTT-Device-Signal hinzufügen</div><form class="card-body" id="mqtt-signal-form">
+<div class="workspace" id="workspace"><svg id="links" class="links" aria-hidden="true"></svg><div class="lanes"><section id="devices"><h2 class="h6 mb-3"><i class="bi bi-house"></i> Devices</h2></section><section id="logic"><h2 class="h6 mb-3"><i class="bi bi-hourglass-split"></i> Logik</h2></section><section id="mqtt"><h2 class="h6 mb-3"><i class="bi bi-broadcast"></i> MQTT-Endpunkte</h2></section></div></div>
+</div></div></main><dialog id="routing-add-dialog" class="routing-add-dialog" aria-labelledby="routing-add-title"><div class="d-flex justify-content-between align-items-center"><h2 id="routing-add-title" class="h5 mb-0">Hinzufügen</h2><button type="button" class="btn-close" id="close-add-dialog" aria-label="Schließen"></button></div><ul class="nav nav-tabs mt-3" role="tablist"><li class="nav-item"><button type="button" class="nav-link active" data-add-tab="device">MQTT-Device</button></li><li class="nav-item"><button type="button" class="nav-link" data-add-tab="signal">MQTT-Signal</button></li><li class="nav-item"><button type="button" class="nav-link" data-add-tab="topic">MQTT-Topic</button></li><li class="nav-item"><button type="button" class="nav-link" data-add-tab="logic">Logik</button></li></ul><div id="add-device-panel" data-add-panel="device" class="mt-3"><button type="button" id="open-mqtt-device" class="btn btn-outline-primary w-100"><i class="bi bi-plus-circle"></i> MQTT-Device anlegen</button></div><div data-add-panel="signal" hidden><form class="card-body" id="mqtt-signal-form">
 <label class="form-label" for="signal-device">MQTT-Device</label><select class="form-select mb-2" id="signal-device" required></select>
 <label class="form-label" for="signal-topic">MQTT-Topic</label><input class="form-control mb-2" id="signal-topic" maxlength="240" required placeholder="sonos/devices/Esszimmer/set/mute">
 <label class="form-label" for="signal-type">Payload-Typ</label><select class="form-select mb-2" id="signal-type"><option value="boolean">Boolean</option><option value="number">Zahl</option><option value="text">Text</option></select>
 <label class="form-label" for="signal-direction">Signalrichtung</label><select class="form-select mb-3" id="signal-direction"><option value="input">Eingang (Nachricht an Device)</option><option value="output">Ausgang (Nachricht vom Device)</option><option value="both">Beide Richtungen</option></select>
-<button class="btn btn-outline-primary w-100" type="submit">Signal hinzufügen</button></form></div>
-<div class="card mb-3"><div class="card-header fw-semibold">Einzelnes MQTT-Topic anlegen</div><form id="endpoint-form" class="card-body">
+<button class="btn btn-outline-primary w-100" type="submit">Signal hinzufügen</button></form></div><div data-add-panel="topic" hidden><form id="endpoint-form" class="card-body">
 <label class="form-label" for="topic-name">Name</label><input class="form-control mb-2" id="topic-name" required maxlength="120" placeholder="Esszimmer Licht">
 <label class="form-label" for="topic">Topic</label><input class="form-control mb-2" id="topic" required maxlength="240" placeholder="home/dining/light/set">
 <label class="form-label" for="payload-type">Payload-Typ</label><select class="form-select mb-3" id="payload-type"><option value="boolean">Boolean</option><option value="number">Zahl</option><option value="text">Text</option></select>
-<button class="btn btn-outline-primary w-100" type="submit"><i class="bi bi-plus-lg"></i> MQTT hinzufügen</button></form></div>
-
-<p class="small muted mt-3">Ausschließlich aktivierte Verbindungen des Routing Designers sind aktiv. Signaltypen und Wertumwandlungen werden beim Speichern geprüft.</p>
-</aside></div></main><dialog id="mqtt-device-dialog" aria-labelledby="mqtt-device-dialog-title" style="width:min(95vw,680px);max-height:90vh;overflow:auto;border:1px solid var(--bs-border-color,#ccc);border-radius:12px;padding:0"><div class="d-flex justify-content-between align-items-center px-3 pt-3"><h3 class="h5 m-0" id="mqtt-device-dialog-title">MQTT-Device anlegen</h3><button type="button" id="close-mqtt-device" class="btn-close" aria-label="Schließen"></button></div><form class="p-3" id="mqtt-device-form">
+<button class="btn btn-outline-primary w-100" type="submit"><i class="bi bi-plus-lg"></i> MQTT hinzufügen</button></form></div><div data-add-panel="logic" hidden><p class="small text-secondary mt-3">Logikbausteine werden auf der Logik-Seite angelegt und hier in der mittleren Spalte angezeigt.</p><a class="btn btn-outline-primary" href="/logic.html">Treppenhauslicht anlegen</a></div></dialog><dialog id="mqtt-device-dialog" aria-labelledby="mqtt-device-dialog-title" style="width:min(95vw,680px);max-height:90vh;overflow:auto;border:1px solid var(--bs-border-color,#ccc);border-radius:12px;padding:0"><div class="d-flex justify-content-between align-items-center px-3 pt-3"><h3 class="h5 m-0" id="mqtt-device-dialog-title">MQTT-Device anlegen</h3><button type="button" id="close-mqtt-device" class="btn-close" aria-label="Schließen"></button></div><form class="p-3" id="mqtt-device-form">
 <label class="form-label" for="mqtt-device-name">Device-Name</label><input class="form-control mb-2" id="mqtt-device-name" required maxlength="120" placeholder="Sonos Esszimmer">
 <label class="form-label" for="mqtt-device-template">Template</label><select class="form-select mb-2" id="mqtt-device-template"><option value="sonos">Sonos Player</option><option value="shelly-plug-s">Shelly Plug S</option><option value="generic">Generisches MQTT-Device</option><option value="custom">Benutzerdefiniert</option></select>
 <label class="form-label" for="mqtt-device-base">MQTT-Basistopic</label><input class="form-control mb-3" id="mqtt-device-base" required placeholder="sonos/devices/Esszimmer">
@@ -93,10 +87,21 @@ $('routing-diagnostics').addEventListener('click',async event=>{
  catch(err){button.disabled=false;alert('Akzeptanz konnte nicht gespeichert werden: '+err.message);}
 });
 function loadRoutingIssues(){fetch('/api/routing/diagnostics').then(r=>{if(!r.ok)throw Error('HTTP '+r.status);return r.json()}).then(data=>{routingIssues=data.issues||[];showRoutingIssues();render();}).catch(e=>console.warn('Routing diagnostics unavailable:',e));}
+let logicBlocks=[];
+async function loadLogicBlocks(){try{const r=await fetch('/api/logic/staircase',{cache:'no-store'});if(r.ok){logicBlocks=await r.json();render();}}catch(e){console.warn('Logic blocks unavailable:',e);}}
+const addDialog=$('routing-add-dialog');
+$('open-add-dialog').addEventListener('click',()=>addDialog.showModal());
+$('close-add-dialog').addEventListener('click',()=>addDialog.close());
+document.querySelectorAll('[data-add-tab]').forEach(button=>button.addEventListener('click',()=>{
+ document.querySelectorAll('[data-add-tab]').forEach(b=>b.classList.toggle('active',b===button));
+ document.querySelectorAll('[data-add-panel]').forEach(panel=>panel.hidden=panel.dataset.addPanel!==button.dataset.addTab);
+}));
+
 const roomColors=['#3b82f6','#10b981','#a855f7','#f59e0b','#ec4899','#06b6d4','#ef4444','#84cc16'];
 let focusAddress=new URLSearchParams(location.search).get("ga"),focusRoute=new URLSearchParams(location.search).get("route"),focusDevice=new URLSearchParams(location.search).get("device");
 const lastTraffic=new Map();
 const socket=io();socket.on('routing-traffic',entry=>{lastTraffic.set(entry.id,entry);});
+socket.on('staircase',data=>{logicBlocks=data;render();});
 socket.on('routing-diagnostics',data=>{routingIssues=data.issues||[];showRoutingIssues();render();});
 // Close native modal dialogs when clicking their backdrop, not their content.
 document.querySelectorAll('dialog').forEach(dialog=>{
@@ -191,6 +196,7 @@ function render(){
   return rank(a)-rank(b);
  });
  $('devices').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-house"></i> KNX-Devices</h2>'+deviceCards.map(c=>c.html).join('');
+ $('logic').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-hourglass-split"></i> Logikbausteine</h2>'+(logicBlocks.length?logicBlocks.map(b=>'<article class="node logic-node" data-logic-id="'+esc(b.id)+'"><h3>'+esc(b.name)+'</h3><div class="signal"><span><i class="bi bi-box-arrow-in-right me-1"></i> Trigger · '+esc(b.input.type.toUpperCase())+' '+esc(b.input.value)+'</span><button class="btn btn-sm btn-outline-primary logic-port" data-logic-id="'+esc(b.id)+'" data-port="input" title="Trigger verbinden"><i class="bi bi-circle"></i></button></div><div class="signal"><button class="btn btn-sm btn-outline-primary logic-port" data-logic-id="'+esc(b.id)+'" data-port="output" title="Ausgang verbinden"><i class="bi bi-circle"></i></button><span><i class="bi bi-box-arrow-right me-1"></i> Ausgang · '+esc(b.output.type.toUpperCase())+' '+esc(b.output.value)+'</span></div><div class="logic-status mt-2">'+(b.enabled?'Aktiv':'Deaktiviert')+' · '+b.durationSeconds+' s'+(b.expiresAt?' · läuft':'')+'</div><a href="/logic.html" class="btn btn-sm btn-outline-primary mt-2">Konfigurieren</a></article>').join(''):'<p class="small muted">Noch keine Logikbausteine. Über Hinzufügen anlegen.</p>');
  $('mqtt').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-broadcast"></i> MQTT-Devices und Endpunkte</h2>'+mqttCards.map(c=>c.html).join('');
  $('signal-device').innerHTML=(graph.mqttDevices||[]).map(d=>'<option value="'+esc(d.id)+'">'+esc(d.name)+'</option>').join('');
  renderRoutes();
@@ -251,11 +257,70 @@ function drawLinks(routes=graph.routes.filter(isFocused)){
 
   
  }
+ drawLogicLinks();
 }
 $('clear-focus').onclick=()=>{focusAddress=null;focusRoute=null;focusDevice=null;history.replaceState(null,'',location.pathname);render()};
 function renderRoutes(){ /* Connections are managed directly on the canvas. */ }
 function signalHtml(s){const key=signalKey(s.ref);const button='<button class="btn btn-sm btn-outline-primary signal-btn '+(selected&&signalKey(selected.ref)===key?'selected':'')+'" data-key="'+esc(key)+'" title="Als Quelle oder Ziel wählen"><i class="bi bi-circle"></i></button>';const label='<span>'+esc(s.name.split(' · ').slice(1).join(' · '))+' <span class="muted">'+(s.ref.type==='device'?' · '+esc(s.address)+' · DPT '+esc(s.dpt):' ('+esc(s.type)+')')+'</span></span>';return '<div class="signal'+(s.enabled===false?' is-disabled':'')+'"'+(s.enabled===false?' title="Kanal deaktiviert"':'')+'>'+(s.ref.type==='device'?label+button:button+label)+'</div>'}
-function choose(ref){const all=[...signals(),...endpointSignals()];const next=all.find(s=>signalKey(s.ref)===signalKey(ref));if(!next)return;if(next.enabled===false){notice('Dieser MQTT-Kanal ist deaktiviert.',true);return;}if(!selected){selected=next;notice('Quelle gewählt: '+next.name+'. Jetzt Ziel auswählen.');render();return}const from=selected;selected=null;if(from.enabled===false){notice('Dieser MQTT-Kanal ist deaktiviert.',true);render();return;}if(from.ref.type!=='device'&&next.ref.type!=='device'){notice('Mindestens ein Endpunkt muss KNX sein.',true);render();return}if(signalKey(from.ref)===signalKey(next.ref)||(from.ref.type==='device'&&next.ref.type==='device'&&from.address===next.address)){notice('Quelle und Ziel müssen unterschiedliche Gruppenadressen haben.',true);render();return}if(from.ref.type==='device'&&next.ref.type==='device'&&graph.routes.some(r=>r.from.type==='device'&&r.to.type==='device'&&signals().find(x=>signalKey(x.ref)===signalKey(r.from))?.address===next.address&&signals().find(x=>signalKey(x.ref)===signalKey(r.to))?.address===from.address)){notice('Direkte KNX-Rückkopplung nicht erlaubt.',true);render();return}if(from.type!==next.type){notice('Datentypen unterscheiden sich. Nach dem Verbinden eine Wertumwandlung konfigurieren.',true)}if(graph.routes.some(r=>signalKey(r.from)===signalKey(from.ref)&&signalKey(r.to)===signalKey(next.ref))){notice('Diese Verbindung besteht bereits.',true);render();return}graph.routes.push({id:uid(),from:from.ref,to:next.ref,enabled:true,...(from.type!==next.type?{transform:{kind:'map',values:{}}}:{})});dirty=true;notice('Verbindung hinzugefügt. Mit „Änderungen aktivieren“ speichern.');render()}
+let logicSelection=null;
+function logicPortRef(button){return {id:button.dataset.logicId,port:button.dataset.port};}
+async function connectLogicPort(blockId,port,signal){
+ const block=logicBlocks.find(b=>b.id===blockId);
+ if(!block)throw Error('Logikbaustein nicht gefunden');
+ const resolved=signal.ref.type==='device'?{type:'knx',value:signal.address}:{type:'mqtt',value:signal.topic||graph.endpoints.find(e=>e.id===signal.ref.id)?.topic};
+ if(!resolved.value)throw Error('Keine Gruppenadresse oder MQTT-Topic gefunden');
+ if(signal.type!=='boolean')throw Error('Treppenhauslicht benötigt ein boolesches Schaltsignal');
+ if(signal.ref.type==='mqttDevice'&&signal.enabled===false)throw Error('MQTT-Kanal ist deaktiviert');
+ if(port==='input'&&resolved.type===block.output.type&&resolved.value===block.output.value||port==='output'&&resolved.type===block.input.type&&resolved.value===block.input.value)throw Error('Ein- und Ausgang dürfen nicht identisch sein');
+ const updated={...block,[port]:resolved};
+ const response=await fetch('/api/logic/staircase/'+encodeURIComponent(blockId),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(updated)});
+ const result=await response.json();
+ if(!response.ok)throw Error(result.error||'Verbindung konnte nicht gespeichert werden');
+ await loadLogicBlocks();
+ notice('Logikverbindung gespeichert und sofort aktiv.');
+}
+function logicEndpointSignal(block,port){
+ const endpoint=block[port];
+ if(endpoint.type==='knx')return signals().find(s=>s.address===endpoint.value);
+ return endpointSignals().find(s=>s.topic===endpoint.value||graph.endpoints.find(e=>e.id===s.ref.id)?.topic===endpoint.value);
+}
+function drawLogicLinks(){
+ const root=$('workspace'),svg=$('links'),rect=root.getBoundingClientRect(),ns='http://www.w3.org/2000/svg';
+ for(const block of logicBlocks){
+  for(const port of ['input','output']){
+   const signal=logicEndpointSignal(block,port);
+   if(!signal)continue;
+   const button=[...root.querySelectorAll('.signal-btn')].find(el=>el.dataset.key===signalKey(signal.ref));
+   const logicButton=[...root.querySelectorAll('.logic-port')].find(el=>el.dataset.logicId===block.id&&el.dataset.port===port);
+   if(!button||!logicButton)continue;
+   const a=button.getBoundingClientRect(),b=logicButton.getBoundingClientRect();
+   const leftToRight=a.left<b.left;
+   const x1=(leftToRight?a.right:a.left)-rect.left+root.scrollLeft,y1=a.top+a.height/2-rect.top+root.scrollTop;
+   const x2=(leftToRight?b.left:b.right)-rect.left+root.scrollLeft,y2=b.top+b.height/2-rect.top+root.scrollTop;
+   const mid=(x1+x2)/2,path=document.createElementNS(ns,'path');
+   path.setAttribute('d','M '+x1+' '+y1+' C '+mid+' '+y1+', '+mid+' '+y2+', '+x2+' '+y2);
+   path.setAttribute('class','connection-path'+(block.enabled?'':' inactive'));
+   svg.appendChild(path);
+   const arrow=document.createElementNS(ns,'path');
+   arrow.setAttribute('d',port==='input'?(leftToRight?'M -7 -4 L 0 0 L -7 4':'M 7 -4 L 0 0 L 7 4'):(leftToRight?'M 7 -4 L 0 0 L 7 4':'M -7 -4 L 0 0 L -7 4'));
+   arrow.setAttribute('transform','translate('+(port==='input'?x2:x1)+' '+(port==='input'?y2:y1)+')');
+   arrow.setAttribute('class','connection-arrow'+(block.enabled?'':' inactive'));svg.appendChild(arrow);
+  }
+ }
+}
+document.addEventListener('click',async event=>{
+ const portButton=event.target.closest('.logic-port');
+ if(portButton){
+  const port=logicPortRef(portButton);
+  if(selected){
+   const signal=selected;selected=null;logicSelection=null;
+   try{await connectLogicPort(port.id,port.port,signal);}catch(err){notice(err.message,true);}
+  }else{
+   logicSelection={port};selected=null;notice('Logik-Port gewählt. Jetzt ein KNX- oder MQTT-Signal anklicken.');render();
+  }
+ }
+});
+function choose(ref){const all=[...signals(),...endpointSignals()];const next=all.find(s=>signalKey(s.ref)===signalKey(ref));if(!next)return;if(logicSelection?.port){if(next.enabled===false){notice('Dieser MQTT-Kanal ist deaktiviert.',true);return;}const port=logicSelection.port;logicSelection=null;connectLogicPort(port.id,port.port,next).catch(err=>notice(err.message,true));return;}if(next.enabled===false){notice('Dieser MQTT-Kanal ist deaktiviert.',true);return;}if(!selected){selected=next;notice('Quelle gewählt: '+next.name+'. Jetzt Ziel oder Logik-Port auswählen.');render();return}const from=selected;selected=null;if(from.enabled===false){notice('Dieser MQTT-Kanal ist deaktiviert.',true);render();return;}if(from.ref.type!=='device'&&next.ref.type!=='device'){notice('Mindestens ein Endpunkt muss KNX sein.',true);render();return}if(signalKey(from.ref)===signalKey(next.ref)||(from.ref.type==='device'&&next.ref.type==='device'&&from.address===next.address)){notice('Quelle und Ziel müssen unterschiedliche Gruppenadressen haben.',true);render();return}if(from.ref.type==='device'&&next.ref.type==='device'&&graph.routes.some(r=>r.from.type==='device'&&r.to.type==='device'&&signals().find(x=>signalKey(x.ref)===signalKey(r.from))?.address===next.address&&signals().find(x=>signalKey(x.ref)===signalKey(r.to))?.address===from.address)){notice('Direkte KNX-Rückkopplung nicht erlaubt.',true);render();return}if(from.type!==next.type){notice('Datentypen unterscheiden sich. Nach dem Verbinden eine Wertumwandlung konfigurieren.',true)}if(graph.routes.some(r=>signalKey(r.from)===signalKey(from.ref)&&signalKey(r.to)===signalKey(next.ref))){notice('Diese Verbindung besteht bereits.',true);render();return}graph.routes.push({id:uid(),from:from.ref,to:next.ref,enabled:true,...(from.type!==next.type?{transform:{kind:'map',values:{}}}:{})});dirty=true;notice('Verbindung hinzugefügt. Mit „Änderungen aktivieren“ speichern.');render()}
 
 let editingRouteId=null;
 function routeMapText(r){
@@ -535,4 +600,5 @@ window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.return
 load();
 
 loadRoutingIssues();
+loadLogicBlocks();
 </script></body></html>
