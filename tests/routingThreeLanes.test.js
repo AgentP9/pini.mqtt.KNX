@@ -19,16 +19,13 @@ test('add forms live only in add dialog, not in right sidebar', () => {
 test('logic blocks are loaded from backend and updated by socket', () => {
   assert.match(html, /fetch\('\/api\/logic\/staircase'/);
   assert.match(html, /socket\.on\('staircase'/);
-  assert.match(html, /logicBlocks\.map/);
+  assert.match(html, /logicBlocks\.filter/);
 });
 
-test('logic ports support signal-first and port-first wiring', () => {
-  assert.match(html, /class="btn btn-sm btn-outline-primary logic-port"/);
-  assert.match(html, /function connectLogicPort\(/);
-  assert.match(html, /function drawLogicLinks\(/);
-  assert.match(html, /if\(logicSelection\?\.port\)/);
-  assert.match(html, /if\(selected\)\{/);
-  assert.match(html, /method:'PUT'/);
-  assert.match(html, /signal\.type!=='boolean'/);
-  assert.match(html, /drawLogicLinks\(\)/);
+test('logic is configured on existing routes instead of standalone', () => {
+  assert.match(html, /route-logic-action/);
+  assert.match(html, /id="route-logic-dialog"/);
+  assert.match(html, /routeId:editingLogicRoute/);
+  assert.match(html, /logicBlocks.find\(b=>b.routeId===r.id\)/);
+  assert.match(html, /Bitte zuerst die Verbindungsänderungen aktivieren/);
 });
