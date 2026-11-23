@@ -21,3 +21,14 @@ test('logic blocks are loaded from backend and updated by socket', () => {
   assert.match(html, /socket\.on\('staircase'/);
   assert.match(html, /logicBlocks\.map/);
 });
+
+test('logic ports support signal-first and port-first wiring', () => {
+  assert.match(html, /class="btn btn-sm btn-outline-primary logic-port"/);
+  assert.match(html, /function connectLogicPort\(/);
+  assert.match(html, /function drawLogicLinks\(/);
+  assert.match(html, /if\(logicSelection\?\.port\)/);
+  assert.match(html, /if\(selected\)\{/);
+  assert.match(html, /method:'PUT'/);
+  assert.match(html, /signal\.type!=='boolean'/);
+  assert.match(html, /drawLogicLinks\(\)/);
+});
