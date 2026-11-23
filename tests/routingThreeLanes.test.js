@@ -29,3 +29,15 @@ test('logic is configured on existing routes instead of standalone', () => {
   assert.match(html, /logicBlocks.find\(b=>b.routeId===route.id\)/);
   assert.match(html, /Bitte zuerst Verbindungsänderungen aktivieren/);
 });
+
+test('staircase editor keeps JSON advanced and name optional to edit', () => {
+ assert.match(html, /<details id="route-advanced"/);
+ assert.match(html, /Weitere Optionen/);
+ assert.match(html, /Einschalten über Dimmwert/);
+});
+test('enabled dimmer draws a dedicated branch to the DPT 5.001 signal', () => {
+ assert.match(html, /logicBlock\.dimmer\.address/);
+ assert.match(html, /stroke-dasharray/);
+ assert.match(html, /connection-path has-logic/);
+ assert.match(html, /connection-arrow has-logic/);
+});
