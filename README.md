@@ -24,6 +24,10 @@ The GA editor and ETS XML import preserve only the address, name, DPT and commen
 
 The web dashboard manages KNX group addresses and devices. Use **Routing Designer** to connect signals to MQTT topics, configure directions, enable/disable routes and edit transformations.
 
+### Astro MQTT device
+
+In **Verbindungen → Hinzufügen → MQTT-Device**, select **Astro-Device** and enter a base topic, for example `home/astro`. The template creates four boolean output channels: `sunrise/start`, `sunrise/end`, `sunset/start`, and `sunset/end` (topics under the selected base). Connect a channel to a boolean KNX signal and activate the changes to subscribe to its topic. The bridge expects an external Astro publisher to send `true`/`false` (or `1`/`0`, `ON`/`OFF`); it does not calculate sunrise or sunset times itself.
+
 Dashboard switch and heating setpoint controls send explicit diagnostic KNX writes; they do not constitute MQTT routes or actuator confirmation.
 
 ## Deployment

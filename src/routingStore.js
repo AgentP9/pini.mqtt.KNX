@@ -137,7 +137,7 @@ class RoutingStore {
     const mqttTopics = new Set(topics);
     for (const device of mqttDevices) {
       if (!device || typeof device.id !== 'string' || deviceIds.has(device.id) || typeof device.name !== 'string' ||
-          !device.name.trim() || device.name.length > 120 || !['generic', 'sonos', 'shelly-plug-s', 'custom'].includes(device.templateId) ||
+          !device.name.trim() || device.name.length > 120 || !['generic', 'sonos', 'shelly-plug-s', 'astro', 'custom'].includes(device.templateId) ||
           !Array.isArray(device.signals) || !device.signals.length || device.signals.length > 30) throw Error('Invalid MQTT device');
       deviceIds.add(device.id);
       const keys = new Set();
