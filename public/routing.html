@@ -282,6 +282,7 @@ async function persistRouteLogic(routeId){
  }
  await loadLogicBlocks();
 }
+const routeLabelOffsets=new Map();
 function drawLinks(routes=graph.routes.filter(isFocused)){
  const root=$('workspace'),svg=$('links');
  root.querySelectorAll('.route-transform').forEach(x=>x.remove());
@@ -301,7 +302,9 @@ function drawLinks(routes=graph.routes.filter(isFocused)){
   const paired=routes.find(other=>other.enabled&&r.enabled&&other.id!==r.id&&signalKey(other.from)===signalKey(r.to)&&signalKey(other.to)===signalKey(r.from));
   if(paired&&String(r.id)>String(paired.id))continue;
   const path=document.createElementNS(ns,'path');
-  path.setAttribute('d',knxToKnx?'M '+x1+' '+y1+' C '+loopX+' '+y1+', '+loopX+' '+y2+', '+(x2+2)+' '+y2:'M '+x1+' '+y1+' C '+mid+' '+y1+', '+mid+' '+y2+', '+x2+' '+y2);
+  const originalPath=knxToKnx?'M '+x1+' '+y1+' C '+loopX+' '+y1+', '+loopX+' '+y2+', '+(x2+2)+' '+y2:'M '+x1+' '+y1+' C '+mid+' '+y1+', '+mid+' '+y2+', '+x2+' '+y2;
+  const anchorX=knxToKnx?loopX:mid,anchorY=(y1+y2)/2;
+  const updatePath=(x,y)=>{path.setAttribute('d',x===anchorX&&y===anchorY?originalPath:'M '+x1+' '+y1+' C '+(knxToKnx?x:x1+(x-x1)/2)+' '+y1+', '+x+' '+y+', '+x+' '+y+' C '+x+' '+y+', '+(knxToKnx?x:x+(x2-x)/2)+' '+y2+', '+(knxToKnx?x2+2:x2)+' '+y2);};
   path.setAttribute('class','connection-path'+(r.enabled?'':' inactive')+(routeIssue(r.id)?' type-warning':(logicBlocks.some(b=>b.routeId===r.id&&b.enabled)?' has-logic':'')));svg.appendChild(path);
   const arrowAt=(x,y,rightward)=>{
    const arrow=document.createElementNS(ns,'path');
@@ -312,6 +315,7 @@ function drawLinks(routes=graph.routes.filter(isFocused)){
   if(knxToKnx)arrowAt(x2+2,y2,false);
   else if(fromDevice)arrowAt(x2-2,y2,true);
   else arrowAt(x1+2,y1,false);
+  let updateBranch=()=>{};
   // Additional branch: ON is sent to the dimmer value GA, while OFF remains on the switch route.
   const logicBlock=logicBlocks.find(b=>b.routeId===r.id&&b.enabled&&b.dimmer?.enabled);
   if(logicBlock){
@@ -322,7 +326,8 @@ function drawLinks(routes=graph.routes.filter(isFocused)){
     const dx=dimRect.right-rect.left+root.scrollLeft,dy=dimRect.top+dimRect.height/2-rect.top+root.scrollTop;
     const startX=knxToKnx?loopX:mid,startY=(y1+y2)/2;
     const branch=document.createElementNS(ns,'path');
-    branch.setAttribute('d','M '+startX+' '+startY+' C '+(Math.max(startX,dx)+45)+' '+startY+', '+(Math.max(startX,dx)+45)+' '+dy+', '+(dx+2)+' '+dy);
+    updateBranch=(x,y)=>branch.setAttribute('d','M '+x+' '+y+' C '+(Math.max(x,dx)+45)+' '+y+', '+(Math.max(x,dx)+45)+' '+dy+', '+(dx+2)+' '+dy);
+    updateBranch(startX,startY);
     branch.setAttribute('class','connection-path has-logic'+(r.enabled?'':' inactive'));
     branch.setAttribute('stroke-dasharray','6 4');
     svg.appendChild(branch);
@@ -336,7 +341,38 @@ function drawLinks(routes=graph.routes.filter(isFocused)){
   if((paired||r.bidirectional)&&!knxToKnx){if(fromDevice)arrowAt(x1+2,y1,false);else arrowAt(x2-2,y2,true);}
   const chip=document.createElement('button');chip.type='button';chip.className='btn btn-sm btn-light border route-transform edit-transform'+(r.enabled?'':' inactive');
   chip.dataset.id=r.id;chip.textContent=(logicBlocks.some(b=>b.routeId===r.id)?'⏱ ':'')+transformLabel(r);chip.title=routeIssue(r.id)?routeIssue(r.id).reasons.join('; '):'Wertumwandlung bearbeiten';if(routeIssue(r.id))chip.classList.add('type-warning');
-  chip.style.left=(knxToKnx?loopX:mid)+'px';chip.style.top=((y1+y2)/2)+'px';root.appendChild(chip);
+  root.appendChild(chip);
+  chip.style.touchAction='none';chip.style.cursor='grab';chip.style.userSelect='none';
+  const place=(x,y)=>{chip.style.left=x+'px';chip.style.top=y+'px';updatePath(x,y);updateBranch(x,y);};
+  const offset=routeLabelOffsets.get(r.id)||{x:0,y:0};
+  place(anchorX+offset.x,anchorY+offset.y);
+  let drag=null,suppressClick=false;
+  chip.addEventListener('pointerdown',event=>{
+   if(!event.isPrimary||event.button!==0)return;
+   suppressClick=false;
+   drag={id:event.pointerId,x:event.clientX,y:event.clientY,left:parseFloat(chip.style.left),top:parseFloat(chip.style.top),scrollX:root.scrollLeft,scrollY:root.scrollTop,moved:false};
+   chip.setPointerCapture(event.pointerId);
+  });
+  chip.addEventListener('pointermove',event=>{
+   if(!drag||drag.id!==event.pointerId)return;
+   const dx=event.clientX-drag.x,dy=event.clientY-drag.y;
+   if(!drag.moved&&Math.hypot(dx,dy)<5)return;
+   drag.moved=true;chip.style.cursor='grabbing';chip.style.zIndex='6';
+   const halfW=Math.min(width/2,chip.offsetWidth/2),halfH=Math.min(height/2,chip.offsetHeight/2);
+   const x=Math.max(halfW,Math.min(width-halfW,drag.left+dx+root.scrollLeft-drag.scrollX));
+   const y=Math.max(halfH,Math.min(height-halfH,drag.top+dy+root.scrollTop-drag.scrollY));
+   routeLabelOffsets.set(r.id,{x:x-anchorX,y:y-anchorY});place(x,y);
+  });
+  const finish=event=>{
+   if(!drag||drag.id!==event.pointerId)return;
+   suppressClick=drag.moved;drag=null;chip.style.cursor='grab';
+   if(chip.hasPointerCapture(event.pointerId))chip.releasePointerCapture(event.pointerId);
+  };
+  chip.addEventListener('pointerup',finish);
+  chip.addEventListener('pointercancel',finish);
+  chip.addEventListener('lostpointercapture',finish);
+  chip.addEventListener('click',event=>{if(suppressClick&&event.detail!==0){event.preventDefault();event.stopPropagation();suppressClick=false;}});
+
 
 
   
