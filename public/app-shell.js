@@ -14,5 +14,13 @@
   document.querySelectorAll('[data-app-theme-toggle]').forEach(button=>button.addEventListener('click',()=>{const next=document.documentElement.getAttribute('data-bs-theme')==='dark'?'light':'dark';document.documentElement.setAttribute('data-bs-theme',next);localStorage.setItem('theme',next)}));
   const actions=document.querySelector('.app-shell-actions');
   if(actions){const button=document.createElement('button');button.type='button';button.className='btn btn-sm';button.setAttribute('data-app-install','');button.hidden=true;button.title='Als App installieren';button.textContent='＋ App installieren';button.addEventListener('click',async()=>{if(installPrompt){const prompt=installPrompt;installPrompt=null;await prompt.prompt();await prompt.userChoice;showInstall();}else if(isIOS){alert('In Safari: Teilen → Zum Home-Bildschirm. Anschließend die App vom Home-Bildschirm starten.');}});actions.prepend(button);showInstall();}
+  fetch('/build-info.json',{cache:'no-store'}).then(response=>response.ok?response.json():null).then(info=>{
+   if(!info||!info.branch||!/^[0-9a-f]{7,40}$/.test(info.shortSha)||!Number.isFinite(Date.parse(info.builtAt)))return;
+   const footer=document.createElement('footer');
+   footer.className='app-build-info small text-body-secondary text-center py-3';
+   footer.setAttribute('aria-label','Build-Information');
+   footer.textContent=`Build · ${info.branch} · ${info.shortSha} · ${new Date(info.builtAt).toLocaleString('de-DE',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}`;
+   document.body.appendChild(footer);
+  }).catch(()=>{});
  });
 })();

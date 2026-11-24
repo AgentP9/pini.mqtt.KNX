@@ -3,6 +3,7 @@ version: "3.8"
 services:
   pinimqtt4knx:
     build: .
+    pull_policy: build
     container_name: pinimqtt4knx
     restart: unless-stopped
     ports:
