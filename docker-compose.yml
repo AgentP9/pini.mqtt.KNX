@@ -2,8 +2,9 @@ version: "3.8"
 
 services:
   pinimqtt4knx:
-    build: .
-    pull_policy: build
+    # One-use artifact selector, not a claimed Git revision; verified OCI labels carry the revision.
+    image: knxmqtt-build-information:build-b41c1d293908cd93
+    pull_policy: never
     container_name: pinimqtt4knx
     restart: unless-stopped
     ports:
