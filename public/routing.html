@@ -251,7 +251,7 @@ function configureRouteLogic(route){
  const block=logicBlocks.find(b=>b.routeId===route.id);
  $('route-enable-inverted').checked=block?.enableInput?.inverted===true;
  const astroOptions=$('route-enable-astro-value');astroOptions.replaceChildren();
- for(const sig of astroSignals().filter(s=>s.enabled!==false))astroOptions.add(new Option(sig.name,sig.ref.id+':'+sig.ref.signal));
+ for(const sig of astroSignals())astroOptions.add(new Option(sig.name+(sig.enabled===false?' (deaktiviert)':''),sig.ref.id+':'+sig.ref.signal));
  $('route-enable-type').value=block?.enableInput?.type||'';
  astroOptions.value=block?.enableInput?.type==='astro'?block.enableInput.value:astroOptions.value;
  $('route-enable-value').value=block?.enableInput?.value||'';
