@@ -125,8 +125,9 @@ class StaircaseLogic {
     const isOn = ['ON','TRUE','1'].includes(command);
     for (const block of this.blocks) {
       if (!routeId && block.enabled && block.enableInput?.type === type && block.enableInput.value === value) {
-        this.permissions.set(block.id, isOn);
-        if (!isOn) { this.stop(block.id); this.send(block.output, 'OFF'); }
+        const released = block.enableInput.inverted === true ? !isOn : isOn;
+        this.permissions.set(block.id, released);
+        if (!released) { this.stop(block.id); this.send(block.output, 'OFF'); }
         this.onChange(this.list());
       }
       if (!block.enabled || (block.enableInput && this.permissions.get(block.id) !== true) || block.input.type !== type || block.input.value !== value || (routeId ? block.routeId !== routeId : Boolean(block.routeId))) continue;
