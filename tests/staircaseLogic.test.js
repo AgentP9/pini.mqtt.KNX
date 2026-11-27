@@ -201,3 +201,17 @@ test('internal Astro day enables inverted staircase logic at night without MQTT'
   assert.equal(h.logic.list()[0].released,false);
  }finally{h.cleanup();}
 });
+
+test('removing an Astro source revokes inverted enable instead of treating it as FALSE',()=>{
+ const h=harness();
+ try{
+  h.logic.routingStore.astroBlocks=[{id:'astro-1',name:'Astro',enabled:true,latitude:48.28,longitude:10.08,offsets:{}}];
+  h.logic.save({...block,enableInput:{type:'astro',value:'astro-1:day',inverted:true}});
+  h.logic.trigger('astro','astro-1:day','FALSE'); // night => released
+  h.logic.onRoute('route-flur','ON');
+  h.logic.invalidateEnable('astro','astro-1:day');
+  h.logic.onRoute('route-flur','ON');
+  assert.deepEqual(h.sent,[['mqtt','home/light','ON'],['mqtt','home/light','OFF']]);
+  assert.equal(h.logic.list()[0].released,false);
+ }finally{h.cleanup();}
+});
