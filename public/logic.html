@@ -59,7 +59,7 @@ $('form').addEventListener('submit',async e=>{
  e.preventDefault();
  if(!editing){showMessage('Bitte zuerst eine Verbindung auswählen.',true);return;}
  const current=blocks.find(b=>b.id===editing);
- const body={routeId:current?.routeId,name:$('name').value,durationSeconds:Number($('duration').value),enabled:$('enabled').checked,input:{type:$('input-type').value,value:$('input-value').value.trim()},output:{type:$('output-type').value,value:$('output-value').value.trim()},...(current?.dimmer?{dimmer:current.dimmer}:{})};
+ const body={routeId:current?.routeId,enableInput:current?.enableInput||null,name:$('name').value,durationSeconds:Number($('duration').value),enabled:$('enabled').checked,input:{type:$('input-type').value,value:$('input-value').value.trim()},output:{type:$('output-type').value,value:$('output-value').value.trim()},...(current?.dimmer?{dimmer:current.dimmer}:{})};
  try{const r=await fetch('/api/logic/staircase/'+encodeURIComponent(editing),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await r.json();if(!r.ok)throw Error(data.error);$('editor').hidden=true;editing=null;await load();showMessage('Änderungen gespeichert.');}catch(err){showMessage(err.message,true);}
 });
 async function load(){try{const r=await fetch('/api/logic/staircase');if(!r.ok)throw Error('HTTP '+r.status);blocks=await r.json();render();}catch(err){showMessage('Laden fehlgeschlagen: '+err.message,true);}}

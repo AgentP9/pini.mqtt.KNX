@@ -40,18 +40,21 @@ function harness() {
 }
 const block = { routeId: 'route-flur', name: 'Flur', durationSeconds: 10, enabled: true, input: { type: 'knx', value: '1/0/7' }, output: { type: 'knx', value: '1/0/8' } };
 
-test('ON and OFF both restart timer; exactly one OFF after last trigger', () => {
+test('ON cancels timer; repeated OFF restarts delay', () => {
   const h = harness();
   try {
     h.logic.save(block);
     h.logic.onRoute('route-flur', 'ON');
+    h.advance(20000);
+    assert.equal(h.logic.list()[0].active, false);
+    h.logic.onRoute('route-flur', 'OFF');
     h.advance(9000);
     h.logic.onRoute('route-flur', 'OFF');
     h.advance(9000);
-    assert.deepEqual(h.sent, [['mqtt','home/light','ON'],['mqtt','home/light','ON']]);
+    assert.deepEqual(h.sent, [['mqtt','home/light','ON']]);
     h.advance(1000);
     assert.deepEqual(h.sent.at(-1), ['mqtt','home/light','OFF']);
-    assert.equal(h.sent.length, 3);
+    assert.equal(h.sent.length, 2);
   } finally { h.cleanup(); }
 });
 test('disabled blocks, unrelated inputs and unsupported MQTT payloads do not trigger', () => {
@@ -65,7 +68,8 @@ test('disabled blocks, unrelated inputs and unsupported MQTT payloads do not tri
     h.logic.onRoute('route-flur', 'garbage');
     assert.equal(h.sent.length, 0);
     h.logic.onRoute('route-flur', '0');
-    assert.deepEqual(h.sent[0], ['mqtt', 'home/light', 'ON']);
+    assert.equal(h.sent.length, 0);
+    assert.equal(h.logic.list()[0].active, true);
     assert.deepEqual(h.logic.mqttTopics(), []);
   } finally { h.cleanup(); }
 });
@@ -75,10 +79,12 @@ test('configuration persists; editing and deletion cancel pending timers', () =>
     const saved = h.logic.save(block);
     assert.equal(JSON.parse(fs.readFileSync(h.file)).blocks.length, 1);
     h.logic.onRoute('route-flur', 'ON');
+    h.logic.onRoute('route-flur', 'OFF');
     h.logic.save({ ...block, durationSeconds: 20 }, saved.id);
     h.advance(11000);
     assert.equal(h.sent.length, 1);
     h.logic.onRoute('route-flur', 'ON');
+    h.logic.onRoute('route-flur', 'OFF');
     h.logic.remove(saved.id);
     h.advance(21000);
     assert.equal(h.sent.length, 2);
@@ -102,11 +108,11 @@ test('dimmer sends DPT5.001 percentage instead of switch ON, but still switches 
     assert.deepEqual(h.sent, [['knx', '2/2/11', '80']]);
     h.advance(5000);
     h.logic.onRoute('route-flur', 'OFF');
-    assert.deepEqual(h.sent[1], ['knx', '2/2/11', '80']);
+    assert.equal(h.sent.length, 1);
     h.advance(9999);
-    assert.equal(h.sent.length, 2);
+    assert.equal(h.sent.length, 1);
     h.advance(1);
-    assert.deepEqual(h.sent[2], ['mqtt', 'home/light', 'OFF']);
+    assert.deepEqual(h.sent[1], ['mqtt', 'home/light', 'OFF']);
   } finally { h.cleanup(); }
 });
 test('dimmer rejects invalid levels and non-DPT5.001 group addresses', () => {
@@ -115,4 +121,41 @@ test('dimmer rejects invalid levels and non-DPT5.001 group addresses', () => {
     assert.throws(() => h.logic.save({ ...block, dimmer: { enabled: true, address: '2/2/11', percent: 101 } }), /1–100/);
     assert.throws(() => h.logic.save({ ...block, dimmer: { enabled: true, address: '1/0/7', percent: 50 } }), /Dimmer address/);
   } finally { h.cleanup(); }
+});
+
+test('ON during countdown cancels OFF including boolean aliases', () => {
+ const h = harness();
+ try {
+  h.logic.save(block);
+  h.logic.onRoute('route-flur', true);
+  h.logic.onRoute('route-flur', false);
+  h.advance(9000);
+  h.logic.onRoute('route-flur', '1');
+  assert.equal(h.logic.list()[0].active, false);
+  h.advance(20000);
+  assert.deepEqual(h.sent, [['mqtt','home/light','ON'],['mqtt','home/light','ON']]);
+ } finally { h.cleanup(); }
+});
+
+test('external enable blocks triggers until ON, cancels delay and sends immediate OFF', () => {
+ const h=harness();
+ try {
+  h.logic.save({...block,enableInput:{type:'mqtt',value:'home/enable'}});
+  assert.ok(h.logic.mqttTopics().includes('home/enable'));
+  assert.equal(h.logic.onRoute('route-flur','ON'),true);
+  assert.equal(h.sent.length,0);
+  h.logic.trigger('mqtt','home/enable','ON');
+  h.logic.onRoute('route-flur','ON');
+  h.logic.onRoute('route-flur','OFF');
+  h.logic.trigger('mqtt','home/enable','OFF');
+  assert.equal(h.logic.list()[0].released,false);
+  assert.equal(h.logic.list()[0].active,false);
+  h.logic.onRoute('route-flur','ON');
+  h.logic.onRoute('route-flur','OFF');
+  h.advance(20000);
+  assert.deepEqual(h.sent,[['mqtt','home/light','ON'],['mqtt','home/light','OFF']]);
+  h.logic.trigger('mqtt','home/enable','ON');
+  h.logic.onRoute('route-flur','ON');
+  assert.equal(h.sent.at(-1)[2],'ON');
+ } finally {h.cleanup();}
 });
