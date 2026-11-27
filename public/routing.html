@@ -347,6 +347,16 @@ function finishLogicDrag(event){
  if(drag.handle.hasPointerCapture(event.pointerId))drag.handle.releasePointerCapture(event.pointerId);
 }
 for(const type of ['pointerup','pointercancel','lostpointercapture'])document.addEventListener(type,finishLogicDrag);
+function astroCardHtml(b){
+ const values=astroState[b.id]||{};
+ const ports=astroChannels.map(c=>{
+  const ref={type:'astro',id:b.id,signal:c.key},key=signalKey(ref);
+  const known=Object.hasOwn(values,c.key),state=!b.enabled?'Deaktiviert':known?(values[c.key]?'TRUE':'FALSE'):'—';
+  return '<div class="signal"><span>'+esc(c.label)+' <small class="text-secondary">'+esc(state)+'</small></span><button type="button" class="btn btn-sm btn-outline-primary signal-btn '+(selected&&signalKey(selected.ref)===key?'selected':'')+'" data-key="'+esc(key)+'" title="Internes Astro-Signal verbinden"><i class="bi bi-circle"></i></button></div>';
+ }).join('');
+ const status=!b.enabled?'Deaktiviert':Number.isFinite(b.latitude)&&Number.isFinite(b.longitude)?'Bereit':'Standort konfigurieren';
+ return '<article class="node logic-node astro-node" data-logic-id="'+esc(b.id)+'"><div class="logic-drag-handle d-flex align-items-center justify-content-between gap-2"><h3 class="mb-0"><i class="bi bi-sun me-1"></i>'+esc(b.name)+'</h3><button type="button" class="btn btn-sm btn-outline-secondary edit-astro" data-id="'+esc(b.id)+'" title="Astro konfigurieren"><i class="bi bi-pencil-square"></i></button></div>'+ports+'<div class="small mt-2">'+esc(status)+'</div></article>';
+}
 function logicCardHtml(b){
  const port=(key,label,output=false)=>{
   const endpoint=key==='dimmer'?(b.dimmer?.enabled?{type:'knx',value:b.dimmer.address}:null):b[key];
@@ -738,6 +748,8 @@ document.addEventListener('click',e=>{
   return;
  }
 
+ const editAstro=e.target.closest('.edit-astro');
+ if(editAstro){openAstroEditor(editAstro.dataset.id);return;}
  const editMqtt=e.target.closest('.edit-mqtt-device');
  if(editMqtt){openMqttEditor(editMqtt.dataset.id);return;}
  const edit=e.target.closest('.edit-transform');if(edit){openRouteDialog(edit.dataset.id);return}
@@ -816,9 +828,39 @@ $('mqtt-signal-form').addEventListener('submit',e=>{
  dirty=true;e.target.reset();render();notice('Signal hinzugefügt. Bitte Änderungen aktivieren.');
 });
 $('endpoint-form').addEventListener('submit',e=>{e.preventDefault();const topic=$('topic').value.trim();if(topic.startsWith('knx/')||/[+#\s]/.test(topic)||graph.endpoints.some(x=>x.topic===topic)){notice('Topic ungültig, reserviert oder bereits vorhanden.',true);return}graph.endpoints.push({id:uid(),name:$('topic-name').value.trim(),topic,payloadType:$('payload-type').value});dirty=true;e.target.reset();render();notice('MQTT-Endpunkt angelegt. Änderungen noch nicht aktiviert.')});
+let editingAstroId=null;
+function openAstroEditor(id=null){
+ const block=(graph.astroBlocks||[]).find(b=>b.id===id);
+ editingAstroId=block?.id||null;
+ $('astro-dialog-title').textContent=block?'Astro-Baustein bearbeiten':'Astro-Baustein anlegen';
+ $('astro-name').value=block?.name||'Astro';
+ $('astro-latitude').value=block?.latitude??'';
+ $('astro-longitude').value=block?.longitude??'';
+ for(const channel of astroChannels)$('astro-offset-'+channel.key).value=block?.offsets?.[channel.key]??0;
+ $('astro-enabled').checked=block?.enabled!==false;
+ $('astro-delete').hidden=!block;
+ $('astro-dialog').showModal();
+}
+$('open-astro').addEventListener('click',()=>{addDialog.close();openAstroEditor();});
+$('astro-cancel').addEventListener('click',()=>$('astro-dialog').close());
+$('astro-form').addEventListener('submit',e=>{
+ e.preventDefault();
+ const name=$('astro-name').value.trim(),latitude=Number($('astro-latitude').value),longitude=Number($('astro-longitude').value);
+ const offsets=Object.fromEntries(astroChannels.map(c=>[c.key,Number($('astro-offset-'+c.key).value)]));
+ if(!name||name.length>120||!Number.isFinite(latitude)||Math.abs(latitude)>90||!Number.isFinite(longitude)||Math.abs(longitude)>180||Object.values(offsets).some(v=>!Number.isInteger(v)||Math.abs(v)>720)){notice('Bitte Standort und Offsets prüfen.',true);return;}
+ const block={id:editingAstroId||uid(),name,latitude,longitude,offsets,enabled:$('astro-enabled').checked};
+ graph.astroBlocks=editingAstroId?(graph.astroBlocks||[]).map(b=>b.id===editingAstroId?block:b):[...(graph.astroBlocks||[]),block];
+ dirty=true;$('astro-dialog').close();render();notice('Astro-Konfiguration vorbereitet. Bitte Änderungen aktivieren.');
+});
+$('astro-delete').addEventListener('click',()=>{
+ if(!editingAstroId)return;
+ if(graph.routes.some(r=>[r.from,r.to].some(ref=>ref.type==='astro'&&ref.id===editingAstroId))||logicBlocks.some(b=>[b.enableInput,b.input].some(e=>e?.type==='astro'&&e.value.startsWith(editingAstroId+':')))){notice('Astro-Ausgänge werden noch verwendet. Zuerst Verbindungen entfernen.',true);return;}
+ if(!confirm('Astro-Baustein entfernen?'))return;
+ graph.astroBlocks=graph.astroBlocks.filter(b=>b.id!==editingAstroId);dirty=true;$('astro-dialog').close();render();notice('Astro-Baustein zum Entfernen vorgemerkt. Änderungen aktivieren.');
+});
 $('save').onclick=async()=>{try{const r=await fetch('/api/routing',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(graph)});const d=await r.json();if(!r.ok)throw Error(d.error||'Speichern fehlgeschlagen');graph=d;dirty=false;const diagnosticsResponse=await fetch('/api/routing/diagnostics',{cache:'no-store'});if(!diagnosticsResponse.ok)throw Error('Konfliktprüfung fehlgeschlagen (HTTP '+diagnosticsResponse.status+')');const diagnostics=await diagnosticsResponse.json();routingIssues=diagnostics.issues||[];showRoutingIssues();render();notice('Routing gespeichert und aktiviert. '+routingIssues.filter(issue=>!issue.accepted).length+' ungeprüfte Konflikte.')}catch(e){notice(e.message,true)}};
 $('reload').onclick=()=>load();
-async function load(){try{const r=await Promise.all(['/api/routing','/api/devices','/api/device-templates','/api/rooms'].map(p=>fetch(p).then(x=>{if(!x.ok)throw Error(p+' nicht erreichbar');return x.json()})));[graph,devices,templates,rooms]=r;selected=null;dirty=false;renderRoomOptions();render();notice('Routing geladen.')}catch(e){notice(e.message,true)}}
+async function load(){try{const r=await Promise.all(['/api/routing','/api/devices','/api/device-templates','/api/rooms','/api/logic/astro/status'].map(p=>fetch(p).then(x=>{if(!x.ok)throw Error(p+' nicht erreichbar');return x.json()})));[graph,devices,templates,rooms,astroState]=r;selected=null;dirty=false;renderRoomOptions();render();notice('Routing geladen.')}catch(e){notice(e.message,true)}}
 window.addEventListener('resize',()=>requestAnimationFrame(()=>{const focused=filterRoutingByRoom(devices,graph.routes,$('room-filter').value).routes.filter(isFocused);alignNodes(focused);alignLogicNodes(focused);drawLinks(focused)}));
 window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
 load();
