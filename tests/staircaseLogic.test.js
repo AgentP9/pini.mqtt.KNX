@@ -136,3 +136,26 @@ test('ON during countdown cancels OFF including boolean aliases', () => {
   assert.deepEqual(h.sent, [['mqtt','home/light','ON'],['mqtt','home/light','ON']]);
  } finally { h.cleanup(); }
 });
+
+test('external enable blocks triggers until ON, cancels delay and sends immediate OFF', () => {
+ const h=harness();
+ try {
+  h.logic.save({...block,enableInput:{type:'mqtt',value:'home/enable'}});
+  assert.ok(h.logic.mqttTopics().includes('home/enable'));
+  assert.equal(h.logic.onRoute('route-flur','ON'),true);
+  assert.equal(h.sent.length,0);
+  h.logic.trigger('mqtt','home/enable','ON');
+  h.logic.onRoute('route-flur','ON');
+  h.logic.onRoute('route-flur','OFF');
+  h.logic.trigger('mqtt','home/enable','OFF');
+  assert.equal(h.logic.list()[0].released,false);
+  assert.equal(h.logic.list()[0].active,false);
+  h.logic.onRoute('route-flur','ON');
+  h.logic.onRoute('route-flur','OFF');
+  h.advance(20000);
+  assert.deepEqual(h.sent,[['mqtt','home/light','ON'],['mqtt','home/light','OFF']]);
+  h.logic.trigger('mqtt','home/enable','ON');
+  h.logic.onRoute('route-flur','ON');
+  assert.equal(h.sent.at(-1)[2],'ON');
+ } finally {h.cleanup();}
+});
