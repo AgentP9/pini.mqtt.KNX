@@ -37,7 +37,7 @@ class StaircaseLogic {
     if (enableInput) {
       if (!['knx','mqtt'].includes(enableInput.type) || !(enableInput.type === 'knx' ? isAddress(enableInput.value) : isTopic(enableInput.value))) throw Error('Invalid enable input');
       if ([b.input,b.output].some(e => e.type === enableInput.type && e.value === enableInput.value)) throw Error('Enable input must differ from trigger and output');
-      if (enableInput.type === 'knx' && this.routingStore && !this.routingStore.groupAddresses?.some(g => g.address === enableInput.value && g.dpt === '1.001')) throw Error('Enable input requires DPT 1.001');
+      if (enableInput.type === 'knx' && this.routingStore && !this.routingStore.groupAddresses?.some(g => g.address === enableInput.value && ['1.001','1.002'].includes(g.dpt))) throw Error('Enable input requires DPT 1.001 or 1.002');
     }
     const dimmer = b.dimmer || { enabled: false };
     if (typeof dimmer.enabled !== 'boolean' && dimmer.enabled !== undefined) throw Error('Invalid dimmer enabled flag');
