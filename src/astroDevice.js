@@ -22,8 +22,8 @@ function states(now,lat,lon,offsets={}) {
  return {sunriseStart:above('sunriseStart',-0.833),sunriseEnd:above('sunriseEnd',-0.267),sunsetStart:!above('sunsetStart',-0.267),sunsetEnd:!above('sunsetEnd',-0.833),day:above('day',-0.833)};
 }
 class AstroDevice {
- constructor({blocks,emit=()=>{},onChange=()=>{},now=()=>new Date()}) {
-  this.blocks=blocks;this.emit=emit;this.onChange=onChange;this.now=now;this.last=new Map();
+ constructor({blocks,emit=()=>{},onInactive=()=>{},onChange=()=>{},now=()=>new Date()}) {
+  this.blocks=blocks;this.emit=emit;this.onInactive=onInactive;this.onChange=onChange;this.now=now;this.last=new Map();
  }
  snapshot() {
   const values={};
@@ -52,7 +52,9 @@ class AstroDevice {
     }
    }
   }
-  for(const key of [...this.last.keys()])if(!active.has(key)){this.last.delete(key);changed=true;}
+  for(const key of [...this.last.keys()])if(!active.has(key)){
+   this.last.delete(key);const pos=key.lastIndexOf(':');this.onInactive(key.slice(0,pos),key.slice(pos+1));changed=true;
+  }
   if(changed)this.onChange(this.snapshot());
  }
 }
