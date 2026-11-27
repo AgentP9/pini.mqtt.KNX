@@ -18,6 +18,7 @@ class StaircaseLogic {
     this.schedule = schedule;
     this.cancel = cancel;
     this.timers = new Map();
+    this.permissions = new Map();
     const data = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : { blocks: [] };
     if (!Array.isArray(data.blocks)) throw Error('Invalid staircase configuration');
     this.blocks = data.blocks.map(b => this.validate(b));
@@ -32,6 +33,12 @@ class StaircaseLogic {
       if (!endpoint || !['knx', 'mqtt'].includes(endpoint.type)) throw Error('Endpoint type must be knx or mqtt');
       if (endpoint.type === 'knx' ? !isAddress(endpoint.value) : !isTopic(endpoint.value)) throw Error('Invalid endpoint address/topic');
     }
+    const enableInput = b.enableInput || null;
+    if (enableInput) {
+      if (!['knx','mqtt'].includes(enableInput.type) || !(enableInput.type === 'knx' ? isAddress(enableInput.value) : isTopic(enableInput.value))) throw Error('Invalid enable input');
+      if ([b.input,b.output].some(e => e.type === enableInput.type && e.value === enableInput.value)) throw Error('Enable input must differ from trigger and output');
+      if (enableInput.type === 'knx' && this.routingStore && !this.routingStore.groupAddresses?.some(g => g.address === enableInput.value && g.dpt === '1.001')) throw Error('Enable input requires DPT 1.001');
+    }
     const dimmer = b.dimmer || { enabled: false };
     if (typeof dimmer.enabled !== 'boolean' && dimmer.enabled !== undefined) throw Error('Invalid dimmer enabled flag');
     if (dimmer.enabled) {
@@ -42,10 +49,10 @@ class StaircaseLogic {
       if (this.routingStore && ga?.dpt !== '5.001') throw Error('Dimmer address must have DPT 5.001');
     }
     if (b.input.type === b.output.type && b.input.value === b.output.value) throw Error('Input and output must differ (feedback loop)');
-    return { id: b.id || crypto.randomUUID(), routeId: b.routeId || null, name, enabled: b.enabled !== false, durationSeconds: b.durationSeconds, dimmer: dimmer.enabled ? { enabled: true, address: dimmer.address, percent: dimmer.percent } : { enabled: false }, input: { type: b.input.type, value: b.input.value }, output: { type: b.output.type, value: b.output.value } };
+    return { id: b.id || crypto.randomUUID(), routeId: b.routeId || null, name, enableInput, enabled: b.enabled !== false, durationSeconds: b.durationSeconds, dimmer: dimmer.enabled ? { enabled: true, address: dimmer.address, percent: dimmer.percent } : { enabled: false }, input: { type: b.input.type, value: b.input.value }, output: { type: b.output.type, value: b.output.value } };
   }
   list() {
-    return this.blocks.map(b => ({ ...b, active: this.timers.has(b.id), expiresAt: this.timers.get(b.id)?.expiresAt || null }));
+    return this.blocks.map(b => ({ ...b, released: !b.enableInput || this.permissions.get(b.id) === true, active: this.timers.has(b.id), expiresAt: this.timers.get(b.id)?.expiresAt || null }));
   }
   persist(blocks) {
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
@@ -85,7 +92,10 @@ class StaircaseLogic {
     const next = id ? this.blocks.map(b => b.id === id ? candidate : b) : [...this.blocks, candidate];
     if (next.length > 100) throw Error('Maximum 100 logic blocks');
     this.persist(next);
-    if (id) this.stop(id);
+    if (id) {
+      this.stop(id);
+      if (JSON.stringify(this.blocks.find(b => b.id === id)?.enableInput) !== JSON.stringify(candidate.enableInput)) this.permissions.delete(id);
+    }
     this.blocks = next;
     this.onChange(this.list());
     return candidate;
@@ -95,6 +105,7 @@ class StaircaseLogic {
     const next = this.blocks.filter(b => b.id !== id);
     this.persist(next);
     this.stop(id);
+    this.permissions.delete(id);
     this.blocks = next;
     this.onChange(this.list());
     return true;
@@ -113,7 +124,12 @@ class StaircaseLogic {
     if (!['ON','OFF','TRUE','FALSE','1','0'].includes(command)) return;
     const isOn = ['ON','TRUE','1'].includes(command);
     for (const block of this.blocks) {
-      if (!block.enabled || block.input.type !== type || block.input.value !== value || (routeId ? block.routeId !== routeId : Boolean(block.routeId))) continue;
+      if (!routeId && block.enabled && block.enableInput?.type === type && block.enableInput.value === value) {
+        this.permissions.set(block.id, isOn);
+        if (!isOn) { this.stop(block.id); this.send(block.output, 'OFF'); }
+        this.onChange(this.list());
+      }
+      if (!block.enabled || (block.enableInput && this.permissions.get(block.id) !== true) || block.input.type !== type || block.input.value !== value || (routeId ? block.routeId !== routeId : Boolean(block.routeId))) continue;
       this.stop(block.id);
       if (isOn) {
         if (block.dimmer?.enabled) this.writeKnx(block.dimmer.address, String(block.dimmer.percent));
@@ -133,7 +149,7 @@ class StaircaseLogic {
       this.onChange(this.list());
     }
   }
-  mqttTopics() { return [...new Set(this.blocks.filter(b => b.enabled && b.input.type === 'mqtt').map(b => b.input.value))]; }
+  mqttTopics() { return [...new Set(this.blocks.filter(b => b.enabled).flatMap(b => [b.input,b.enableInput].filter(e => e?.type === 'mqtt').map(e => e.value)))]; }
   close() { for (const id of this.timers.keys()) this.stop(id); }
 }
 module.exports = StaircaseLogic;
