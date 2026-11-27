@@ -203,6 +203,7 @@ const {AstroDevice}=require('./astroDevice');
 const astro=new AstroDevice({
  blocks:()=>routingStore.astroBlocks,
  onChange:states=>webServer.io.emit('astro',states),
+ onInactive:(id,signal)=>staircaseLogic.invalidateEnable('astro',id+':'+signal),
  emit:(id,signal,value)=>{
   const raw=value?'ON':'OFF';
   staircaseLogic.trigger('astro',id+':'+signal,raw);
