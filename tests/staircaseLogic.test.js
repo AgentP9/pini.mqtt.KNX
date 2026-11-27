@@ -159,3 +159,21 @@ test('external enable blocks triggers until ON, cancels delay and sends immediat
   assert.equal(h.sent.at(-1)[2],'ON');
  } finally {h.cleanup();}
 });
+
+test('KNX enable accepts DPT 1.001 and 1.002 with TRUE/FALSE semantics', () => {
+ for (const dpt of ['1.001','1.002']) {
+  const h=harness();
+  try {
+   h.logic.routingStore.groupAddresses.push({address:'1/0/9',dpt});
+   h.logic.save({...block,enableInput:{type:'knx',value:'1/0/9'}});
+   h.logic.trigger('knx','1/0/9','TRUE');
+   h.logic.onRoute('route-flur','ON');
+   h.logic.onRoute('route-flur','OFF');
+   h.logic.trigger('knx','1/0/9','FALSE');
+   h.advance(20000);
+   h.logic.onRoute('route-flur','ON');
+   assert.deepEqual(h.sent,[['mqtt','home/light','ON'],['mqtt','home/light','OFF']]);
+   assert.equal(h.logic.list()[0].released,false);
+  } finally {h.cleanup();}
+ }
+});
