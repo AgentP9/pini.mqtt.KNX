@@ -155,6 +155,21 @@ class StaircaseLogic {
       this.onChange(this.list());
     }
   }
+  // A removed/disabled internal source is unknown, not FALSE: always fail closed,
+  // even when an inverted enable would otherwise interpret FALSE as release.
+  invalidateEnable(type, value) {
+    let changed = false;
+    for (const block of this.blocks) {
+      if (!block.enabled || block.enableInput?.type !== type || block.enableInput.value !== value) continue;
+      const wasReleased = this.permissions.get(block.id) === true;
+      const hadTimer = this.timers.has(block.id);
+      this.permissions.delete(block.id);
+      if (hadTimer) this.stop(block.id);
+      if (wasReleased || hadTimer) this.send(block.output, 'OFF');
+      changed = true;
+    }
+    if (changed) this.onChange(this.list());
+  }
   mqttTopics() { return [...new Set(this.blocks.filter(b => b.enabled).flatMap(b => [b.input,b.enableInput].filter(e => e?.type === 'mqtt').map(e => e.value)))]; }
   close() { for (const id of this.timers.keys()) this.stop(id); }
 }
