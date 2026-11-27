@@ -24,9 +24,22 @@ The GA editor and ETS XML import preserve only the address, name, DPT and commen
 
 The web dashboard manages KNX group addresses and devices. Use **Routing Designer** to connect signals to MQTT topics, configure directions, enable/disable routes and edit transformations.
 
-### Astro MQTT device
+### Internes Astro-Device
 
-In **Verbindungen → Hinzufügen → MQTT-Device**, select **Astro-Device** and enter a base topic, for example `home/astro`. The template creates four boolean output channels: `sunrise/start`, `sunrise/end`, `sunset/start`, and `sunset/end` (topics under the selected base). Connect a channel to a boolean KNX signal and activate the changes to subscribe to its topic. The bridge expects an external Astro publisher to send `true`/`false` (or `1`/`0`, `ON`/`OFF`); it does not calculate sunrise or sunset times itself.
+Das **Astro-Device ist ein interner Logikbaustein**. Es benötigt weder einen externen MQTT-Astro-Publisher noch eine eigene MQTT-Verbindung.
+
+1. Im **Routing Designer** auf **Hinzufügen → Logik → Internen Astro-Baustein anlegen** klicken.
+2. Name, Breitengrad und Längengrad festlegen. Breitengrad und Längengrad werden in Dezimalgrad gespeichert.
+3. Optional für **Sunrise Start**, **Sunrise End**, **Sunset Start**, **Sunset End** und **Tag/Nacht** separate Offsets in Minuten konfigurieren. Positive Werte verzögern, negative verfrühen die Schaltzeitpunkte.
+4. Übernehmen und **Änderungen aktivieren** auswählen.
+
+Die fünf Ausgänge erscheinen direkt in der mittleren Logik-Ebene des Routing Designers. Der Baustein kann über seinen Kopf verschoben werden; diese Bildschirmposition wird nur während der aktuellen Seitensitzung gehalten. **Tag/Nacht** liefert TRUE am Tag und FALSE in der Nacht. Sunrise-/Sunset-Kanäle liefern Boolean-Zustände entsprechend den jeweiligen astronomischen Schwellenwerten, keine Impulse.
+
+Ein Ausgang kann direkt als Quelle einer KNX- oder MQTT-Route ausgewählt werden. Für das Treppenhauslicht lässt sich ein Astro-Ausgang außerdem direkt mit dem **Enable-Port** verbinden (oder über **Externe Freigabe → Astro (intern)** im Verbindungsdialog auswählen). Mit **Enable invertieren** kann die Freigabe beispielsweise auf die Nacht begrenzt werden: TRUE (Tag) sperrt und FALSE (Nacht) gibt frei.
+
+Die Standortdaten und Offsets werden in `routing.json` unter `astroBlocks` gespeichert. Nach dem Containerstart initialisiert die Bridge die aktuellen Zustände selbst; es werden keine Portainer-Umgebungsvariablen `ASTRO_*` mehr benötigt. Die Berechnung verwendet eine astronomische Näherungsformel und ist nicht für sicherheitskritische Anwendungen bestimmt.
+
+**Migration:** Frühere MQTT-Astro-Devices, die ausschließlich als Quelle verwendet wurden, werden beim Laden in interne Astro-Bausteine umgewandelt; vorhandene Routen behalten ihre Zuordnung. Migrierte Bausteine sind zunächst **deaktiviert**, da die alte MQTT-Konfiguration keine Standortkoordinaten enthält. Den Baustein bearbeiten, Standort setzen und aktivieren. Vor dem Deployment die Konfiguration sichern. Bei alten Astro-Devices, die als *Ziel* verwendet wurden, erfolgt keine automatische Konvertierung; in diesem Fall erscheint eine Warnung im Backend-Log.
 
 Dashboard switch and heating setpoint controls send explicit diagnostic KNX writes; they do not constitute MQTT routes or actuator confirmation.
 
@@ -38,7 +51,7 @@ Before deploying this breaking architecture cleanup, back up your configuration 
 
 ## Testing
 
-Run `npm test` to execute the Node.js regression tests. Verify real KNX and MQTT traffic in your installation before relying on automation.
+Run `node --test tests/*.test.js` to execute the Node.js regression tests. The focused Astro, routing and staircase checks run automatically through GitHub Actions. Verify real KNX and MQTT traffic in your installation before relying on automation.
 
 ## Progressive Web App (PWA)
 
