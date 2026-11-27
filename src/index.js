@@ -5,6 +5,8 @@ const config = require('./config');
 const KnxHandler = require('./knxHandler');
 const MqttHandler = require('./mqttHandler');
 const WebServer = require('./webServer');
+const StaircaseLogic = require('./staircaseLogic');
+const path = require('path');
 
 const eventEmitter = new EventEmitter();
 
@@ -15,10 +17,31 @@ const webServer = new WebServer(config.webPort, eventEmitter, config.groupAddres
 const knxHandler = new KnxHandler(config.knx, config.groupAddresses);
 const mqttHandler = new MqttHandler(config.mqtt);
 
+// Staircase timers are owned by the backend, not the browser.
+const staircaseLogic = new StaircaseLogic({
+  file: process.env.STAIRCASE_LOGIC_PATH || path.join(path.dirname(config.groupAddressesPath), 'staircase-logic.json'),
+  writeKnx: (address, value) => knxHandler.write(address, value === 'ON' ? '1' : value === 'OFF' ? '0' : value),
+  publishMqtt: (topic, value) => {
+    if (!mqttHandler.connected) return false;
+    mqttHandler.publish(topic, value);
+    return true;
+  },
+  onChange: blocks => eventEmitter.emit('staircase-changed', blocks),
+});
+webServer.staircaseLogic = staircaseLogic;
+eventEmitter.on('staircase-changed', blocks => {
+  webServer.io.emit('staircase', blocks);
+  if (mqttHandler.connected) staircaseLogic.mqttTopics().forEach(topic => mqttHandler.subscribe(topic));
+});
+knxHandler.on('groupValueWrite', ({ address, value }) => staircaseLogic.trigger('knx', address, value));
+mqttHandler.on('message', ({ topic, value }) => staircaseLogic.trigger('mqtt', topic, value));
+mqttHandler.on('connected', () => staircaseLogic.mqttTopics().forEach(topic => mqttHandler.subscribe(topic)));
+
 // ── Router helpers ─────────────────────────────────────────────────────────────
 
 // Routing Designer is the sole authority for message flow.
 const routingStore = webServer.routingStore;
+staircaseLogic.bindRouting(routingStore);
 function subscribeVisualRoutes() {
   for (const route of routingStore.routes) {
     if (route.enabled && (['mqtt', 'mqttDevice'].includes(route.from.type) || route.bidirectional)) {
@@ -78,6 +101,7 @@ knxHandler.on('groupValueWrite', ({ address, value }) => {
       const destination = routingStore.resolve(reverse ? route.from : route.to, routingStore.endpoints);
       const payload = reverse ? reverseRoutePayload(value, source.type, route.transform) : routePayload(value, source.type, false, route.transform);
       if (payload === null) continue;
+      if (staircaseLogic.onRoute(route.id, value)) continue;
       if (!reverse && route.to.type === 'device') {
         if (!knxHandler.connected || source.address === destination.address) continue;
         const knxPayload = routePayload(value, source.type, true, route.transform);
@@ -101,7 +125,9 @@ mqttHandler.on('message', ({ topic, value }) => {
       if (source.topic !== topic) continue;
       const destination = routingStore.resolve(reverse ? route.from : route.to, routingStore.endpoints);
       const payload = reverse ? reverseRoutePayload(value, destination.type, route.transform) : routePayload(value, source.type, true, route.transform);
-      if (payload === null || !knxHandler.connected) continue;
+      if (payload === null) continue;
+      if (staircaseLogic.onRoute(route.id, value)) continue;
+      if (!knxHandler.connected) continue;
       if (!knxHandler.write(destination.address, payload)) continue;
       eventEmitter.emit('routing-traffic', { id: route.id, value: payload, direction: 'MQTT→KNX', timestamp: new Date().toISOString() });
     } catch (err) { console.warn('[ROUTING] Invalid MQTT route:', err.message); }

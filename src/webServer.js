@@ -44,6 +44,24 @@ class WebServer {
       } catch (err) { return res.status(err.message === 'Diagnostic not found' ? 404 : 500).json({ error: err.message }); }
     });
 
+    // Staircase light logic: configuration and live countdown.
+    this.app.get('/api/logic/staircase', (_req, res) => res.json(this.staircaseLogic.list()));
+    const saveStaircase = (req, res, id) => {
+      try {
+        const block = this.staircaseLogic.save(req.body, id);
+        if (!block) return res.status(404).json({ error: 'Logic block not found' });
+        return res.json(block);
+      } catch (err) { return res.status(400).json({ error: err.message }); }
+    };
+    this.app.post('/api/logic/staircase', (req, res) => saveStaircase(req, res));
+    this.app.put('/api/logic/staircase/:id', (req, res) => saveStaircase(req, res, req.params.id));
+    this.app.delete('/api/logic/staircase/:id', (req, res) => {
+      try {
+        if (!this.staircaseLogic.remove(req.params.id)) return res.status(404).json({ error: 'Logic block not found' });
+        return res.json({ ok: true });
+      } catch (err) { return res.status(500).json({ error: err.message }); }
+    });
+
     // Device templates only reference existing group addresses. Existing GA routes stay untouched.
     this.app.get('/api/rooms', (_req, res) => res.json(this.deviceStore.listRooms()));
     const publishRooms = () => this.io.emit('rooms', this.deviceStore.listRooms());
@@ -115,7 +133,15 @@ class WebServer {
     this.app.get('/api/routing', (_req, res) => res.json(this.routingStore.list()));
     this.app.put('/api/routing', (req, res) => {
       try {
-        const data = this.routingStore.save(req.body || {});
+        const proposed = req.body || {};
+        for (const block of this.staircaseLogic.list().filter(b => b.routeId)) {
+          const current = this.routingStore.routes.find(r => r.id === block.routeId);
+          const next = proposed.routes?.find(r => r.id === block.routeId);
+          if (!current || !next || next.bidirectional || JSON.stringify(current.from) !== JSON.stringify(next.from) || JSON.stringify(current.to) !== JSON.stringify(next.to)) {
+            return res.status(409).json({ error: 'Connection has staircase logic: remove the logic before deleting, reversing or rewiring the connection (' + block.name + ')' });
+          }
+        }
+        const data = this.routingStore.save(proposed);
         this.eventEmitter.emit('routing-changed', data);
         res.json(data);
       } catch (err) { res.status(400).json({ error: err.message }); }

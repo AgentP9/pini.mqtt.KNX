@@ -1,0 +1,24 @@
+/* Logic view follows the same Bootstrap/app-shell conventions as Devices and Routing. */
+.logic-main{max-width:1500px}
+.logic-card{min-width:0;overflow:hidden;transition:box-shadow .15s ease,border-color .15s ease}
+.logic-card:hover{box-shadow:0 .35rem 1.2rem rgba(0,0,0,.08);border-color:var(--bs-primary-border-subtle)}
+.logic-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1rem 1.25rem}
+.logic-card-title{display:flex;align-items:center;gap:.75rem;min-width:0}
+.logic-card-title>div{min-width:0}
+.logic-card-title h3{font-size:1rem;font-weight:600;line-height:1.4;margin:.2rem 0 0;overflow-wrap:anywhere}
+.logic-card-icon{display:grid;place-items:center;flex-shrink:0;width:2.6rem;height:2.6rem;border-radius:.8rem;background:var(--bs-tertiary-bg);color:var(--bs-primary);font-size:1.2rem}
+.logic-flow{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:.6rem;margin:0 1.25rem 1rem;padding:.85rem;background:var(--bs-tertiary-bg);border-radius:.75rem}
+.logic-flow--dimmer{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr)}
+.logic-flow-point{display:flex;flex-direction:column;min-width:0;gap:.25rem}
+.logic-flow-label{font-size:.75rem;color:var(--bs-secondary-color)}
+.logic-flow-value{font-size:.88rem;overflow-wrap:anywhere}
+.logic-flow-arrow{color:var(--bs-primary)}
+.logic-card-bottom{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;padding:1rem 1.25rem;border-top:1px solid var(--bs-border-color)}
+.logic-timing{display:flex;flex-wrap:wrap;gap:1rem 1.5rem}
+.logic-timing>div{display:flex;flex-direction:column;gap:.1rem}
+.logic-timing span{font-size:.75rem;color:var(--bs-secondary-color)}
+.logic-timing strong{font-size:1rem;font-variant-numeric:tabular-nums}
+.logic-timing small{font-size:.8em;font-weight:400}
+#editor[hidden],#message[hidden]{display:none!important}
+@media(max-width:650px){.logic-card-top,.logic-card-bottom{padding:1rem}.logic-flow,.logic-flow--dimmer{grid-template-columns:1fr;margin:0 1rem 1rem}.logic-flow-arrow{transform:rotate(90deg);justify-self:start}.logic-card-bottom{align-items:stretch;flex-direction:column}.logic-card-bottom .d-flex.gap-2 .btn:first-child{flex:1}}
+@media(prefers-reduced-motion:reduce){.logic-card{transition:none}}
