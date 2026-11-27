@@ -70,7 +70,7 @@ class StaircaseLogic {
     const block = this.blocks.find(b => b.routeId === routeId && b.enabled);
     if (!block) return false;
     // Consume the original route, never forward the unmodified command.
-    if (!['ON','OFF','TRUE','FALSE','1','0','OK'].includes(String(payload).trim().toUpperCase())) return true;
+    if (!['ON','OFF','TRUE','FALSE','1','0'].includes(String(payload).trim().toUpperCase())) return true;
     this.trigger(block.input.type, block.input.value, payload, routeId);
     return true;
   }
@@ -109,24 +109,27 @@ class StaircaseLogic {
     return this.publishMqtt(endpoint.value, value);
   }
   trigger(type, value, payload, routeId = null) {
-    // KNX DPT1.017: both telegram values are triggers; MQTT accepts explicit ON/OFF equivalents.
-    if (type === 'mqtt' && !['ON', 'OFF', 'TRUE', 'FALSE', '1', '0'].includes(String(payload).trim().toUpperCase())) return;
+    const command = String(payload).trim().toUpperCase();
+    if (!['ON','OFF','TRUE','FALSE','1','0'].includes(command)) return;
+    const isOn = ['ON','TRUE','1'].includes(command);
     for (const block of this.blocks) {
       if (!block.enabled || block.input.type !== type || block.input.value !== value || (routeId ? block.routeId !== routeId : Boolean(block.routeId))) continue;
-      // Only arm when the ON command can actually be delivered.
-      const started = block.dimmer?.enabled
-        ? this.writeKnx(block.dimmer.address, String(block.dimmer.percent))
-        : this.send(block.output, 'ON');
-      if (started === false) continue;
       this.stop(block.id);
+      if (isOn) {
+        if (block.dimmer?.enabled) this.writeKnx(block.dimmer.address, String(block.dimmer.percent));
+        else this.send(block.output, 'ON');
+        this.onChange(this.list());
+        continue;
+      }
       const expiresAt = this.now() + block.durationSeconds * 1000;
+      const token = {};
       const handle = this.schedule(() => {
-        if (this.timers.get(block.id)?.expiresAt !== expiresAt) return;
+        if (this.timers.get(block.id)?.token !== token) return;
         this.timers.delete(block.id);
         this.send(block.output, 'OFF');
         this.onChange(this.list());
       }, block.durationSeconds * 1000);
-      this.timers.set(block.id, { handle, expiresAt });
+      this.timers.set(block.id, { handle, expiresAt, token });
       this.onChange(this.list());
     }
   }
