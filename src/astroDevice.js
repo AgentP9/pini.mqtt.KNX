@@ -1,5 +1,5 @@
 'use strict';
-// Approximate solar altitude (NOAA fractional-year equations), UTC based.
+// Approximate solar altitude following NOAA fractional-year equations.
 function altitude(date, lat, lon) {
  const rad=Math.PI/180, start=Date.UTC(date.getUTCFullYear(),0,1);
  const days=(date.getTime()-start)/86400000;
@@ -10,32 +10,50 @@ function altitude(date, lat, lon) {
  const hour=(minutes+eq+4*lon)/4-180;
  return Math.asin(Math.sin(lat*rad)*Math.sin(dec)+Math.cos(lat*rad)*Math.cos(dec)*Math.cos(hour*rad))/rad;
 }
+const CHANNELS=Object.freeze([
+ {key:'sunriseStart',label:'Sunrise Start'},
+ {key:'sunriseEnd',label:'Sunrise End'},
+ {key:'sunsetStart',label:'Sunset Start'},
+ {key:'sunsetEnd',label:'Sunset End'},
+ {key:'day',label:'Tag/Nacht'},
+]);
 function states(now,lat,lon,offsets={}) {
  const above=(key,threshold)=>altitude(new Date(now.getTime()-(offsets[key]||0)*60000),lat,lon)>=threshold;
  return {sunriseStart:above('sunriseStart',-0.833),sunriseEnd:above('sunriseEnd',-0.267),sunsetStart:!above('sunsetStart',-0.267),sunsetEnd:!above('sunsetEnd',-0.833),day:above('day',-0.833)};
 }
 class AstroDevice {
- constructor({devices,publish,env=process.env,now=()=>new Date()}) {
-  this.devices=devices;this.publish=publish;this.now=now;this.last=new Map();
-  this.lat=env.ASTRO_LATITUDE?.trim()?Number(env.ASTRO_LATITUDE):NaN;
-  this.lon=env.ASTRO_LONGITUDE?.trim()?Number(env.ASTRO_LONGITUDE):NaN;
-  this.valid=Number.isFinite(this.lat)&&Math.abs(this.lat)<=90&&Number.isFinite(this.lon)&&Math.abs(this.lon)<=180;
-  this.offsets=Object.fromEntries(['sunriseStart','sunriseEnd','sunsetStart','sunsetEnd','day'].map(key=>{
-   const name='ASTRO_'+key.replace(/[A-Z]/g,c=>'_'+c).toUpperCase()+'_OFFSET_MIN';
-   const n=Number(env[name]||0);return [key,Number.isFinite(n)&&Math.abs(n)<=720?n:0];
-  }));
+ constructor({blocks,emit=()=>{},onChange=()=>{},now=()=>new Date()}) {
+  this.blocks=blocks;this.emit=emit;this.onChange=onChange;this.now=now;this.last=new Map();
+ }
+ snapshot() {
+  const values={};
+  for(const block of this.blocks()) {
+   const channels={};
+   for(const channel of CHANNELS) {
+    const key=block.id+':'+channel.key;
+    if(this.last.has(key))channels[channel.key]=this.last.get(key);
+   }
+   values[block.id]=channels;
+  }
+  return values;
  }
  tick(force=false) {
-  if(!this.valid)return;
-  const values=states(this.now(),this.lat,this.lon,this.offsets),seen=new Set();
-  for(const device of this.devices().filter(d=>d.templateId==='astro'))for(const signal of device.signals){
-   if(signal.enabled===false||!Object.hasOwn(values,signal.key))continue;
-   const value=String(values[signal.key]);seen.add(signal.topic);
-   if(force||this.last.get(signal.topic)!==value){
-    if(this.publish(signal.topic,value)!==false)this.last.set(signal.topic,value);
+  const active=new Set(),now=this.now();let changed=false;
+  for(const block of this.blocks()){
+   if(!block.enabled||!Number.isFinite(block.latitude)||!Number.isFinite(block.longitude))continue;
+   const values=states(now,block.latitude,block.longitude,block.offsets);
+   for(const channel of CHANNELS) {
+    const key=block.id+':'+channel.key,value=values[channel.key];
+    active.add(key);
+    if(force||this.last.get(key)!==value){
+     this.last.set(key,value);
+     this.emit(block.id,channel.key,value);
+     changed=true;
+    }
    }
   }
-  for(const topic of this.last.keys())if(!seen.has(topic))this.last.delete(topic);
+  for(const key of [...this.last.keys()])if(!active.has(key)){this.last.delete(key);changed=true;}
+  if(changed)this.onChange(this.snapshot());
  }
 }
-module.exports={AstroDevice,states,altitude};
+module.exports={AstroDevice,CHANNELS,states,altitude};
