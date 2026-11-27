@@ -132,7 +132,7 @@ const endpointSignals=()=>[...graph.endpoints.map(e=>({ref:{type:'mqtt',id:e.id}
 const mqttTemplates={
  sonos:[{key:'control',suffix:'/control',payloadType:'text',direction:'input'},{key:'volume',suffix:'/set/volume',payloadType:'number',direction:'input'},{key:'state',suffix:'/state',payloadType:'text',direction:'output'},{key:'volumeStatus',suffix:'/volume',payloadType:'number',direction:'output'}],
  'shelly-plug-s':[{key:'switchCommand',suffix:'/command/switch:0',payloadType:'text',direction:'input'},{key:'switchStatus',suffix:'/status/switch:0',payloadType:'text',direction:'output'}],
- astro:[{key:'sunriseStart',label:'Sunrise Start',suffix:'/sunrise/start',payloadType:'boolean',direction:'output'},{key:'sunriseEnd',label:'Sunrise End',suffix:'/sunrise/end',payloadType:'boolean',direction:'output'},{key:'sunsetStart',label:'Sunset Start',suffix:'/sunset/start',payloadType:'boolean',direction:'output'},{key:'sunsetEnd',label:'Sunset End',suffix:'/sunset/end',payloadType:'boolean',direction:'output'}],
+ astro:[{key:'sunriseStart',label:'Sunrise Start',suffix:'/sunrise/start',payloadType:'boolean',direction:'output'},{key:'sunriseEnd',label:'Sunrise End',suffix:'/sunrise/end',payloadType:'boolean',direction:'output'},{key:'sunsetStart',label:'Sunset Start',suffix:'/sunset/start',payloadType:'boolean',direction:'output'},{key:'sunsetEnd',label:'Sunset End',suffix:'/sunset/end',payloadType:'boolean',direction:'output'},{key:'day',label:'Tag/Nacht',suffix:'/day',payloadType:'boolean',direction:'output'}],
  generic:[{key:'command',suffix:'/set',payloadType:'text',direction:'input'},{key:'status',suffix:'/state',payloadType:'text',direction:'output'}]
 };
 function mqttTemplateUpgrade(device){
