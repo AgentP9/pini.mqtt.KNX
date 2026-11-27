@@ -586,10 +586,10 @@ function openRouteDialog(id){
  $('route-dialog-source').textContent=left;
  $('route-dialog-target').textContent=right;
  const button=$('route-dialog-direction');
- button.dataset.direction=r.bidirectional?'both':knxFrom?'forward':'reverse';
+ button.dataset.direction=astroFrom?'forward':r.bidirectional?'both':knxFrom?'forward':'reverse';
  button.disabled=astroFrom;
  button.textContent={forward:'→',reverse:'←',both:'↔'}[button.dataset.direction];
- $('route-dialog-direction-hint').textContent=right==='KNX'?'KNX-Verbindungen können in beide Einzelrichtungen geschaltet werden.':'Klicken, um zwischen →, ← und ↔ zu wechseln.';
+ $('route-dialog-direction-hint').textContent=astroFrom?'Astro ist eine interne Signalquelle. Die Richtung kann nicht umgekehrt werden.':right==='KNX'?'KNX-Verbindungen können in beide Einzelrichtungen geschaltet werden.':'Klicken, um zwischen →, ← und ↔ zu wechseln.';
  $('route-dialog-enabled').checked=r.enabled;
  configureRouteLogic(r);
  $('route-dialog').showModal();
