@@ -177,3 +177,7 @@ test('KNX enable accepts DPT 1.001 and 1.002 with TRUE/FALSE semantics', () => {
   } finally {h.cleanup();}
  }
 });
+
+test('inverted enable releases on FALSE and disables on TRUE',()=>{
+ const h=harness();try{h.logic.save({...block,enableInput:{type:'mqtt',value:'home/enable',inverted:true}});h.logic.trigger('mqtt','home/enable','FALSE');h.logic.onRoute('route-flur','ON');h.logic.onRoute('route-flur','OFF');h.logic.trigger('mqtt','home/enable','TRUE');h.advance(20000);assert.deepEqual(h.sent,[['mqtt','home/light','ON'],['mqtt','home/light','OFF']]);assert.equal(h.logic.list()[0].released,false);}finally{h.cleanup();}
+});
