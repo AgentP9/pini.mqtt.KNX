@@ -169,9 +169,13 @@ function render(){
  const focused=roomView.routes.filter(isFocused);
  $('focus-bar').hidden=!focusAddress&&!focusRoute&&!focusDevice;
  $('focus-label').textContent=focusAddress?'Routing für Gruppenadresse '+focusAddress:focusDevice?'Routing für Device '+(devices.find(d=>d.id===focusDevice)?.name||focusDevice):'Ausgewählte Verbindung '+(focusRoute||'');
+ const visibleLogic=logicBlocks.filter(b=>b.routeId?focused.some(r=>r.id===b.routeId):roomId==='all'&&!focusAddress&&!focusRoute&&!focusDevice);
+ const auxiliaryRefs=visibleLogic.flatMap(b=>['enableInput','dimmer'].map(p=>logicEndpointSignal(b,p)?.ref).filter(Boolean));
  const roomDeviceIds=roomId!=='all'?filterRoutingByRoom(devices,focused,roomId).deviceIds:null;
- const visibleDevices=roomDeviceIds?devices.filter(d=>roomDeviceIds.has(d.id)):focusDevice?devices.filter(d=>d.id===focusDevice):focusAddress||focusRoute?devices.filter(d=>focused.some(r=>[r.from,r.to].some(ref=>ref.type==='device'&&ref.id===d.id))):devices;
+ let visibleDevices=roomDeviceIds?devices.filter(d=>roomDeviceIds.has(d.id)):focusDevice?devices.filter(d=>d.id===focusDevice):focusAddress||focusRoute?devices.filter(d=>focused.some(r=>[r.from,r.to].some(ref=>ref.type==='device'&&ref.id===d.id))):devices;
+ visibleDevices=devices.filter(d=>visibleDevices.includes(d)||auxiliaryRefs.some(ref=>ref.type==='device'&&ref.id===d.id));
  const visibleMqttIds=new Set(focused.flatMap(r=>[r.from,r.to].filter(ref=>ref.type!=='device').map(ref=>ref.id)));
+ auxiliaryRefs.filter(ref=>ref.type!=='device').forEach(ref=>visibleMqttIds.add(ref.id));
  const sortedRooms=[...rooms].sort((a,b)=>a.name.localeCompare(b.name,'de',{sensitivity:'base'}));
  const roomColorById=new Map(sortedRooms.map((r,i)=>[r.id,roomColors[i%roomColors.length]]));
  const roomNameById=new Map(rooms.map(room=>[room.id,room.name]));
@@ -210,7 +214,7 @@ function render(){
   return rank(a)-rank(b);
  });
  $('devices').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-house"></i> KNX-Devices</h2>'+deviceCards.map(c=>c.html).join('');
- $('logic').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-hourglass-split"></i> Logikbausteine</h2>'+(logicBlocks.length?logicBlocks.filter(b=>!b.routeId).map(b=>'<article class="node logic-node" data-logic-id="'+esc(b.id)+'"><h3>'+esc(b.name)+'</h3><div class="signal"><span><i class="bi bi-box-arrow-in-right me-1"></i> Trigger · '+esc(b.input.type.toUpperCase())+' '+esc(b.input.value)+'</span><button class="btn btn-sm btn-outline-primary logic-port" data-logic-id="'+esc(b.id)+'" data-port="input" title="Trigger verbinden"><i class="bi bi-circle"></i></button></div><div class="signal"><button class="btn btn-sm btn-outline-primary logic-port" data-logic-id="'+esc(b.id)+'" data-port="output" title="Ausgang verbinden"><i class="bi bi-circle"></i></button><span><i class="bi bi-box-arrow-right me-1"></i> Ausgang · '+esc(b.output.type.toUpperCase())+' '+esc(b.output.value)+'</span></div><div class="logic-status mt-2">'+(b.enabled?'Aktiv':'Deaktiviert')+' · '+b.durationSeconds+' s'+(b.expiresAt?' · läuft':'')+'</div><a href="/logic.html" class="btn btn-sm btn-outline-primary mt-2">Konfigurieren</a></article>').join(''):'<p class="small muted">Noch keine Logikbausteine. Über Hinzufügen anlegen.</p>');
+ $('logic').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-hourglass-split"></i> Logikbausteine</h2>'+(visibleLogic.length?visibleLogic.map(logicCardHtml).join(''):'<p class="small muted">Logik an einer bestehenden Verbindung konfigurieren.</p>');
  $('mqtt').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-broadcast"></i> MQTT-Devices und Endpunkte</h2>'+mqttCards.map(c=>c.html).join('');
  $('signal-device').innerHTML=(graph.mqttDevices||[]).map(d=>'<option value="'+esc(d.id)+'">'+esc(d.name)+'</option>').join('');
  renderRoutes();
@@ -287,6 +291,16 @@ async function persistRouteLogic(routeId){
  await loadLogicBlocks();
 }
 const routeLabelOffsets=new Map();
+function logicCardHtml(b){
+ const port=(key,label,output=false)=>{
+  const endpoint=key==='dimmer'?(b.dimmer?.enabled?{type:'knx',value:b.dimmer.address}:null):b[key];
+  const editable=key==='enableInput'||key==='dimmer';
+  const button='<button type="button" class="btn btn-sm btn-outline-success logic-port'+(logicSelection?.port?.id===b.id&&logicSelection.port.port===key?' active':'')+'" data-logic-id="'+esc(b.id)+'" data-port="'+key+'" title="'+esc(editable?label+' verbinden':label+' · Verbindung bearbeiten')+'"><i class="bi bi-circle"></i></button>';
+  const text='<span>'+esc(label)+' <small class="text-secondary d-block">'+esc(endpoint?endpoint.value:'Nicht verbunden')+'</small></span>';
+  return '<div class="signal">'+(output?text+button:button+text)+'</div>';
+ };
+ return '<article class="node logic-node" data-logic-id="'+esc(b.id)+'"><div class="d-flex align-items-center justify-content-between gap-2"><h3 class="mb-0"><i class="bi bi-hourglass-split me-1"></i>'+esc(b.name)+'</h3>'+(b.routeId?'<button class="btn btn-sm btn-outline-secondary edit-transform" data-id="'+esc(b.routeId)+'" title="Logik bearbeiten"><i class="bi bi-pencil-square"></i></button>':'')+'</div>'+port('input','Trigger')+port('enableInput','Enable')+port('output','Schalten',true)+port('dimmer','Dimmwert',true)+'<div class="small mt-2">'+esc(!b.enabled?'Deaktiviert':b.released===false?'Gesperrt':b.active?'Ausschaltverzögerung läuft':'Bereit')+' · '+esc(b.durationSeconds)+' s</div></article>';
+}
 function drawLinks(routes=graph.routes.filter(isFocused)){
  const root=$('workspace'),svg=$('links');
  root.querySelectorAll('.route-transform').forEach(x=>x.remove());
@@ -295,6 +309,7 @@ function drawLinks(routes=graph.routes.filter(isFocused)){
  svg.innerHTML='';
  const find=ref=>[...root.querySelectorAll('.signal-btn')].find(el=>el.dataset.key===signalKey(ref));
  for(const r of routes){
+  if(logicBlocks.some(block=>block.routeId===r.id))continue;
   const a=find(r.from),b=find(r.to);if(!a||!b)continue;
   const p=a.getBoundingClientRect(),q=b.getBoundingClientRect();
   const knxToKnx=r.from.type==='device'&&r.to.type==='device';
@@ -393,10 +408,12 @@ async function connectLogicPort(blockId,port,signal){
  if(!block)throw Error('Logikbaustein nicht gefunden');
  const resolved=signal.ref.type==='device'?{type:'knx',value:signal.address}:{type:'mqtt',value:signal.topic||graph.endpoints.find(e=>e.id===signal.ref.id)?.topic};
  if(!resolved.value)throw Error('Keine Gruppenadresse oder MQTT-Topic gefunden');
- if(signal.type!=='boolean')throw Error('Treppenhauslicht benötigt ein boolesches Schaltsignal');
+ if(port==='dimmer'?(signal.ref.type!=='device'||signal.dpt!=='5.001'):signal.type!=='boolean')throw Error('Unpassender Signaltyp');
+ if(port==='enableInput'&&resolved.type==='knx'&&signal.dpt!=='1.001')throw Error('Enable benötigt DPT 1.001');
+ if(block.routeId&&!['enableInput','dimmer'].includes(port))throw Error('Trigger und Ausgang werden über die bestehende Verbindung festgelegt');
  if(signal.ref.type==='mqttDevice'&&signal.enabled===false)throw Error('MQTT-Kanal ist deaktiviert');
  if(port==='input'&&resolved.type===block.output.type&&resolved.value===block.output.value||port==='output'&&resolved.type===block.input.type&&resolved.value===block.input.value)throw Error('Ein- und Ausgang dürfen nicht identisch sein');
- const updated={...block,[port]:resolved};
+ const updated={...block,[port]:port==='dimmer'?{enabled:true,address:resolved.value,percent:block.dimmer?.percent||80}:resolved};
  const response=await fetch('/api/logic/staircase/'+encodeURIComponent(blockId),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(updated)});
  const result=await response.json();
  if(!response.ok)throw Error(result.error||'Verbindung konnte nicht gespeichert werden');
@@ -404,31 +421,33 @@ async function connectLogicPort(blockId,port,signal){
  notice('Logikverbindung gespeichert und sofort aktiv.');
 }
 function logicEndpointSignal(block,port){
- const endpoint=block[port];
+ const endpoint=port==='dimmer'?(block.dimmer?.enabled?{type:'knx',value:block.dimmer.address}:null):block[port];
+ if(!endpoint)return null;
  if(endpoint.type==='knx')return signals().find(s=>s.address===endpoint.value);
  return endpointSignals().find(s=>s.topic===endpoint.value||graph.endpoints.find(e=>e.id===s.ref.id)?.topic===endpoint.value);
 }
 function drawLogicLinks(){
  const root=$('workspace'),svg=$('links'),rect=root.getBoundingClientRect(),ns='http://www.w3.org/2000/svg';
  for(const block of logicBlocks){
-  for(const port of ['input','output']){
+  for(const port of ['input','enableInput','output','dimmer']){
    const signal=logicEndpointSignal(block,port);
    if(!signal)continue;
    const button=[...root.querySelectorAll('.signal-btn')].find(el=>el.dataset.key===signalKey(signal.ref));
    const logicButton=[...root.querySelectorAll('.logic-port')].find(el=>el.dataset.logicId===block.id&&el.dataset.port===port);
    if(!button||!logicButton)continue;
    const a=button.getBoundingClientRect(),b=logicButton.getBoundingClientRect();
+   const incoming=port==='input'||port==='enableInput';
    const leftToRight=a.left<b.left;
    const x1=(leftToRight?a.right:a.left)-rect.left+root.scrollLeft,y1=a.top+a.height/2-rect.top+root.scrollTop;
    const x2=(leftToRight?b.left:b.right)-rect.left+root.scrollLeft,y2=b.top+b.height/2-rect.top+root.scrollTop;
    const mid=(x1+x2)/2,path=document.createElementNS(ns,'path');
    path.setAttribute('d','M '+x1+' '+y1+' C '+mid+' '+y1+', '+mid+' '+y2+', '+x2+' '+y2);
-   path.setAttribute('class','connection-path'+(block.enabled?'':' inactive'));
+   path.setAttribute('class','connection-path has-logic'+(block.enabled&&block.released!==false?'':' inactive'));
    svg.appendChild(path);
    const arrow=document.createElementNS(ns,'path');
-   arrow.setAttribute('d',port==='input'?(leftToRight?'M -7 -4 L 0 0 L -7 4':'M 7 -4 L 0 0 L 7 4'):(leftToRight?'M 7 -4 L 0 0 L 7 4':'M -7 -4 L 0 0 L -7 4'));
-   arrow.setAttribute('transform','translate('+(port==='input'?x2:x1)+' '+(port==='input'?y2:y1)+')');
-   arrow.setAttribute('class','connection-arrow'+(block.enabled?'':' inactive'));svg.appendChild(arrow);
+   arrow.setAttribute('d',incoming?(leftToRight?'M -7 -4 L 0 0 L -7 4':'M 7 -4 L 0 0 L 7 4'):(leftToRight?'M 7 -4 L 0 0 L 7 4':'M -7 -4 L 0 0 L -7 4'));
+   arrow.setAttribute('transform','translate('+(incoming?x2:x1)+' '+(incoming?y2:y1)+')');
+   arrow.setAttribute('class','connection-arrow has-logic'+(block.enabled&&block.released!==false?'':' inactive'));svg.appendChild(arrow);
   }
  }
 }
@@ -436,6 +455,8 @@ document.addEventListener('click',async event=>{
  const portButton=event.target.closest('.logic-port');
  if(portButton){
   const port=logicPortRef(portButton);
+  const block=logicBlocks.find(b=>b.id===port.id);
+  if(block?.routeId&&['input','output'].includes(port.port)){selected=null;logicSelection=null;openRouteDialog(block.routeId);return;}
   if(selected){
    const signal=selected;selected=null;logicSelection=null;
    try{await connectLogicPort(port.id,port.port,signal);}catch(err){notice(err.message,true);}
