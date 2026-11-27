@@ -318,7 +318,7 @@ function drawLinks(routes=graph.routes.filter(isFocused)){
   const x1=left.right-rect.left+root.scrollLeft,y1=left.top+left.height/2-rect.top+root.scrollTop;
   const x2=(knxToKnx?q.right:right.left)-rect.left+root.scrollLeft,y2=right.top+right.height/2-rect.top+root.scrollTop;
   const mid=(x1+x2)/2,loopX=Math.max(x1,x2)+70,ns='http://www.w3.org/2000/svg';
-  const paired=routes.find(other=>other.enabled&&r.enabled&&other.id!==r.id&&signalKey(other.from)===signalKey(r.to)&&signalKey(other.to)===signalKey(r.from));
+  const paired=routes.find(other=>!logicBlocks.some(block=>block.routeId===other.id)&&other.enabled&&r.enabled&&other.id!==r.id&&signalKey(other.from)===signalKey(r.to)&&signalKey(other.to)===signalKey(r.from));
   if(paired&&String(r.id)>String(paired.id))continue;
   const path=document.createElementNS(ns,'path');
   const originalPath=knxToKnx?'M '+x1+' '+y1+' C '+loopX+' '+y1+', '+loopX+' '+y2+', '+(x2+2)+' '+y2:'M '+x1+' '+y1+' C '+mid+' '+y1+', '+mid+' '+y2+', '+x2+' '+y2;
@@ -430,7 +430,9 @@ function drawLogicLinks(){
  const root=$('workspace'),svg=$('links'),rect=root.getBoundingClientRect(),ns='http://www.w3.org/2000/svg';
  for(const block of logicBlocks){
   for(const port of ['input','enableInput','output','dimmer']){
-   const signal=logicEndpointSignal(block,port);
+   const route=graph.routes.find(r=>r.id===block.routeId);
+   const ref=port==='input'?route?.from:port==='output'?route?.to:null;
+   const signal=ref?[...signals(),...endpointSignals()].find(s=>signalKey(s.ref)===signalKey(ref)):logicEndpointSignal(block,port);
    if(!signal)continue;
    const button=[...root.querySelectorAll('.signal-btn')].find(el=>el.dataset.key===signalKey(signal.ref));
    const logicButton=[...root.querySelectorAll('.logic-port')].find(el=>el.dataset.logicId===block.id&&el.dataset.port===port);
@@ -439,7 +441,7 @@ function drawLogicLinks(){
    const incoming=port==='input'||port==='enableInput';
    const leftToRight=a.left<b.left;
    const x1=(leftToRight?a.right:a.left)-rect.left+root.scrollLeft,y1=a.top+a.height/2-rect.top+root.scrollTop;
-   const x2=(leftToRight?b.left:b.right)-rect.left+root.scrollLeft,y2=b.top+b.height/2-rect.top+root.scrollTop;
+   const x2=(incoming?b.left:b.right)-rect.left+root.scrollLeft,y2=b.top+b.height/2-rect.top+root.scrollTop;
    const mid=(x1+x2)/2,path=document.createElementNS(ns,'path');
    path.setAttribute('d','M '+x1+' '+y1+' C '+mid+' '+y1+', '+mid+' '+y2+', '+x2+' '+y2);
    path.setAttribute('class','connection-path has-logic'+(block.enabled&&block.released!==false?'':' inactive'));
