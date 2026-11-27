@@ -1,0 +1,23 @@
+name: Astro and routing regression
+on:
+  push:
+    branches:
+      - feature/draggable-logic-blocks
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'tests/**'
+      - '.github/workflows/test-astro.yml'
+jobs:
+  node-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/astroDevice.test.js tests/staircaseLogic.test.js tests/routingStore.test.js tests/routingThreeLanes.test.js
