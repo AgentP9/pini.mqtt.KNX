@@ -84,3 +84,12 @@ test('legacy MQTT Astro source migrates to a disabled internal block awaiting co
   assert.equal(persisted.routes[0].from.type,'astro');
  }finally{f.cleanup();}
 });
+
+test('disabling Astro invalidates previously published internal states',()=>{
+ let enabled=true;
+ const revoked=[];
+ const astro=new AstroDevice({blocks:()=>[astroBlock({enabled})],now:()=>new Date('2026-06-21T12:00:00Z'),onInactive:(id,signal)=>revoked.push([id,signal])});
+ astro.tick();enabled=false;astro.tick();
+ assert.equal(revoked.length,5);
+ assert.deepEqual(Object.keys(astro.snapshot()['astro-1']),[]);
+});
