@@ -12,12 +12,13 @@ const templateSource = page.match(/const mqttTemplates=({[\s\S]*?});\s*function 
 assert.ok(templateSource, 'MQTT templates must be exposed in routing designer');
 const templates = vm.runInNewContext('('+templateSource[1]+')');
 
-test('Astro MQTT device has four named boolean output channels', () => {
+test('Astro MQTT device has five named boolean output channels', () => {
   assert.deepEqual(Array.from(templates.astro || [], x => ({ key: x.key, label: x.label, suffix: x.suffix, payloadType: x.payloadType, direction: x.direction })), [
     { key: 'sunriseStart', label: 'Sunrise Start', suffix: '/sunrise/start', payloadType: 'boolean', direction: 'output' },
     { key: 'sunriseEnd', label: 'Sunrise End', suffix: '/sunrise/end', payloadType: 'boolean', direction: 'output' },
     { key: 'sunsetStart', label: 'Sunset Start', suffix: '/sunset/start', payloadType: 'boolean', direction: 'output' },
     { key: 'sunsetEnd', label: 'Sunset End', suffix: '/sunset/end', payloadType: 'boolean', direction: 'output' },
+    { key: 'day', label: 'Tag/Nacht', suffix: '/day', payloadType: 'boolean', direction: 'output' },
   ]);
   assert.match(page, /<option value="astro">Astro-Device<\/option>/);
 });
@@ -32,7 +33,7 @@ test('Astro channels are persisted and resolvable as MQTT boolean sources', () =
     const route = { id: 'rise', from: { type: 'mqttDevice', id: astro.id, signal: 'sunriseStart' }, to: { type: 'device', id: 'light', signal: 'command' }, enabled: true };
     store.save({ endpoints: [], mqttDevices: [astro], routes: [route] });
     assert.deepEqual(store.resolve(route.from), { topic: 'home/astro/sunrise/start', type: 'boolean', direction: 'output', enabled: true });
-    assert.equal(JSON.parse(fs.readFileSync(store.file, 'utf8')).mqttDevices[0].signals.length, 4);
+    assert.equal(JSON.parse(fs.readFileSync(store.file, 'utf8')).mqttDevices[0].signals.length, 5);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -43,4 +44,10 @@ test('Astro signal names are visible in the routing designer', () => {
   const signals = vm.runInNewContext(expression, { graph })();
   assert.equal(signals[0].name, 'Astro · Sunrise Start');
   assert.equal(signals[0].topic, 'home/astro/sunrise/start');
+});
+
+test('internal astro publishes initial day state and changes only',()=>{
+ const {AstroDevice}=require('../src/astroDevice');let now=new Date('2026-06-21T12:00:00Z');const sent=[];
+ const astro=new AstroDevice({devices:()=>[{templateId:'astro',signals:[{key:'day',topic:'astro/day'}]}],publish:(...args)=>sent.push(args),env:{ASTRO_LATITUDE:'48',ASTRO_LONGITUDE:'10'},now:()=>now});
+ astro.tick();astro.tick();now=new Date('2026-06-21T23:00:00Z');astro.tick();assert.deepEqual(sent,[['astro/day','true'],['astro/day','false']]);
 });
