@@ -197,3 +197,15 @@ mqttHandler.on('disconnected', () =>
 
 // Allow dashboard-triggered MQTT restart (refreshes connection + subscriptions)
 eventEmitter.on('mqtt-restart', () => mqttHandler.restart());
+
+// Internal astro source; broker retained states also initialize newly connected consumers.
+const {AstroDevice}=require('./astroDevice');
+const astro=new AstroDevice({devices:()=>routingStore.mqttDevices,publish:(topic,value)=>{
+ if(!mqttHandler.connected)return false;
+ mqttHandler.publish(topic,value,{retain:true});
+ return true;
+}});
+mqttHandler.on('connected',()=>astro.tick(true));
+eventEmitter.on('routing-changed',()=>astro.tick(true));
+knxHandler.on('connected',()=>astro.tick(true));
+setInterval(()=>astro.tick(),1000).unref();
