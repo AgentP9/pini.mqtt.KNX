@@ -95,13 +95,13 @@ class MqttHandler extends EventEmitter {
    * @param {string} topic
    * @param {string|number} value
    */
-  publish(topic, value) {
+  publish(topic, value, options = {}) {
     if (!this.client || !this.connected) {
       console.error('[MQTT] Cannot publish – not connected');
       return;
     }
     const payload = typeof value === 'object' ? JSON.stringify(value) : String(value);
-    this.client.publish(topic, payload, { retain: false });
+    this.client.publish(topic, payload, { retain: options.retain === true });
     console.log(`[MQTT] Publish ${topic} = ${payload}`);
   }
 

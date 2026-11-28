@@ -30,14 +30,19 @@ class StaircaseLogic {
     if (!Number.isInteger(b.durationSeconds) || b.durationSeconds < 1 || b.durationSeconds > MAX_DURATION) throw Error('Duration must be 1–86400 seconds');
     if (b.routeId && (typeof b.routeId !== 'string' || b.routeId.length > 120)) throw Error('Invalid route ID');
     for (const endpoint of [b.input, b.output]) {
-      if (!endpoint || !['knx', 'mqtt'].includes(endpoint.type)) throw Error('Endpoint type must be knx or mqtt');
-      if (endpoint.type === 'knx' ? !isAddress(endpoint.value) : !isTopic(endpoint.value)) throw Error('Invalid endpoint address/topic');
+      if (!endpoint || !['knx', 'mqtt', 'astro'].includes(endpoint.type)) throw Error('Endpoint type must be knx, mqtt or astro');
+      if (endpoint.type === 'knx' ? !isAddress(endpoint.value) : endpoint.type === 'astro' ? !/^[a-zA-Z0-9_-]+:[a-zA-Z]+$/.test(endpoint.value) : !isTopic(endpoint.value)) throw Error('Invalid endpoint address/topic');
     }
     const enableInput = b.enableInput || null;
     if (enableInput) {
-      if (!['knx','mqtt'].includes(enableInput.type) || !(enableInput.type === 'knx' ? isAddress(enableInput.value) : isTopic(enableInput.value))) throw Error('Invalid enable input');
+      if (!['knx','mqtt','astro'].includes(enableInput.type) || !(enableInput.type === 'knx' ? isAddress(enableInput.value) : enableInput.type === 'astro' ? typeof enableInput.value === 'string' && /^[a-zA-Z0-9_-]+:[a-zA-Z]+$/.test(enableInput.value) : isTopic(enableInput.value))) throw Error('Invalid enable input');
+      if (enableInput.inverted !== undefined && typeof enableInput.inverted !== 'boolean') throw Error('Invalid enable inversion flag');
+      if (enableInput.type === 'astro' && this.routingStore) {
+        const colon = enableInput.value.lastIndexOf(':'), id = enableInput.value.slice(0,colon), signal = enableInput.value.slice(colon+1);
+        if (!this.routingStore.astroBlocks.some(b => b.id === id) || !['sunriseStart','sunriseEnd','sunsetStart','sunsetEnd','day'].includes(signal)) throw Error('Astro enable output not found');
+      }
       if ([b.input,b.output].some(e => e.type === enableInput.type && e.value === enableInput.value)) throw Error('Enable input must differ from trigger and output');
-      if (enableInput.type === 'knx' && this.routingStore && !this.routingStore.groupAddresses?.some(g => g.address === enableInput.value && g.dpt === '1.001')) throw Error('Enable input requires DPT 1.001');
+      if (enableInput.type === 'knx' && this.routingStore && !this.routingStore.groupAddresses?.some(g => g.address === enableInput.value && ['1.001','1.002'].includes(g.dpt))) throw Error('Enable input requires DPT 1.001 or 1.002');
     }
     const dimmer = b.dimmer || { enabled: false };
     if (typeof dimmer.enabled !== 'boolean' && dimmer.enabled !== undefined) throw Error('Invalid dimmer enabled flag');
@@ -70,7 +75,7 @@ class StaircaseLogic {
     const from = this.routingStore.resolve(route.from, this.routingStore.endpoints);
     const to = this.routingStore.resolve(route.to, this.routingStore.endpoints);
     if (from.type !== 'boolean' || to.type !== 'boolean') throw Error('Staircase logic requires boolean signals');
-    const endpoint = x => x.address ? { type: 'knx', value: x.address } : { type: 'mqtt', value: x.topic };
+    const endpoint = x => x.astro ? { type: 'astro', value: x.astro.id+':'+x.astro.signal } : x.address ? { type: 'knx', value: x.address } : { type: 'mqtt', value: x.topic };
     return { input: endpoint(from), output: endpoint(to) };
   }
   onRoute(routeId, payload) {
@@ -125,8 +130,9 @@ class StaircaseLogic {
     const isOn = ['ON','TRUE','1'].includes(command);
     for (const block of this.blocks) {
       if (!routeId && block.enabled && block.enableInput?.type === type && block.enableInput.value === value) {
-        this.permissions.set(block.id, isOn);
-        if (!isOn) { this.stop(block.id); this.send(block.output, 'OFF'); }
+        const released = block.enableInput.inverted === true ? !isOn : isOn;
+        this.permissions.set(block.id, released);
+        if (!released) { this.stop(block.id); this.send(block.output, 'OFF'); }
         this.onChange(this.list());
       }
       if (!block.enabled || (block.enableInput && this.permissions.get(block.id) !== true) || block.input.type !== type || block.input.value !== value || (routeId ? block.routeId !== routeId : Boolean(block.routeId))) continue;
@@ -148,6 +154,21 @@ class StaircaseLogic {
       this.timers.set(block.id, { handle, expiresAt, token });
       this.onChange(this.list());
     }
+  }
+  // A removed/disabled internal source is unknown, not FALSE: always fail closed,
+  // even when an inverted enable would otherwise interpret FALSE as release.
+  invalidateEnable(type, value) {
+    let changed = false;
+    for (const block of this.blocks) {
+      if (!block.enabled || block.enableInput?.type !== type || block.enableInput.value !== value) continue;
+      const wasReleased = this.permissions.get(block.id) === true;
+      const hadTimer = this.timers.has(block.id);
+      this.permissions.delete(block.id);
+      if (hadTimer) this.stop(block.id);
+      if (wasReleased || hadTimer) this.send(block.output, 'OFF');
+      changed = true;
+    }
+    if (changed) this.onChange(this.list());
   }
   mqttTopics() { return [...new Set(this.blocks.filter(b => b.enabled).flatMap(b => [b.input,b.enableInput].filter(e => e?.type === 'mqtt').map(e => e.value)))]; }
   close() { for (const id of this.timers.keys()) this.stop(id); }

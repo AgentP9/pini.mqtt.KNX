@@ -197,3 +197,34 @@ mqttHandler.on('disconnected', () =>
 
 // Allow dashboard-triggered MQTT restart (refreshes connection + subscriptions)
 eventEmitter.on('mqtt-restart', () => mqttHandler.restart());
+
+// Astro outputs live entirely inside this process; MQTT is only used for explicit external routes.
+const {AstroDevice}=require('./astroDevice');
+const astro=new AstroDevice({
+ blocks:()=>routingStore.astroBlocks,
+ onChange:states=>webServer.io.emit('astro',states),
+ onInactive:(id,signal)=>staircaseLogic.invalidateEnable('astro',id+':'+signal),
+ emit:(id,signal,value)=>{
+  const raw=value?'ON':'OFF';
+  staircaseLogic.trigger('astro',id+':'+signal,raw);
+  for(const route of routingStore.routes){
+   if(!route.enabled||route.from.type!=='astro'||route.from.id!==id||route.from.signal!==signal)continue;
+   try{
+    const destination=routingStore.resolve(route.to,routingStore.endpoints);
+    if(staircaseLogic.onRoute(route.id,raw))continue;
+    const payload=routePayload(raw,'boolean',Boolean(destination.address),route.transform);
+    if(payload===null)continue;
+    let sent=false;
+    if(destination.address){sent=Boolean(knxHandler.connected&&knxHandler.write(destination.address,payload));}
+    else if(destination.topic&&mqttHandler.connected){publishVisualRoute(destination.topic,payload);sent=true;}
+    if(sent)eventEmitter.emit('routing-traffic',{id:route.id,value:payload,direction:'ASTRO→'+(destination.address?'KNX':'MQTT'),timestamp:new Date().toISOString()});
+   }catch(err){console.warn('[ASTRO] Invalid route:',err.message);}
+  }
+ }
+});
+webServer.astro=astro;
+mqttHandler.on('connected',()=>astro.tick(true));
+knxHandler.on('connected',()=>astro.tick(true));
+eventEmitter.on('routing-changed',()=>astro.tick(true));
+setInterval(()=>astro.tick(),1000).unref();
+astro.tick(true);

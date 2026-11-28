@@ -135,7 +135,7 @@ test('non-numeric string mapping to number target remains a diagnostic conflict'
 test('JSON boolean mapping with ON/OFF strings does not produce false type conflict',()=>{
  const f=fixture();
  try {
-  const md={id:'shelly1',name:'Shelly',templateId:'generic',signals:[{key:'status',topic:'shelly/status',payloadType:'text',direction:'output'}]};
+  const md={id:'shelly1',name:'Shelly',templateId:'generic',signals:[{key:'status',label:'Status',topic:'shelly/status',payloadType:'text',direction:'output'}]};
   f.store.save({endpoints:[],mqttDevices:[md],routes:[{id:'json-boolean',from:{type:'mqttDevice',id:'shelly1',signal:'status'},to:{type:'device',id:'d1',signal:'status'},enabled:true,transform:{kind:'json',path:'output',values:{true:'ON',false:'OFF'}}}]});
   assert.equal(f.store.diagnostics().length,0);
  } finally {f.cleanup();}

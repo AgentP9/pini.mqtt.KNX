@@ -11,15 +11,35 @@ class RoutingStore {
     this.file = file || process.env.ROUTING_PATH || path.join(path.dirname(deviceStore.file), 'routing.json');
     const raw = fs.existsSync(this.file) ? JSON.parse(fs.readFileSync(this.file, 'utf8')) : {};
     this.mqttDevices = raw.mqttDevices || [];
+    this.astroBlocks = raw.astroBlocks || [];
     this.endpoints = raw.endpoints || [];
     this.routes = (raw.routes || []).map(({ legacyKey, ...route }) => route);
     this.knxMqttBaseTopic = raw.knxMqttBaseTopic || 'knx';
     this.acceptedDiagnostics = Array.isArray(raw.acceptedDiagnostics) ? raw.acceptedDiagnostics.filter(x => typeof x === 'string') : [];
-    this.validateAll(this.endpoints, this.routes, this.mqttDevices);
+    // Convert legacy MQTT Astro sources into internal blocks (no broker dependency).
+    let migrated = false;
+    for (const old of [...this.mqttDevices].filter(d => d.templateId === 'astro')) {
+      const uses = this.routes.filter(r => [r.from, r.to].some(ref => ref.type === 'mqttDevice' && ref.id === old.id));
+      if (uses.some(r => r.to.type === 'mqttDevice' && r.to.id === old.id)) {
+        console.warn('[ASTRO] Legacy MQTT Astro used as destination; cannot migrate automatically:', old.name);
+        continue;
+      }
+      if (!this.astroBlocks.some(b => b.id === old.id)) this.astroBlocks.push({ id: old.id, name: old.name, enabled: false, latitude: null, longitude: null, offsets: {} });
+      this.routes = this.routes.map(r => r.from.type === 'mqttDevice' && r.from.id === old.id ? { ...r, from: { type: 'astro', id: old.id, signal: r.from.signal } } : r);
+      this.mqttDevices = this.mqttDevices.filter(d => d.id !== old.id);
+      migrated = true;
+    }
+    this.validateAll(this.endpoints, this.routes, this.mqttDevices, this.astroBlocks);
+    if (migrated) this.save(this.list());
   }
-  list() { return { endpoints: this.endpoints, mqttDevices: this.mqttDevices, routes: this.routes, knxMqttBaseTopic: this.knxMqttBaseTopic }; }
-  resolve(ref, endpoints, mqttDevices = this.mqttDevices) {
-    if (!ref || !['device', 'mqtt', 'mqttDevice'].includes(ref.type)) throw Error('Invalid endpoint type');
+  list() { return { endpoints: this.endpoints, mqttDevices: this.mqttDevices, astroBlocks: this.astroBlocks, routes: this.routes, knxMqttBaseTopic: this.knxMqttBaseTopic }; }
+  resolve(ref, endpoints, mqttDevices = this.mqttDevices, astroBlocks = this.astroBlocks) {
+    if (!ref || !['device', 'mqtt', 'mqttDevice', 'astro'].includes(ref.type)) throw Error('Invalid endpoint type');
+    if (ref.type === 'astro') {
+      const block = astroBlocks.find(b => b.id === ref.id);
+      if (!block || !['sunriseStart','sunriseEnd','sunsetStart','sunsetEnd','day'].includes(ref.signal)) throw Error('Astro output missing');
+      return { type: 'boolean', direction: 'output', astro: { id: ref.id, signal: ref.signal }, enabled: block.enabled !== false };
+    }
     if (ref.type === 'mqttDevice') {
       const device = mqttDevices.find(d => d.id === ref.id);
       const signal = device?.signals.find(x => x.key === ref.signal);
@@ -53,7 +73,7 @@ class RoutingStore {
     this.persistAcceptedDiagnostics([...next]);
   }
   persistAcceptedDiagnostics(accepted) {
-    const data = JSON.stringify({ version: 3, endpoints: this.endpoints, mqttDevices: this.mqttDevices, routes: this.routes, knxMqttBaseTopic: this.knxMqttBaseTopic, acceptedDiagnostics: accepted }, null, 2) + '\n';
+    const data = JSON.stringify({ version: 3, endpoints: this.endpoints, mqttDevices: this.mqttDevices, astroBlocks: this.astroBlocks, routes: this.routes, knxMqttBaseTopic: this.knxMqttBaseTopic, acceptedDiagnostics: accepted }, null, 2) + '\n';
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     const tmp = this.file + '.' + crypto.randomUUID() + '.tmp';
     try { fs.writeFileSync(tmp, data, { mode: 0o600 }); fs.renameSync(tmp, this.file); }
@@ -74,6 +94,7 @@ class RoutingStore {
         const type = ga.dpt?.startsWith('1.') ? 'boolean' : ['10.001', '11.001', '19.001'].includes(ga.dpt) ? 'text' : ga.dpt ? 'number' : null;
         return { type, address, problem: valid ? null : 'DPT ' + (ga.dpt || 'unbekannt') + ' passt nicht zum Gerätesignal (erwartet ' + obj.dpt + ')' };
       }
+      if (ref.type === 'astro') { const b = this.astroBlocks.find(x => x.id === ref.id); return { type: 'boolean', problem: b && ['sunriseStart','sunriseEnd','sunsetStart','sunsetEnd','day'].includes(ref.signal) ? null : 'Astro-Ausgang fehlt' }; }
       if (ref.type === 'mqtt') { const e = this.endpoints.find(e => e.id === ref.id); return { type: e?.payloadType || null, problem: e ? null : 'MQTT-Endpunkt fehlt' }; }
       if (ref.type === 'mqttDevice') { const d = this.mqttDevices.find(d => d.id === ref.id); const e = d?.signals.find(e => e.key === ref.signal); return { type: e?.payloadType || null, problem: e ? null : 'MQTT-Signal fehlt' }; }
       return { type: null, problem: 'Unbekannter Endpunkt' };
@@ -123,7 +144,17 @@ class RoutingStore {
     }
     return issues.map(issue => ({ ...issue, key: this.diagnosticKey(issue), accepted: this.acceptedDiagnostics.includes(this.diagnosticKey(issue)) }));
   }
-  validateAll(endpoints, routes, mqttDevices = this.mqttDevices) {
+  validateAll(endpoints, routes, mqttDevices = this.mqttDevices, astroBlocks = this.astroBlocks) {
+    if (!Array.isArray(astroBlocks) || astroBlocks.length > 100) throw Error('Invalid Astro blocks');
+    const astroIds = new Set();
+    for (const block of astroBlocks) {
+      if (!block || typeof block.id !== 'string' || !block.id || astroIds.has(block.id) || typeof block.name !== 'string' || !block.name.trim() || block.name.length > 120 || typeof block.enabled !== 'boolean') throw Error('Invalid Astro block');
+      astroIds.add(block.id);
+      const ready = block.latitude !== null && block.longitude !== null && typeof block.latitude === 'number' && typeof block.longitude === 'number' && Number.isFinite(block.latitude) && Number.isFinite(block.longitude) && Math.abs(block.latitude) <= 90 && Math.abs(block.longitude) <= 180;
+      if (!ready && !(block.enabled === false && block.latitude === null && block.longitude === null)) throw Error('Astro requires valid latitude and longitude');
+      const offsets = block.offsets || {};
+      if (!offsets || typeof offsets !== 'object' || Array.isArray(offsets) || Object.entries(offsets).some(([key,value]) => !['sunriseStart','sunriseEnd','sunsetStart','sunsetEnd','day'].includes(key) || !Number.isInteger(value) || Math.abs(value) > 720)) throw Error('Invalid Astro offsets');
+    }
     if (!Array.isArray(endpoints) || !Array.isArray(routes) || endpoints.length > 300 || routes.length > 500) throw Error('Invalid routing configuration');
     const ids = new Set(), topics = new Set();
     for (const e of endpoints) {
@@ -158,8 +189,9 @@ class RoutingStore {
       if (r.enabled && [r.from,r.to].some(ref => ref.type === 'mqttDevice' && mqttDevices.find(d => d.id === ref.id)?.signals.find(signal => signal.key === ref.signal)?.enabled === false)) throw Error('Enabled route references a disabled MQTT channel');
       if (r.bidirectional !== undefined && typeof r.bidirectional !== 'boolean') throw Error('Invalid bidirectional flag');
       if (r.bidirectional && r.from.type === 'device' && r.to.type === 'device') throw Error('Bidirectional routing requires KNX and MQTT');
-      const src = this.resolve(r.from, endpoints, mqttDevices), dst = this.resolve(r.to, endpoints, mqttDevices);
-      if (r.from.type !== 'device' && r.to.type !== 'device') throw Error('One side must be a KNX device');
+      const src = this.resolve(r.from, endpoints, mqttDevices, astroBlocks), dst = this.resolve(r.to, endpoints, mqttDevices, astroBlocks);
+      if (r.to.type === 'astro' || (r.from.type === 'astro' && r.bidirectional)) throw Error('Astro has output ports only');
+      if (r.from.type !== 'astro' && r.from.type !== 'device' && r.to.type !== 'device') throw Error('One side must be a KNX device');
       if (r.from.type === 'device' && r.to.type === 'device' && src.address === dst.address) throw Error('KNX source and target must use different group addresses');
       if (r.from.type === 'device' && r.to.type === 'device' && routes.some(other => other !== r && other.from?.type === 'device' && other.to?.type === 'device' && this.resolve(other.from, endpoints, mqttDevices).address === dst.address && this.resolve(other.to, endpoints, mqttDevices).address === src.address)) throw Error('Direct KNX feedback loop is not allowed');
       if (src.type !== dst.type && !r.transform) throw Error('Signal types differ; a conversion is required');
@@ -183,16 +215,18 @@ class RoutingStore {
   }
   save(next) {
     const mqttDevices = next.mqttDevices === undefined ? this.mqttDevices : next.mqttDevices;
+    const astroBlocks = next.astroBlocks === undefined ? this.astroBlocks : next.astroBlocks;
     const routes = next.routes.map(({ legacyKey, ...route }) => route);
-    this.validateAll(next.endpoints, routes, mqttDevices);
+    this.validateAll(next.endpoints, routes, mqttDevices, astroBlocks);
     const knxMqttBaseTopic = next.knxMqttBaseTopic === undefined ? this.knxMqttBaseTopic : next.knxMqttBaseTopic;
     if (typeof knxMqttBaseTopic !== 'string' || !knxMqttBaseTopic || knxMqttBaseTopic.length > 180 || /[+#\\s]/.test(knxMqttBaseTopic) || knxMqttBaseTopic.startsWith('/') || knxMqttBaseTopic.endsWith('/')) throw Error('Invalid KNX MQTT base topic');
-    const data = JSON.stringify({ version: 3, endpoints: next.endpoints, mqttDevices, routes, knxMqttBaseTopic, acceptedDiagnostics: this.acceptedDiagnostics }, null, 2) + '\n';
+    const data = JSON.stringify({ version: 3, endpoints: next.endpoints, mqttDevices, astroBlocks, routes, knxMqttBaseTopic, acceptedDiagnostics: this.acceptedDiagnostics }, null, 2) + '\n';
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     const tmp = this.file + '.' + crypto.randomUUID() + '.tmp';
     try { fs.writeFileSync(tmp, data, { mode: 0o600 }); fs.renameSync(tmp, this.file); }
     finally { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); }
     this.mqttDevices = mqttDevices;
+    this.astroBlocks = astroBlocks;
     this.endpoints = next.endpoints;
     this.routes = routes;
     this.knxMqttBaseTopic = knxMqttBaseTopic;

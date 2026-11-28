@@ -44,6 +44,9 @@ class WebServer {
       } catch (err) { return res.status(err.message === 'Diagnostic not found' ? 404 : 500).json({ error: err.message }); }
     });
 
+    // Internal Astro values, not MQTT endpoints. Configuration is part of routing.json.
+    this.app.get('/api/logic/astro/status', (_req, res) => res.json(this.astro?.snapshot() || {}));
+
     // Staircase light logic: configuration and live countdown.
     this.app.get('/api/logic/staircase', (_req, res) => res.json(this.staircaseLogic.list()));
     const saveStaircase = (req, res, id) => {
@@ -139,6 +142,15 @@ class WebServer {
           const next = proposed.routes?.find(r => r.id === block.routeId);
           if (!current || !next || next.bidirectional || JSON.stringify(current.from) !== JSON.stringify(next.from) || JSON.stringify(current.to) !== JSON.stringify(next.to)) {
             return res.status(409).json({ error: 'Connection has staircase logic: remove the logic before deleting, reversing or rewiring the connection (' + block.name + ')' });
+          }
+        }
+        for (const block of this.staircaseLogic.list()) {
+          if (block.enableInput?.type !== 'astro' && block.input.type !== 'astro') continue;
+          for (const endpoint of [block.enableInput, block.input].filter(e => e?.type === 'astro')) {
+            const pos = endpoint.value.lastIndexOf(':');
+            const id = endpoint.value.slice(0, pos), signal = endpoint.value.slice(pos + 1);
+            if (!(proposed.astroBlocks || this.routingStore.astroBlocks).some(b => b.id === id) || !['sunriseStart','sunriseEnd','sunsetStart','sunsetEnd','day'].includes(signal))
+              return res.status(409).json({ error: 'Astro-Ausgang wird von Logikbaustein '+block.name+' verwendet. Verbindung zuerst entfernen.' });
           }
         }
         const data = this.routingStore.save(proposed);
