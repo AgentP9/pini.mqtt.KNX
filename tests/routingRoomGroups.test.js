@@ -11,8 +11,8 @@ test('five lanes retain independent corridors for KNX, logic and MQTT',()=>{
  for(const id of ids){const pos=html.indexOf('<section id="'+id+'"');assert.ok(pos>prev,'missing or unordered '+id);prev=pos;}
  assert.match(html,/grid-template-columns:minmax\(265px,1fr\) minmax\(135px,\.52fr\) minmax\(250px,\.94fr\) minmax\(135px,\.52fr\) minmax\(265px,1fr\)/);
  assert.match(html,/gutterRect\.left\+gutterRect\.width\/2/);
- assert.match(html,/groupedMarkup\(deviceCards\)/);
- assert.match(html,/groupedMarkup\(mqttCards\)/);
+ assert.match(html,/groupedMarkup\(deviceCards,mqttCards\)/);
+ assert.match(html,/groupedMarkup\(mqttCards,deviceCards\)/);
  assert.match(html,/min-width:1320px/);
 });
 test('KNX cards group alphabetically and keep unassigned devices separate',()=>{
@@ -39,4 +39,11 @@ test('unique name and explicit KNX mapping are fallbacks, never ambiguous guesse
  assert.equal(mqttRoutingRoomId(ref,devices,[],{name:'Sonos Bad'}),'unassigned');
  assert.equal(mqttRoutingRoomId(ref,devices,[],{knxDeviceId:'k1',name:'Sonos Bad'}),'bad');
  assert.equal(mqttRoutingRoomId(ref,devices,[],{name:'Schlafzimmer'}),'sleep');
+});
+
+test('room groups render empty counterparts and share the larger measured height',()=>{
+ assert.match(html,/groupRoutingCardsByRoom\(\[\.\.\.cards,\.\.\.otherCards\],rooms\)/);
+ assert.match(html,/data-room-group/);
+ assert.match(html,/Math\.max\(group\.getBoundingClientRect\(\)\.height,peer\.getBoundingClientRect\(\)\.height\)/);
+ assert.match(html,/group\.style\.minHeight=peer\.style\.minHeight/);
 });

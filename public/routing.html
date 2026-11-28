@@ -24,7 +24,7 @@ body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:42
 .connection-gutter{min-height:100%;border:1px dashed var(--bs-border-color);border-radius:.7rem;background:color-mix(in srgb,var(--bs-secondary-bg) 35%,transparent);pointer-events:none}
 .connection-gutter h2{text-align:center;font-size:.81rem;color:var(--bs-secondary-color);padding:.8rem .25rem;overflow-wrap:anywhere}
 .room-heading{font-size:.87rem;font-weight:650;line-height:1.4;padding:.55rem .65rem;margin:1.2rem 0 .55rem;border-left:4px solid var(--bs-border-color);border-radius:.3rem;background:var(--bs-secondary-bg);display:flex;align-items:center;justify-content:space-between;gap:.5rem}
-.room-heading:first-of-type{margin-top:0}
+.room-heading:first-of-type{margin-top:0}.room-group{display:flow-root;box-sizing:border-box;padding-bottom:.75rem}.room-group .room-heading{margin-top:0}.lanes>#devices>h2,.lanes>#mqtt>h2{min-height:2.5rem;margin-bottom:.75rem!important}
 .room-heading .room-count{font-size:.72rem;color:var(--bs-secondary-color);font-weight:400}
 @media(max-width:900px){.lanes{min-width:1320px;padding:1rem!important;gap:12px!important}}
 </style><script src="/socket.io/socket.io.js"></script><script src="/header-status.js" defer></script></head><body>
@@ -193,11 +193,14 @@ function render(){
  auxiliaryRefs.filter(ref=>ref.type!=='device').forEach(ref=>visibleMqttIds.add(ref.id));
  const sortedRooms=[...rooms].sort((a,b)=>a.name.localeCompare(b.name,'de',{sensitivity:'base'}));
  const roomColorById=new Map(sortedRooms.map((r,i)=>[r.id,roomColors[i%roomColors.length]]));
- const groupedMarkup=cards=>groupRoutingCardsByRoom(cards,rooms).map(group=>{
+ const groupedMarkup=(cards,otherCards)=>{
+ const groups=new Map(groupRoutingCardsByRoom(cards,rooms).map(g=>[g.id,g]));
+ return groupRoutingCardsByRoom([...cards,...otherCards],rooms).map(shared=>{
+  const group=groups.get(shared.id)||{...shared,cards:[]};
   const color=roomColorById.get(group.id);
   const style=color?' style="border-left-color:'+color+';background:color-mix(in srgb,'+color+' 10%,var(--bs-body-bg))"':'';
-  return '<h3 class="room-heading"'+style+'>'+esc(group.name)+'<span class="room-count">'+group.cards.length+'</span></h3>'+group.cards.map(card=>card.html).join('');
- }).join('');
+  return '<div class="room-group" data-room-group="'+esc(group.id)+'"><h3 class="room-heading"'+style+'>'+esc(group.name)+'<span class="room-count">'+group.cards.length+'</span></h3>'+group.cards.map(card=>card.html).join('')+'</div>';
+ }).join('');};
  const deviceCards=visibleDevices.map(d=>{
   const own=list.filter(x=>x.ref.id===d.id);
   const roomColor=roomColorById.get(d.roomId);
@@ -217,29 +220,23 @@ function render(){
    return {id:x.ref.id,name:endpoint.name,roomId:mqttRoutingRoomId(x.ref,devices,graph.routes,{name:endpoint.name}),html:'<div class="node" data-node="mqtt:'+esc(x.ref.id)+'"><h3>'+esc(endpoint.name)+'</h3>'+signalHtml(x)+'<button class="btn btn-sm btn-link text-danger delete-endpoint" data-id="'+esc(x.ref.id)+'">Entfernen</button></div>'};
   })
  ];
- $('devices').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-house"></i> KNX-Devices</h2>'+groupedMarkup(deviceCards);
+ $('devices').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-house"></i> KNX-Devices</h2>'+groupedMarkup(deviceCards,mqttCards);
  $('logic').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-hourglass-split"></i> Logikbausteine</h2>'+visibleAstro.map(astroCardHtml).join('')+visibleLogic.map(logicCardHtml).join('')+(!visibleAstro.length&&!visibleLogic.length?'<p class="small muted">Astro-Baustein hinzufügen oder Logik an einer Verbindung konfigurieren.</p>':'');
- $('mqtt').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-broadcast"></i> MQTT-Devices und Endpunkte</h2>'+groupedMarkup(mqttCards);
+ $('mqtt').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-broadcast"></i> MQTT-Devices und Endpunkte</h2>'+groupedMarkup(mqttCards,deviceCards);
  $('signal-device').innerHTML=(graph.mqttDevices||[]).map(d=>'<option value="'+esc(d.id)+'">'+esc(d.name)+'</option>').join('');
  renderRoutes();
  requestAnimationFrame(()=>{alignNodes(focused);alignLogicNodes(focused);drawLinks(focused)});
 }
 function alignNodes(routes){
- // Add spacing only on the right lane, keeping the original card layout.
- const root=$('workspace'),right=$('mqtt');
- right.querySelectorAll('.node').forEach(n=>n.style.marginTop='');
- const knx=signals();
- for(const node of right.querySelectorAll('.node')){
-  const ref=node.dataset.node;
-  const connected=routes.filter(r=>[r.from,r.to].some(x=>x.type+':'+x.id===ref));
-  const targets=connected.flatMap(r=>[r.from,r.to].filter(x=>x.type==='device').map(x=>knx.find(y=>signalKey(y.ref)===signalKey(x))));
-  const top=Math.min(Infinity,...targets.filter(Boolean).map(x=>{const btn=[...document.querySelectorAll('#devices .signal-btn')].find(el=>el.dataset.key===signalKey(x.ref));return btn?btn.getBoundingClientRect().top:Infinity}));
-  if(!Number.isFinite(top))continue;
-  const linked=connected.flatMap(r=>[r.from,r.to].filter(x=>x.type!=='device'&&x.type+':'+x.id===ref));
-  const own=[...node.querySelectorAll('.signal-btn')].find(el=>linked.some(x=>el.dataset.key===signalKey(x)))||node.querySelector('.signal-btn');
-  if(!own)continue;
-  const delta=top-own.getBoundingClientRect().top;
-  if(delta>0)node.style.marginTop=Math.min(delta,600)+'px';
+ // Both lanes contain the same ordered room groups, including empty counterparts.
+ const left=[...$('devices').querySelectorAll('.room-group')],right=[...$('mqtt').querySelectorAll('.room-group')];
+ for(const group of [...left,...right])group.style.minHeight='';
+ const rightByRoom=new Map(right.map(group=>[group.dataset.roomGroup,group]));
+ for(const group of left){
+  const peer=rightByRoom.get(group.dataset.roomGroup);
+  if(!peer)continue;
+  const height=Math.ceil(Math.max(group.getBoundingClientRect().height,peer.getBoundingClientRect().height));
+  group.style.minHeight=peer.style.minHeight=height+'px';
  }
 }
 const logicMode=$('route-logic-mode');
