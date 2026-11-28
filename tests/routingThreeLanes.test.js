@@ -5,9 +5,9 @@ const fs = require('fs');
 const path = require('path');
 const html = fs.readFileSync(path.join(__dirname, '../public/routing.html'), 'utf8');
 
-test('routing designer provides KNX, logic and MQTT lanes', () => {
-  for (const id of ['devices', 'logic', 'mqtt']) assert.match(html, new RegExp('<section id="'+id+'"'));
-  assert.match(html, /grid-template-columns:minmax\(240px,1fr\) minmax\(220px,\.8fr\) minmax\(240px,1fr\)/);
+test('routing designer provides five lanes including two connection corridors', () => {
+  for (const id of ['devices', 'connections-knx-logic', 'logic', 'connections-logic-mqtt', 'mqtt']) assert.match(html, new RegExp('<section id="'+id+'"'));
+  assert.match(html, /grid-template-columns:minmax\(265px,1fr\) minmax\(135px,\.52fr\) minmax\(250px,\.94fr\) minmax\(135px,\.52fr\) minmax\(265px,1fr\)/);
 });
 test('add forms live only in add dialog, not in right sidebar', () => {
   assert.match(html, /id="routing-add-dialog"/);

@@ -3,7 +3,7 @@
 <meta name="theme-color" content="#212529"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><link rel="manifest" href="/manifest.json"><link rel="apple-touch-icon" href="/favicon.svg"><title>Routing Designer · pini.mqtt.KNX</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet"><script src="/socket.io/socket.io.js"></script><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<link rel="stylesheet" href="/app-shell.css"><script src="/app-shell.js" defer></script><script src="/routingRoomFilter.js"></script>
+<link rel="stylesheet" href="/app-shell.css"><script src="/app-shell.js" defer></script><script src="/routingRoomFilter.js"></script><script src="/routingRoomGroups.js"></script>
 <style>
 .node.type-warning{border:2px solid #dc3545!important;box-shadow:0 0 0 3px rgba(220,53,69,.14)}.signal.type-warning{background:rgba(220,53,69,.12);border-radius:7px}.route-transform.type-warning{border:2px solid #dc3545!important;background:#fff0f0!important;color:#842029!important}.connection-path.type-warning,.connection-arrow.type-warning{stroke:#dc3545!important;stroke-width:4!important}
 .connection-path.has-logic,.connection-arrow.has-logic{stroke:#198754;stroke-width:3}
@@ -17,7 +17,17 @@
 
 body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:420px;background:var(--bs-body-bg);border:1px solid var(--bs-border-color);border-radius:1rem;overflow:auto}.lanes{display:grid;grid-template-columns:minmax(230px,1fr) minmax(230px,1fr);gap:12%;padding:1.5rem;position:relative;z-index:2}.node{background:var(--bs-body-bg);border:1px solid var(--bs-border-color);border-radius:.8rem;padding:.75rem;margin-bottom:.75rem;box-shadow:0 2px 8px #0001}.node h3{font-size:1rem;margin:0 0 .5rem}.knx-node-header,.mqtt-node-header{min-height:56px;padding:12px 14px;margin:0;border-radius:.75rem .75rem 0 0}.mqtt-node-header h3,.knx-node-header h3{line-height:1.5;min-height:0}.mqtt-node-header .btn,.knx-node-header .btn{flex-shrink:0}.knx-node-header h3{line-height:1.5;min-height:0}.knx-node-header .btn{flex-shrink:0}.signal{display:flex;align-items:center;justify-content:space-between;gap:.5rem;border-top:1px solid var(--bs-border-color);padding:.4rem 0;font-size:.85rem}.signal button{white-space:nowrap;flex-shrink:0}#mqtt .signal{justify-content:flex-start}#mqtt .signal .signal-btn{margin-right:.25rem}.signal button.selected{background:var(--bs-primary);color:white}.links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}.muted{color:var(--bs-secondary-color)}@media(max-width:650px){.lanes{gap:1rem;grid-template-columns:minmax(170px,1fr) minmax(170px,1fr);padding:.7rem}.node{padding:.5rem}.signal{flex-wrap:wrap}}
 .aligned-route{display:grid;grid-template-columns:minmax(180px,1fr) minmax(150px,.9fr) minmax(180px,1fr);gap:1rem;align-items:center;border-bottom:1px solid var(--bs-border-color);padding:1rem 0}.aligned-route .node{margin:0}.transform-chip{display:block;text-align:center;font-size:.8rem;white-space:normal;overflow-wrap:anywhere}.aligned-route .arrow{text-align:center;color:var(--bs-primary)}@media(max-width:700px){.aligned-route{gap:.4rem;grid-template-columns:minmax(90px,1fr) minmax(90px,1fr) minmax(90px,1fr)}.aligned-route .node{padding:.4rem}}.workspace{overflow:auto}.lanes{display:grid;grid-template-columns:minmax(230px,1fr) minmax(230px,1fr);gap:16%;padding:1.5rem;position:relative;z-index:2;align-items:start}.node{position:relative}.node[data-node^="device:"],.node[data-node^="mqttDevice:"]{padding:0;overflow:hidden}.node[data-node^="device:"]>.signal,.node[data-node^="mqttDevice:"]>.signal{margin:0 .75rem}.node[data-node^="mqttDevice:"]>.upgrade-mqtt-device{margin:.75rem}.node h3{min-height:1.5rem}.signal{min-height:43px}.links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3;overflow:visible}.connection-label{font-size:12px;fill:var(--bs-body-color);paint-order:stroke;stroke:var(--bs-body-bg);stroke-width:5px;stroke-linejoin:round}.connection-path{fill:none;stroke:var(--bs-primary);stroke-width:2.5;opacity:.8}.connection-path.inactive{stroke:var(--bs-secondary-color);stroke-dasharray:6 5;opacity:.55}.route-transform{position:absolute;z-index:4;transform:translate(-50%,-50%);font-size:.73rem;max-width:190px;white-space:normal;overflow-wrap:anywhere;box-shadow:0 1px 4px #0002}.route-transform.inactive{opacity:.65}
-.route-actions{display:flex;align-items:center;justify-content:center;gap:.45rem;margin-top:.35rem}.route-actions input{cursor:pointer}.route-actions .btn{padding:.12rem .3rem}.floating-route-actions{position:absolute;z-index:5;transform:translate(-50%,0);background:var(--bs-body-bg);border-radius:.35rem;padding:.12rem .3rem;box-shadow:0 1px 3px #0002}#route-dialog{border:1px solid var(--bs-border-color);border-radius:1rem;max-width:min(94vw,560px);width:100%;background:var(--bs-body-bg);color:var(--bs-body-color);box-shadow:0 20px 60px #0004}#route-dialog::backdrop{background:#0007}.aligned-route{padding:1.6rem 0;gap:1.75rem}.aligned-connector{min-height:64px}.lanes{gap:20%;padding:2rem 1.5rem}.signal{min-height:56px}.route-transform{max-width:170px;padding:.35rem .6rem}.node{padding:1rem}@media(max-width:700px){.aligned-route{gap:.6rem;padding:1rem 0}.lanes{gap:1rem;padding:1rem .7rem}.node{padding:.6rem}}.connection-arrow{fill:none;stroke:var(--bs-primary);stroke-width:2.8;stroke-linecap:round;stroke-linejoin:round}.connection-arrow.inactive{stroke:var(--bs-secondary-color);opacity:.55}.lanes{grid-template-columns:minmax(240px,1fr) minmax(220px,.8fr) minmax(240px,1fr)!important;gap:1.5rem!important;min-width:860px}.logic-node{border-color:var(--bs-primary-border-subtle);background:var(--bs-primary-bg-subtle)}.logic-node .signal{justify-content:space-between}.logic-node .logic-status{font-size:.8rem}.routing-add-dialog{width:min(95vw,620px);max-height:90dvh;overflow:auto;border:1px solid var(--bs-border-color);border-radius:1rem;background:var(--bs-body-bg);color:var(--bs-body-color);padding:1.25rem}.routing-add-dialog::backdrop{background:#0008}.routing-add-dialog .tab-pane{padding-top:1rem}@media(max-width:900px){.lanes{gap:1rem!important;padding:1rem!important}}  .logic-drag-handle{cursor:grab;touch-action:none;user-select:none}.logic-node{z-index:4}</style><script src="/socket.io/socket.io.js"></script><script src="/header-status.js" defer></script></head><body>
+.route-actions{display:flex;align-items:center;justify-content:center;gap:.45rem;margin-top:.35rem}.route-actions input{cursor:pointer}.route-actions .btn{padding:.12rem .3rem}.floating-route-actions{position:absolute;z-index:5;transform:translate(-50%,0);background:var(--bs-body-bg);border-radius:.35rem;padding:.12rem .3rem;box-shadow:0 1px 3px #0002}#route-dialog{border:1px solid var(--bs-border-color);border-radius:1rem;max-width:min(94vw,560px);width:100%;background:var(--bs-body-bg);color:var(--bs-body-color);box-shadow:0 20px 60px #0004}#route-dialog::backdrop{background:#0007}.aligned-route{padding:1.6rem 0;gap:1.75rem}.aligned-connector{min-height:64px}.lanes{gap:20%;padding:2rem 1.5rem}.signal{min-height:56px}.route-transform{max-width:170px;padding:.35rem .6rem}.node{padding:1rem}@media(max-width:700px){.aligned-route{gap:.6rem;padding:1rem 0}.lanes{gap:1rem;padding:1rem .7rem}.node{padding:.6rem}}.connection-arrow{fill:none;stroke:var(--bs-primary);stroke-width:2.8;stroke-linecap:round;stroke-linejoin:round}.connection-arrow.inactive{stroke:var(--bs-secondary-color);opacity:.55}.lanes{grid-template-columns:minmax(240px,1fr) minmax(220px,.8fr) minmax(240px,1fr)!important;gap:1.5rem!important;min-width:860px}.logic-node{border-color:var(--bs-primary-border-subtle);background:var(--bs-primary-bg-subtle)}.logic-node .signal{justify-content:space-between}.logic-node .logic-status{font-size:.8rem}.routing-add-dialog{width:min(95vw,620px);max-height:90dvh;overflow:auto;border:1px solid var(--bs-border-color);border-radius:1rem;background:var(--bs-body-bg);color:var(--bs-body-color);padding:1.25rem}.routing-add-dialog::backdrop{background:#0008}.routing-add-dialog .tab-pane{padding-top:1rem}@media(max-width:900px){.lanes{gap:1rem!important;padding:1rem!important}}  .logic-drag-handle{cursor:grab;touch-action:none;user-select:none}.logic-node{z-index:4}
+/* Five lanes with two dedicated connection corridors; scroll on narrow screens. */
+.lanes{grid-template-columns:minmax(265px,1fr) minmax(135px,.52fr) minmax(250px,.94fr) minmax(135px,.52fr) minmax(265px,1fr)!important;gap:12px!important;min-width:1320px;padding:1.5rem!important;align-items:start}
+.lanes>section{min-width:0}
+.connection-gutter{min-height:100%;border:1px dashed var(--bs-border-color);border-radius:.7rem;background:color-mix(in srgb,var(--bs-secondary-bg) 35%,transparent);pointer-events:none}
+.connection-gutter h2{text-align:center;font-size:.81rem;color:var(--bs-secondary-color);padding:.8rem .25rem;overflow-wrap:anywhere}
+.room-heading{font-size:.87rem;font-weight:650;line-height:1.4;padding:.55rem .65rem;margin:1.2rem 0 .55rem;border-left:4px solid var(--bs-border-color);border-radius:.3rem;background:var(--bs-secondary-bg);display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+.room-heading:first-of-type{margin-top:0}.room-group{display:flow-root;box-sizing:border-box;padding-bottom:.75rem}.room-group .room-heading{margin-top:0}.lanes>#devices>h2,.lanes>#mqtt>h2{min-height:2.5rem;margin-bottom:.75rem!important}
+.room-heading .room-count{font-size:.72rem;color:var(--bs-secondary-color);font-weight:400}
+@media(max-width:900px){.lanes{min-width:1320px;padding:1rem!important;gap:12px!important}}
+</style><script src="/socket.io/socket.io.js"></script><script src="/header-status.js" defer></script></head><body>
 <header class="app-shell dashboard-shell"><div class="app-shell-inner">
   <a class="app-brand" href="/"><i class="bi bi-lightning-charge-fill text-primary me-1"></i> pini.mqtt.KNX</a>
   <nav class="app-nav" aria-label="Hauptnavigation">
@@ -42,7 +52,7 @@ body{background:var(--bs-tertiary-bg)}.workspace{position:relative;min-height:42
 <div id="notice" role="status" class="small mb-3"></div><div id="routing-diagnostics" class="alert alert-danger" hidden role="alert"></div><div id="focus-bar" class="alert alert-info py-2" hidden><span id="focus-label"></span> <button class="btn btn-sm btn-outline-primary ms-2" id="clear-focus">Alle Devices anzeigen</button></div>
 <div class="row g-3"><div class="col-12">
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2"><h2 class="h6 m-0">Signalübersicht</h2><div class="d-flex align-items-center gap-2 flex-wrap"><label class="small" for="room-filter">Raum</label><select id="room-filter" class="form-select form-select-sm" style="width:auto;max-width:18rem" aria-label="Verbindungen nach Raum filtern"><option value="all">Alle Räume</option><option value="unassigned">Ohne Raum</option></select><span class="small muted">Zuerst Quelle, dann Ziel anklicken</span></div></div>
-<div class="workspace" id="workspace"><svg id="links" class="links" aria-hidden="true"></svg><div class="lanes"><section id="devices"><h2 class="h6 mb-3"><i class="bi bi-house"></i> Devices</h2></section><section id="logic"><h2 class="h6 mb-3"><i class="bi bi-hourglass-split"></i> Logik</h2></section><section id="mqtt"><h2 class="h6 mb-3"><i class="bi bi-broadcast"></i> MQTT-Endpunkte</h2></section></div></div>
+<div class="workspace" id="workspace"><svg id="links" class="links" aria-hidden="true"></svg><div class="lanes"><section id="devices"><h2 class="h6 mb-3"><i class="bi bi-house"></i> KNX-Devices</h2></section><section id="connections-knx-logic" class="connection-gutter" aria-label="Verbindungen KNX und Logik"><h2 class="h6">Verbindungen</h2></section><section id="logic"><h2 class="h6 mb-3"><i class="bi bi-hourglass-split"></i> Logikbausteine</h2></section><section id="connections-logic-mqtt" class="connection-gutter" aria-label="Verbindungen Logik und MQTT"><h2 class="h6">Verbindungen</h2></section><section id="mqtt"><h2 class="h6 mb-3"><i class="bi bi-broadcast"></i> MQTT-Devices und Endpunkte</h2></section></div></div>
 </div></div></main><dialog id="routing-add-dialog" class="routing-add-dialog" aria-labelledby="routing-add-title"><div class="d-flex justify-content-between align-items-center"><h2 id="routing-add-title" class="h5 mb-0">Hinzufügen</h2><button type="button" class="btn-close" id="close-add-dialog" aria-label="Schließen"></button></div><ul class="nav nav-tabs mt-3" role="tablist"><li class="nav-item"><button type="button" class="nav-link active" data-add-tab="device">MQTT-Device</button></li><li class="nav-item"><button type="button" class="nav-link" data-add-tab="signal">MQTT-Signal</button></li><li class="nav-item"><button type="button" class="nav-link" data-add-tab="topic">MQTT-Topic</button></li><li class="nav-item"><button type="button" class="nav-link" data-add-tab="logic">Logik</button></li></ul><div id="add-device-panel" data-add-panel="device" class="mt-3"><button type="button" id="open-mqtt-device" class="btn btn-outline-primary w-100"><i class="bi bi-plus-circle"></i> MQTT-Device anlegen</button></div><div data-add-panel="signal" hidden><form class="card-body" id="mqtt-signal-form">
 <label class="form-label" for="signal-device">MQTT-Device</label><select class="form-select mb-2" id="signal-device" required></select>
 <label class="form-label" for="signal-topic">MQTT-Topic</label><input class="form-control mb-2" id="signal-topic" maxlength="240" required placeholder="sonos/devices/Esszimmer/set/mute">
@@ -183,64 +193,50 @@ function render(){
  auxiliaryRefs.filter(ref=>ref.type!=='device').forEach(ref=>visibleMqttIds.add(ref.id));
  const sortedRooms=[...rooms].sort((a,b)=>a.name.localeCompare(b.name,'de',{sensitivity:'base'}));
  const roomColorById=new Map(sortedRooms.map((r,i)=>[r.id,roomColors[i%roomColors.length]]));
- const roomNameById=new Map(rooms.map(room=>[room.id,room.name]));
- const deviceTitle=(name,roomId)=>[roomNameById.get(roomId),name].filter(Boolean).join(' : ');
+ const groupedMarkup=(cards,otherCards)=>{
+ const groups=new Map(groupRoutingCardsByRoom(cards,rooms).map(g=>[g.id,g]));
+ return groupRoutingCardsByRoom([...cards,...otherCards],rooms).map(shared=>{
+  const group=groups.get(shared.id)||{...shared,cards:[]};
+  const color=roomColorById.get(group.id);
+  const style=color?' style="border-left-color:'+color+';background:color-mix(in srgb,'+color+' 10%,var(--bs-body-bg))"':'';
+  return '<div class="room-group" data-room-group="'+esc(group.id)+'"><h3 class="room-heading"'+style+'>'+esc(group.name)+'<span class="room-count">'+group.cards.length+'</span></h3>'+group.cards.map(card=>card.html).join('')+'</div>';
+ }).join('');};
  const deviceCards=visibleDevices.map(d=>{
   const own=list.filter(x=>x.ref.id===d.id);
   const roomColor=roomColorById.get(d.roomId);
   const headerStyle=roomColor?' style="background:color-mix(in srgb, '+roomColor+' 18%, var(--bs-body-bg));border-bottom:2px solid '+roomColor+'"':'';
-  return {id:d.id,html:'<div class="node" data-node="device:'+esc(d.id)+'"><div class="knx-node-header d-flex align-items-center justify-content-between gap-2"'+headerStyle+'><h3 class="mb-0">'+esc(deviceTitle(d.name,d.roomId))+'</h3><button type="button" class="btn btn-sm btn-outline-primary create-corresponding-mqtt" data-id="'+esc(d.id)+'" title="Corresponding MQTT-Device anlegen" aria-label="Corresponding MQTT-Device für '+esc(d.name)+' anlegen"><i class="bi bi-plus-square" aria-hidden="true"></i></button></div>'+own.map(signalHtml).join('')+'</div>'};
+  return {id:d.id,name:d.name,roomId:d.roomId||'unassigned',html:'<div class="node" data-node="device:'+esc(d.id)+'"><div class="knx-node-header d-flex align-items-center justify-content-between gap-2"'+headerStyle+'><h3 class="mb-0">'+esc(d.name)+'</h3><button type="button" class="btn btn-sm btn-outline-primary create-corresponding-mqtt" data-id="'+esc(d.id)+'" title="Corresponding MQTT-Device anlegen" aria-label="Corresponding MQTT-Device für '+esc(d.name)+' anlegen"><i class="bi bi-plus-square" aria-hidden="true"></i></button></div>'+own.map(signalHtml).join('')+'</div>'};
  });
  const mqttCards=[
- ...(graph.mqttDevices||[]).filter(d=>roomId==='all'&&!focusAddress&&!focusRoute&&!focusDevice||visibleMqttIds.has(d.id)).map(d=>{const linked=(()=>{
-  // Routing is the primary association: device names are not unique across rooms.
-  const counts=new Map();
-  for(const route of graph.routes){
-   if(![route.from,route.to].some(ref=>ref.type==='mqttDevice'&&ref.id===d.id))continue;
-   for(const ref of [route.from,route.to]){
-    if(ref.type!=='device')continue;
-    counts.set(ref.id,(counts.get(ref.id)||0)+1);
-   }
-  }
-  const matches=[...counts].sort((a,b)=>b[1]-a[1]);
-  if(matches.length)return devices.find(device=>device.id===matches[0][0]);
-  const explicit=devices.find(device=>device.id===d.knxDeviceId);
-  if(explicit)return explicit;
-  const sameName=devices.filter(device=>device.name===d.name);
-  return sameName.length===1?sameName[0]:null;
- })();const roomColor=linked&&roomColorById.get(linked.roomId);const headerStyle=roomColor?' style="background:color-mix(in srgb, '+roomColor+' 18%, var(--bs-body-bg));border-bottom:2px solid '+roomColor+'"':'';return {id:d.id,html:'<div class="node" data-node="mqttDevice:'+esc(d.id)+'"><div class="mqtt-node-header d-flex align-items-center justify-content-between gap-2"'+headerStyle+'><h3 class="mb-0">'+esc(deviceTitle(d.name,linked?.roomId))+'</h3><button type="button" class="btn btn-sm btn-outline-secondary edit-mqtt-device" data-id="'+esc(d.id)+'" title="MQTT-Device bearbeiten" aria-label="MQTT-Device '+esc(d.name)+' bearbeiten"><i class="bi bi-pencil-square" aria-hidden="true"></i></button></div>'+eps.filter(x=>x.ref.type==='mqttDevice'&&x.ref.id===d.id).map(signalHtml).join('')+(mqttTemplateUpgrade(d)?.additions.length?'<button class="btn btn-sm btn-outline-primary upgrade-mqtt-device me-2" data-id="'+esc(d.id)+'"><i class="bi bi-arrow-up-circle"></i> Template aktualisieren ('+mqttTemplateUpgrade(d).additions.length+')</button>':'')+'</div>'};}),
- ...eps.filter(x=>x.ref.type==='mqtt'&&(roomId==='all'&&!focusAddress&&!focusRoute&&!focusDevice||visibleMqttIds.has(x.ref.id))).map(x=>({id:x.ref.id,html:'<div class="node" data-node="mqtt:'+esc(x.ref.id)+'"><h3>'+esc(graph.endpoints.find(e=>e.id===x.ref.id).name)+'</h3>'+signalHtml(x)+'<button class="btn btn-sm btn-link text-danger delete-endpoint" data-id="'+esc(x.ref.id)+'">Entfernen</button></div>'}))
+  ...(graph.mqttDevices||[]).filter(d=>roomId==='all'&&!focusAddress&&!focusRoute&&!focusDevice||visibleMqttIds.has(d.id)).map(d=>{
+   const assignedRoom=mqttRoutingRoomId({type:'mqttDevice',id:d.id},devices,graph.routes,{knxDeviceId:d.knxDeviceId,name:d.name});
+   const roomColor=roomColorById.get(assignedRoom);
+   const headerStyle=roomColor?' style="background:color-mix(in srgb, '+roomColor+' 18%, var(--bs-body-bg));border-bottom:2px solid '+roomColor+'"':'';
+   const upgrade=mqttTemplateUpgrade(d);
+   return {id:d.id,name:d.name,roomId:assignedRoom,html:'<div class="node" data-node="mqttDevice:'+esc(d.id)+'"><div class="mqtt-node-header d-flex align-items-center justify-content-between gap-2"'+headerStyle+'><h3 class="mb-0">'+esc(d.name)+'</h3><button type="button" class="btn btn-sm btn-outline-secondary edit-mqtt-device" data-id="'+esc(d.id)+'" title="MQTT-Device bearbeiten" aria-label="MQTT-Device '+esc(d.name)+' bearbeiten"><i class="bi bi-pencil-square"></i></button></div>'+eps.filter(x=>x.ref.type==='mqttDevice'&&x.ref.id===d.id).map(signalHtml).join('')+(upgrade?.additions.length?'<button class="btn btn-sm btn-outline-primary upgrade-mqtt-device me-2" data-id="'+esc(d.id)+'"><i class="bi bi-arrow-up-circle"></i> Template aktualisieren ('+upgrade.additions.length+')</button>':'')+'</div>'};
+  }),
+  ...eps.filter(x=>x.ref.type==='mqtt'&&(roomId==='all'&&!focusAddress&&!focusRoute&&!focusDevice||visibleMqttIds.has(x.ref.id))).map(x=>{
+   const endpoint=graph.endpoints.find(e=>e.id===x.ref.id);
+   return {id:x.ref.id,name:endpoint.name,roomId:mqttRoutingRoomId(x.ref,devices,graph.routes,{name:endpoint.name}),html:'<div class="node" data-node="mqtt:'+esc(x.ref.id)+'"><h3>'+esc(endpoint.name)+'</h3>'+signalHtml(x)+'<button class="btn btn-sm btn-link text-danger delete-endpoint" data-id="'+esc(x.ref.id)+'">Entfernen</button></div>'};
+  })
  ];
- // Order the right-hand cards by their connected KNX device, so related
- // devices start on the same horizontal level instead of independent lists.
- const order=new Map(deviceCards.map((d,i)=>[d.id,i]));
- mqttCards.sort((a,b)=>{
-  const rank=c=>Math.min(Infinity,...focused.filter(r=>[r.from,r.to].some(x=>x.id===c.id&&x.type!=='device')).flatMap(r=>[r.from,r.to].filter(x=>x.type==='device').map(x=>order.get(x.id)??Infinity)));
-  return rank(a)-rank(b);
- });
- $('devices').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-house"></i> KNX-Devices</h2>'+deviceCards.map(c=>c.html).join('');
+ $('devices').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-house"></i> KNX-Devices</h2>'+groupedMarkup(deviceCards,mqttCards);
  $('logic').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-hourglass-split"></i> Logikbausteine</h2>'+visibleAstro.map(astroCardHtml).join('')+visibleLogic.map(logicCardHtml).join('')+(!visibleAstro.length&&!visibleLogic.length?'<p class="small muted">Astro-Baustein hinzufügen oder Logik an einer Verbindung konfigurieren.</p>':'');
- $('mqtt').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-broadcast"></i> MQTT-Devices und Endpunkte</h2>'+mqttCards.map(c=>c.html).join('');
+ $('mqtt').innerHTML='<h2 class="h6 mb-3"><i class="bi bi-broadcast"></i> MQTT-Devices und Endpunkte</h2>'+groupedMarkup(mqttCards,deviceCards);
  $('signal-device').innerHTML=(graph.mqttDevices||[]).map(d=>'<option value="'+esc(d.id)+'">'+esc(d.name)+'</option>').join('');
  renderRoutes();
  requestAnimationFrame(()=>{alignNodes(focused);alignLogicNodes(focused);drawLinks(focused)});
 }
 function alignNodes(routes){
- // Add spacing only on the right lane, keeping the original card layout.
- const root=$('workspace'),right=$('mqtt');
- right.querySelectorAll('.node').forEach(n=>n.style.marginTop='');
- const knx=signals();
- for(const node of right.querySelectorAll('.node')){
-  const ref=node.dataset.node;
-  const connected=routes.filter(r=>[r.from,r.to].some(x=>x.type+':'+x.id===ref));
-  const targets=connected.flatMap(r=>[r.from,r.to].filter(x=>x.type==='device').map(x=>knx.find(y=>signalKey(y.ref)===signalKey(x))));
-  const top=Math.min(Infinity,...targets.filter(Boolean).map(x=>{const btn=[...document.querySelectorAll('#devices .signal-btn')].find(el=>el.dataset.key===signalKey(x.ref));return btn?btn.getBoundingClientRect().top:Infinity}));
-  if(!Number.isFinite(top))continue;
-  const linked=connected.flatMap(r=>[r.from,r.to].filter(x=>x.type!=='device'&&x.type+':'+x.id===ref));
-  const own=[...node.querySelectorAll('.signal-btn')].find(el=>linked.some(x=>el.dataset.key===signalKey(x)))||node.querySelector('.signal-btn');
-  if(!own)continue;
-  const delta=top-own.getBoundingClientRect().top;
-  if(delta>0)node.style.marginTop=Math.min(delta,600)+'px';
+ // Both lanes contain the same ordered room groups, including empty counterparts.
+ const left=[...$('devices').querySelectorAll('.room-group')],right=[...$('mqtt').querySelectorAll('.room-group')];
+ for(const group of [...left,...right])group.style.minHeight='';
+ const rightByRoom=new Map(right.map(group=>[group.dataset.roomGroup,group]));
+ for(const group of left){
+  const peer=rightByRoom.get(group.dataset.roomGroup);
+  if(!peer)continue;
+  const height=Math.ceil(Math.max(group.getBoundingClientRect().height,peer.getBoundingClientRect().height));
+  group.style.minHeight=peer.style.minHeight=height+'px';
  }
 }
 const logicMode=$('route-logic-mode');
@@ -388,7 +384,10 @@ function drawLinks(routes=graph.routes.filter(isFocused)){
   if(paired&&String(r.id)>String(paired.id))continue;
   const path=document.createElementNS(ns,'path');
   const originalPath=knxToKnx?'M '+x1+' '+y1+' C '+loopX+' '+y1+', '+loopX+' '+y2+', '+(x2+2)+' '+y2:'M '+x1+' '+y1+' C '+mid+' '+y1+', '+mid+' '+y2+', '+x2+' '+y2;
-  const anchorX=knxToKnx?loopX:mid,anchorY=(y1+y2)/2;
+  // Default connection controls live in a corridor instead of covering logic cards.
+   const gutter=r.from.type==='astro'&&r.to.type!=='device'?$('connections-logic-mqtt'):$('connections-knx-logic');
+   const gutterRect=gutter.getBoundingClientRect();
+   const anchorX=knxToKnx?loopX:gutterRect.left+gutterRect.width/2-rect.left+root.scrollLeft,anchorY=(y1+y2)/2;
   const updatePath=(x,y)=>{path.setAttribute('d',x===anchorX&&y===anchorY?originalPath:'M '+x1+' '+y1+' C '+(knxToKnx?x:x1+(x-x1)/2)+' '+y1+', '+x+' '+y+', '+x+' '+y+' C '+x+' '+y+', '+(knxToKnx?x:x+(x2-x)/2)+' '+y2+', '+(knxToKnx?x2+2:x2)+' '+y2);};
   path.setAttribute('class','connection-path'+(r.enabled?'':' inactive')+(routeIssue(r.id)?' type-warning':(logicBlocks.some(b=>b.routeId===r.id&&b.enabled)?' has-logic':'')));svg.appendChild(path);
   const arrowAt=(x,y,rightward)=>{
