@@ -20,4 +20,4 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: node --test tests/astroDevice.test.js tests/staircaseLogic.test.js tests/routingStore.test.js tests/routingThreeLanes.test.js
+      - run: node --test tests/astroDevice.test.js tests/staircaseLogic.test.js tests/routingStore.test.js tests/routingThreeLanes.test.js tests/routingRoomGroups.test.js
